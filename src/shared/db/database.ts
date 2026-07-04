@@ -97,6 +97,15 @@ export type JournalRecapRow = {
   created_at: string;
 };
 
+export type JournalRecapInput = {
+  id?: string;
+  accountId?: string | null;
+  cadence: JournalRecapRow["cadence"];
+  title: string;
+  period: string;
+  body: string;
+};
+
 export type AccountType = "live" | "demo" | "backtesting";
 
 export type Strategy = {
@@ -1317,6 +1326,64 @@ export async function listJournalRecaps(
       ORDER BY created_at DESC`,
     [cadence, accountId ?? null],
   )) as JournalRecapRow[];
+}
+
+export async function saveJournalRecap(
+  input: JournalRecapInput,
+): Promise<JournalRecapRow> {
+  const title = input.title.trim();
+  const body = input.body.trim();
+  const period = input.period.trim();
+  const row: JournalRecapRow = {
+    id: input.id ?? newEntityId("JRN"),
+    account_id: input.accountId ?? null,
+    cadence: input.cadence,
+    title,
+    period,
+    body,
+    created_at: new Date().toISOString(),
+  };
+
+  if (!title) throw new Error("Recap title is required.");
+  if (!period) throw new Error("Recap period is required.");
+
+  if (!isTauri()) {
+    const rows = SEED_JOURNAL[row.cadence];
+    const index = rows.findIndex((recap) => recap.id === row.id);
+    if (index >= 0) {
+      rows[index] = {
+        ...rows[index],
+        ...row,
+        created_at: rows[index].created_at,
+      };
+    } else {
+      rows.unshift(row);
+    }
+    return index >= 0 ? rows[index] : row;
+  }
+
+  const db = await getDb();
+  if (input.id) {
+    await db.execute(
+      `UPDATE journal_recaps
+          SET account_id = $1,
+              cadence = $2,
+              title = $3,
+              period = $4,
+              body = $5
+        WHERE id = $6`,
+      [row.account_id, row.cadence, row.title, row.period, row.body, row.id],
+    );
+  } else {
+    await db.execute(
+      `INSERT INTO journal_recaps
+         (id, account_id, cadence, title, period, body)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [row.id, row.account_id, row.cadence, row.title, row.period, row.body],
+    );
+  }
+
+  return row;
 }
 
 const SEED_JOURNAL: Record<JournalRecapRow["cadence"], JournalRecapRow[]> = {

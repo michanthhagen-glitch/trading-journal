@@ -22,6 +22,7 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 - Trades and journal recaps belong to the selected top-bar account through `account_id`.
 - Saving a per-trade recap marks that trade as reviewed.
 - Per-trade recaps store structured fields for later daily, weekly, and monthly automation.
+- Journal recaps use shared save/list helpers and keep browser fallback aligned with SQLite.
 
 ## Work Guidance
 
