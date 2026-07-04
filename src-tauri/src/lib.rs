@@ -157,6 +157,12 @@ pub fn run() {
             sql: include_str!("../migrations/0007_account_context.sql"),
             kind: tauri_plugin_sql::MigrationKind::Up,
         },
+        tauri_plugin_sql::Migration {
+            version: 8,
+            description: "add_trade_recap_structure",
+            sql: include_str!("../migrations/0008_trade_recap_structure.sql"),
+            kind: tauri_plugin_sql::MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

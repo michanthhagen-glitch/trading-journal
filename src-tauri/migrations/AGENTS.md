@@ -13,6 +13,7 @@ Owns SQLite schema migration files for the desktop database.
 - `0005_strategy_rules.sql`: strategy rule detail fields.
 - `0006_risk_plan_limits.sql`: risk limits, trade limits, and goal fields.
 - `0007_account_context.sql`: account assignment for trades and journal recaps.
+- `0008_trade_recap_structure.sql`: structured fields for per-trade recap automation.
 
 ## Local Contracts
 

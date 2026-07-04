@@ -20,6 +20,8 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 - Strategy setup fields include strategy text, entry rules, SL/TP rules, and invalidation rules.
 - Risk management setup fields include per-trade/day/week risk ranges, trade-loss limits, and daily/weekly goal ranges.
 - Trades and journal recaps belong to the selected top-bar account through `account_id`.
+- Saving a per-trade recap marks that trade as reviewed.
+- Per-trade recaps store structured fields for later daily, weekly, and monthly automation.
 
 ## Work Guidance
 

@@ -8,6 +8,8 @@ const DB_URL = "sqlite:trading-journal.db";
 
 export type TradeStatus = "pre-trade" | "open" | "closed" | "reviewed";
 export type TradeResult = "" | "win" | "loss" | "break-even";
+export type TradeRecapGrade = "" | "A" | "B" | "C" | "D";
+export type TradeRecapPlanFollowed = "" | "yes" | "partial" | "no";
 
 export type TradeRow = {
   id: string;
@@ -48,7 +50,41 @@ export type RecapRow = {
   id: string;
   trade_id: string;
   body: string;
+  grade: TradeRecapGrade;
+  followed_plan: TradeRecapPlanFollowed;
+  setup_quality: number | null;
+  entry_quality: number | null;
+  management_quality: number | null;
+  exit_quality: number | null;
+  mistake_tags: string;
+  positive_tags: string;
+  emotion_tag: string;
+  rule_broken: number;
+  lesson: string;
+  next_action: string;
   created_at: string;
+};
+
+export type TradeRecapInput = {
+  grade: TradeRecapGrade;
+  followedPlan: TradeRecapPlanFollowed;
+  setupQuality: number | null;
+  entryQuality: number | null;
+  managementQuality: number | null;
+  exitQuality: number | null;
+  mistakeTags: string[];
+  positiveTags: string[];
+  emotionTag: string;
+  ruleBroken: boolean;
+  lesson: string;
+  nextAction: string;
+  body: string;
+};
+
+export type TradeRecap = TradeRecapInput & {
+  id: string;
+  tradeId: string;
+  createdAt: string;
 };
 
 export type JournalRecapRow = {
@@ -209,12 +245,13 @@ export type Trade = {
   exit: ExitData;
   pnl: number | null;
   hasRecap: boolean;
+  recap: TradeRecap | null;
   screenshots: ScreenshotRow[];
 };
 
 export type NewTrade = Omit<
   Trade,
-  "id" | "status" | "hasRecap" | "screenshots" | "accountId"
+  "id" | "status" | "hasRecap" | "recap" | "screenshots" | "accountId"
 > & {
   accountId?: string | null;
   status?: TradeStatus;
@@ -227,9 +264,54 @@ function normalizedResult(value: string): TradeResult {
   return "";
 }
 
+function normalizedRecapGrade(value: string): TradeRecapGrade {
+  if (value === "A" || value === "B" || value === "C" || value === "D") {
+    return value;
+  }
+  return "";
+}
+
+function normalizedPlanFollowed(value: string): TradeRecapPlanFollowed {
+  if (value === "yes" || value === "partial" || value === "no") return value;
+  return "";
+}
+
+function stringArrayFromJson(value: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item): item is string => typeof item === "string");
+    }
+  } catch {
+    // Older local rows can contain plain text; keep them from breaking reads.
+  }
+  return [];
+}
+
+function recapRowToRecap(row: RecapRow): TradeRecap {
+  return {
+    id: row.id,
+    tradeId: row.trade_id,
+    grade: normalizedRecapGrade(row.grade),
+    followedPlan: normalizedPlanFollowed(row.followed_plan),
+    setupQuality: row.setup_quality,
+    entryQuality: row.entry_quality,
+    managementQuality: row.management_quality,
+    exitQuality: row.exit_quality,
+    mistakeTags: stringArrayFromJson(row.mistake_tags),
+    positiveTags: stringArrayFromJson(row.positive_tags),
+    emotionTag: row.emotion_tag ?? "",
+    ruleBroken: row.rule_broken === 1,
+    lesson: row.lesson ?? "",
+    nextAction: row.next_action ?? "",
+    body: row.body ?? "",
+    createdAt: row.created_at,
+  };
+}
+
 function rowToTrade(
   row: TradeRow,
-  hasRecap: boolean,
+  recap: TradeRecap | null,
   screenshots: ScreenshotRow[],
 ): Trade {
   return {
@@ -264,7 +346,8 @@ function rowToTrade(
       time: row.exit_time,
     },
     pnl: row.pnl,
-    hasRecap,
+    hasRecap: recap !== null,
+    recap,
     screenshots,
   };
 }
@@ -350,6 +433,24 @@ const SEED_TRADES: Trade[] = [
     },
     pnl: 240,
     hasRecap: true,
+    recap: {
+      id: "R-128",
+      tradeId: "T-128",
+      grade: "A",
+      followedPlan: "yes",
+      setupQuality: 8,
+      entryQuality: 8,
+      managementQuality: 7,
+      exitQuality: 8,
+      mistakeTags: [],
+      positiveTags: ["Followed plan", "Waited for confirmation"],
+      emotionTag: "none",
+      ruleBroken: false,
+      lesson: "The best trades came after waiting for confirmation.",
+      nextAction: "Keep using the same confirmation checklist.",
+      body: "Target hit. Followed plan and waited for confirmation.",
+      createdAt: "2026-07-03T18:00:00Z",
+    },
     screenshots: [],
   },
   {
@@ -379,6 +480,7 @@ const SEED_TRADES: Trade[] = [
     exit: { price: null, result: "", note: "", feeling: null, time: null },
     pnl: null,
     hasRecap: false,
+    recap: null,
     screenshots: [],
   },
   {
@@ -414,6 +516,7 @@ const SEED_TRADES: Trade[] = [
     },
     pnl: -150,
     hasRecap: false,
+    recap: null,
     screenshots: [],
   },
 ];
@@ -856,13 +959,19 @@ export async function listTrades(accountId?: string | null): Promise<Trade[]> {
     [accountId ?? null],
   )) as TradeRow[];
   const recapRows = (await db.select(
-    "SELECT DISTINCT trade_id FROM recaps",
-  )) as { trade_id: string }[];
+    "SELECT * FROM recaps ORDER BY created_at DESC",
+  )) as RecapRow[];
   const screenshotRows = (await db.select(
     "SELECT * FROM screenshots ORDER BY created_at ASC",
   )) as ScreenshotRow[];
 
-  const recapped = new Set(recapRows.map((row) => row.trade_id));
+  const recapsByTrade = new Map<string, TradeRecap>();
+  for (const row of recapRows) {
+    if (!recapsByTrade.has(row.trade_id)) {
+      recapsByTrade.set(row.trade_id, recapRowToRecap(row));
+    }
+  }
+
   const shotsByTrade = new Map<string, ScreenshotRow[]>();
   for (const screenshot of screenshotRows) {
     const screenshots = shotsByTrade.get(screenshot.trade_id) ?? [];
@@ -871,7 +980,11 @@ export async function listTrades(accountId?: string | null): Promise<Trade[]> {
   }
 
   return rows.map((row) =>
-    rowToTrade(row, recapped.has(row.id), shotsByTrade.get(row.id) ?? []),
+    rowToTrade(
+      row,
+      recapsByTrade.get(row.id) ?? null,
+      shotsByTrade.get(row.id) ?? [],
+    ),
   );
 }
 
@@ -883,6 +996,7 @@ export async function insertTrade(input: NewTrade): Promise<Trade> {
     accountId: input.accountId ?? null,
     status: deriveStatus(input),
     hasRecap: false,
+    recap: null,
     screenshots: [],
   };
 
@@ -1070,19 +1184,113 @@ export async function deleteTrade(id: string): Promise<void> {
   await db.execute("DELETE FROM trades WHERE id = $1", [id]);
 }
 
-export async function saveRecap(tradeId: string, body: string): Promise<void> {
+const EMPTY_TRADE_RECAP_INPUT: TradeRecapInput = {
+  grade: "",
+  followedPlan: "",
+  setupQuality: null,
+  entryQuality: null,
+  managementQuality: null,
+  exitQuality: null,
+  mistakeTags: [],
+  positiveTags: [],
+  emotionTag: "",
+  ruleBroken: false,
+  lesson: "",
+  nextAction: "",
+  body: "",
+};
+
+function normalizeRecapInput(input: TradeRecapInput | string): TradeRecapInput {
+  if (typeof input === "string") {
+    return { ...EMPTY_TRADE_RECAP_INPUT, body: input.trim() };
+  }
+
+  return {
+    grade: normalizedRecapGrade(input.grade),
+    followedPlan: normalizedPlanFollowed(input.followedPlan),
+    setupQuality: input.setupQuality,
+    entryQuality: input.entryQuality,
+    managementQuality: input.managementQuality,
+    exitQuality: input.exitQuality,
+    mistakeTags: Array.from(
+      new Set(input.mistakeTags.map((tag) => tag.trim()).filter(Boolean)),
+    ),
+    positiveTags: Array.from(
+      new Set(input.positiveTags.map((tag) => tag.trim()).filter(Boolean)),
+    ),
+    emotionTag: input.emotionTag.trim(),
+    ruleBroken: input.ruleBroken,
+    lesson: input.lesson.trim(),
+    nextAction: input.nextAction.trim(),
+    body: input.body.trim(),
+  };
+}
+
+export async function saveRecap(
+  tradeId: string,
+  input: TradeRecapInput | string,
+): Promise<void> {
   const id = `R-${Date.now().toString().slice(-10)}`;
+  const recapInput = normalizeRecapInput(input);
 
   if (!isTauri()) {
     const trade = memoryTrades.get(tradeId);
-    if (trade) memoryTrades.set(tradeId, { ...trade, hasRecap: true });
+    if (trade)
+      memoryTrades.set(tradeId, {
+        ...trade,
+        hasRecap: true,
+        recap: {
+          ...recapInput,
+          id,
+          tradeId,
+          createdAt: new Date().toISOString(),
+        },
+        status: "reviewed",
+      });
     return;
   }
 
   const db = await getDb();
+  await db.execute("DELETE FROM recaps WHERE trade_id = $1", [tradeId]);
   await db.execute(
-    `INSERT INTO recaps (id, trade_id, body) VALUES ($1, $2, $3)`,
-    [id, tradeId, body],
+    `INSERT INTO recaps (
+       id,
+       trade_id,
+       body,
+       grade,
+       followed_plan,
+       setup_quality,
+       entry_quality,
+       management_quality,
+       exit_quality,
+       mistake_tags,
+       positive_tags,
+       emotion_tag,
+       rule_broken,
+       lesson,
+       next_action
+     ) VALUES (
+       $1, $2, $3, $4, $5,
+       $6, $7, $8, $9, $10,
+       $11, $12, $13, $14, $15
+     )`,
+    [
+      id,
+      tradeId,
+      recapInput.body,
+      recapInput.grade,
+      recapInput.followedPlan,
+      recapInput.setupQuality,
+      recapInput.entryQuality,
+      recapInput.managementQuality,
+      recapInput.exitQuality,
+      JSON.stringify(recapInput.mistakeTags),
+      JSON.stringify(recapInput.positiveTags),
+      recapInput.emotionTag,
+      recapInput.ruleBroken ? 1 : 0,
+      recapInput.lesson,
+      recapInput.nextAction,
+    ],
   );
   await db.execute(
     `UPDATE trades SET status = 'reviewed', updated_at = datetime('now') WHERE id = $1`,

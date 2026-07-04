@@ -25,6 +25,11 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - New trade risk % is checked against the selected account's risk plan without editing the plan.
 - Saved trade cards expose screenshot import for `pre-trade`, `entry`, and `exit`.
 - Screenshot buttons try TradingView capture first, then a window selector, then file import fallback.
+- Trades opens on the Calendar tab by default; the List tab groups trades by collapsible weeks.
+- Calendar days show only day totals; double-click a populated day to open that day's trades.
+- Missing per-trade recaps show a small warning on calendar days, weekly groups, and trade rows.
+- Calendar day detail and list rows can create a missing per-trade recap.
+- Per-trade recap creation collects structured automation fields: grade, plan follow, quality scores, mistake tags, positive tags, emotion, rule-broken, lesson, and next action.
 - The trade list stays compact and shows date/time, buy/sell, strategy, result, P&L, and growth %.
 - Recaps are separate from the pre-trade, entry, and exit workflow.
 - All persistence must use `src/shared/db/database.ts` and `src/shared/db/storage.ts`.

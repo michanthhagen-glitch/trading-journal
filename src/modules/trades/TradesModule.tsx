@@ -1,4 +1,17 @@
-import { ArrowLeft, FileText, Plus, Trash2, X } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CalendarDays,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  FileText,
+  List as ListIcon,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   addScreenshot,
@@ -8,12 +21,14 @@ import {
   listAccountSetup,
   listTrades,
   saveEntry,
+  saveRecap,
   type EntryData,
   type ExitData,
   type NewTrade,
   type RiskManagementPlan,
   type Strategy,
   type Trade,
+  type TradeRecapInput,
   type TradeResult,
   type TradingAccount,
 } from "../../shared/db/database";
@@ -28,6 +43,63 @@ import {
   type DraftScreenshot,
 } from "./components/ScreenshotTools";
 import { deleteScreenshotFile } from "../../shared/db/storage";
+
+type TradesView = "calendar" | "list";
+
+const TRADE_VIEWS: { id: TradesView; label: string; icon: ReactNode }[] = [
+  { id: "calendar", label: "Calendar", icon: <CalendarDays size={16} /> },
+  { id: "list", label: "List", icon: <ListIcon size={16} /> },
+];
+
+const TRADE_RECAP_GRADES: TradeRecapInput["grade"][] = ["A", "B", "C", "D"];
+
+const PLAN_FOLLOWED_OPTIONS: {
+  value: TradeRecapInput["followedPlan"];
+  label: string;
+}[] = [
+  { value: "yes", label: "Yes" },
+  { value: "partial", label: "Partial" },
+  { value: "no", label: "No" },
+];
+
+const EMOTION_TAGS = [
+  "none",
+  "fomo",
+  "fear",
+  "revenge",
+  "hesitation",
+  "greed",
+  "overconfidence",
+];
+
+const MISTAKE_TAGS = [
+  "Entered too early",
+  "Entered too late",
+  "No valid setup",
+  "Ignored bias",
+  "Bad stop loss",
+  "Bad take profit",
+  "Moved stop loss",
+  "Closed too early",
+  "Held too long",
+  "Over-risked",
+  "Revenge trade",
+  "FOMO entry",
+  "Did not follow plan",
+];
+
+const POSITIVE_TAGS = [
+  "Followed plan",
+  "Waited for confirmation",
+  "Good entry",
+  "Good stop loss",
+  "Good take profit",
+  "Managed risk well",
+  "Stayed calm",
+  "Cut loss correctly",
+  "Let winner run",
+  "Skipped bad setup",
+];
 
 function resultLabel(result: TradeResult) {
   switch (result) {
@@ -129,6 +201,85 @@ function tradeListDateTime(trade: Trade) {
   return `${trade.date} ${tradeListTime(trade)}`;
 }
 
+function parseTradeDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  )
+    return new Date();
+  return new Date(year, month - 1, day);
+}
+
+function dateKey(date: Date) {
+  return [
+    date.getFullYear(),
+    padTimePart(date.getMonth() + 1),
+    padTimePart(date.getDate()),
+  ].join("-");
+}
+
+function firstOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addDays(date: Date, amount: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+}
+
+function addMonths(date: Date, amount: number) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+function startOfWeek(date: Date) {
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  return addDays(date, diff);
+}
+
+function calendarDays(month: Date) {
+  const start = startOfWeek(firstOfMonth(month));
+  return Array.from({ length: 42 }, (_, index) => addDays(start, index));
+}
+
+function formatMonthLabel(date: Date) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatWeekLabel(start: Date) {
+  const end = addDays(start, 6);
+  const startLabel = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  }).format(start);
+  const endLabel = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(end);
+  return `${startLabel} - ${endLabel}`;
+}
+
+function sameMonth(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+}
+
+function tradePnlTotal(trades: Trade[]) {
+  const hasPnl = trades.some((trade) => trade.pnl !== null);
+  if (!hasPnl) return null;
+  return trades.reduce((sum, trade) => sum + (trade.pnl ?? 0), 0);
+}
+
+function missingRecapCount(trades: Trade[]) {
+  return trades.filter((trade) => !trade.hasRecap).length;
+}
+
 function plannedRiskReward(trade: Trade): number | null {
   const { price, stopLoss, takeProfit } = trade.entry;
   if (price === null || stopLoss === null || takeProfit === null) return null;
@@ -189,6 +340,36 @@ function tradeBalanceSummary(
   return { before, after, growthPercent };
 }
 
+function dayBalanceSummary(
+  account: TradingAccount | null,
+  trades: Trade[],
+  dayKey: string,
+) {
+  const dayTrades = trades.filter((trade) => trade.date === dayKey);
+  const pnl = tradePnlTotal(dayTrades);
+
+  if (!account) {
+    return { before: null, after: null, growthPercent: null, pnl };
+  }
+
+  const olderTrades = trades.filter((trade) => trade.date < dayKey);
+  const before = account.startingBalance + accountNetPnl(olderTrades);
+  const after = pnl === null ? null : before + pnl;
+  const growthPercent =
+    after === null || before === 0 ? null : ((after - before) / before) * 100;
+
+  return { before, after, growthPercent, pnl };
+}
+
+function formatDayDialogTitle(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(parseTradeDate(value));
+}
+
 function riskPlanMin(plan: RiskManagementPlan | null) {
   return plan?.riskPerTradeMinPercent ?? null;
 }
@@ -240,11 +421,19 @@ export function TradesModule({
   selectedAccount,
   selectedAccountId,
 }: ModuleContext) {
+  const [activeView, setActiveView] = useState<TradesView>("calendar");
+  const [calendarMonth, setCalendarMonth] = useState(() =>
+    firstOfMonth(new Date()),
+  );
+  const [collapsedWeeks, setCollapsedWeeks] = useState<Record<string, boolean>>(
+    {},
+  );
   const [trades, setTrades] = useState<Trade[]>([]);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [riskPlans, setRiskPlans] = useState<RiskManagementPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [recapTrade, setRecapTrade] = useState<Trade | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
 
   async function reload() {
@@ -264,6 +453,8 @@ export function TradesModule({
 
   useEffect(() => {
     setSelectedId(null);
+    setRecapTrade(null);
+    setCollapsedWeeks({});
     reload();
   }, [selectedAccountId]);
 
@@ -332,68 +523,68 @@ export function TradesModule({
         </button>
       </header>
 
-      <div className="panel">
-        {loading ? (
-          <p className="empty-state">Loading trades...</p>
-        ) : trades.length === 0 ? (
-          <p className="empty-state">No trades yet. Start with New trade.</p>
-        ) : (
-          <table className="trades-table">
-            <thead>
-              <tr>
-                <th>Date / Time</th>
-                <th>Buy/Sell</th>
-                <th>Strategy</th>
-                <th>Win/Loss/BE</th>
-                <th className="num">P&amp;L</th>
-                <th className="num">Growth %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trades.map((trade) => {
-                const balance = tradeBalanceSummary(
-                  selectedAccount,
-                  trades,
-                  trade,
-                );
-                const pnlTone = pnlToneClass(trade.pnl);
-                const growthTone = pnlToneClass(balance.growthPercent);
-
-                return (
-                  <tr
-                    key={trade.id}
-                    className="trades-row"
-                    onClick={() => setSelectedId(trade.id)}
-                  >
-                    <td>{tradeListDateTime(trade)}</td>
-                    <td>
-                      <span className={`dir-pill dir-${trade.direction}`}>
-                        {directionActionLabel(trade.direction)}
-                      </span>
-                    </td>
-                    <td className="strategy-cell">
-                      {trade.preTrade.strategy || "—"}
-                    </td>
-                    <td>
-                      <span
-                        className={`result-pill result-${trade.exit.result || "pending"}`}
-                      >
-                        {resultShortLabel(trade.exit.result)}
-                      </span>
-                    </td>
-                    <td className={`num pnl ${pnlTone}`}>
-                      {fmtPnl(trade.pnl, selectedAccount?.currency)}
-                    </td>
-                    <td className={`num pnl ${growthTone}`}>
-                      {fmtPercent(balance.growthPercent)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+      <div className="tab-bar" role="tablist" aria-label="Trade views">
+        {TRADE_VIEWS.map((view) => (
+          <button
+            key={view.id}
+            role="tab"
+            aria-selected={activeView === view.id}
+            className={`tab ${activeView === view.id ? "active" : ""}`}
+            onClick={() => setActiveView(view.id)}
+            type="button"
+          >
+            <span className="tab-icon" aria-hidden="true">
+              {view.icon}
+            </span>
+            <span>{view.label}</span>
+          </button>
+        ))}
       </div>
+
+      {loading ? (
+        <div className="panel">
+          <p className="empty-state">Loading trades...</p>
+        </div>
+      ) : trades.length === 0 ? (
+        <div className="panel">
+          <p className="empty-state">No trades yet. Start with New trade.</p>
+        </div>
+      ) : activeView === "calendar" ? (
+        <TradesCalendarView
+          month={calendarMonth}
+          selectedAccount={selectedAccount}
+          trades={trades}
+          onCreateRecap={setRecapTrade}
+          onMonthChange={setCalendarMonth}
+          onSelectTrade={setSelectedId}
+        />
+      ) : (
+        <WeeklyTradesList
+          collapsedWeeks={collapsedWeeks}
+          selectedAccount={selectedAccount}
+          trades={trades}
+          onCreateRecap={setRecapTrade}
+          onSelectTrade={setSelectedId}
+          onToggleWeek={(weekKey) =>
+            setCollapsedWeeks((current) => ({
+              ...current,
+              [weekKey]: !(current[weekKey] ?? false),
+            }))
+          }
+        />
+      )}
+
+      {recapTrade ? (
+        <TradeRecapDialog
+          account={selectedAccount}
+          trade={recapTrade}
+          onClose={() => setRecapTrade(null)}
+          onSaved={async () => {
+            setRecapTrade(null);
+            await reload();
+          }}
+        />
+      ) : null}
 
       {showNewForm && selectedAccount ? (
         <NewTradeWorkflow
@@ -408,6 +599,804 @@ export function TradesModule({
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+type TradesListTableProps = {
+  accountTrades: Trade[];
+  selectedAccount: TradingAccount | null;
+  trades: Trade[];
+  onCreateRecap: (trade: Trade) => void;
+  onSelectTrade: (tradeId: string) => void;
+};
+
+function TradesListTable({
+  accountTrades,
+  selectedAccount,
+  trades,
+  onCreateRecap,
+  onSelectTrade,
+}: TradesListTableProps) {
+  return (
+    <table className="trades-table">
+      <thead>
+        <tr>
+          <th>Date / Time</th>
+          <th>Buy/Sell</th>
+          <th>Strategy</th>
+          <th>Win/Loss/BE</th>
+          <th className="num">P&amp;L</th>
+          <th className="num">Growth %</th>
+          <th className="recap-column">Recap</th>
+        </tr>
+      </thead>
+      <tbody>
+        {trades.map((trade) => {
+          const balance = tradeBalanceSummary(
+            selectedAccount,
+            accountTrades,
+            trade,
+          );
+          const pnlTone = pnlToneClass(trade.pnl);
+          const growthTone = pnlToneClass(balance.growthPercent);
+
+          return (
+            <tr
+              key={trade.id}
+              className="trades-row"
+              onClick={() => onSelectTrade(trade.id)}
+            >
+              <td>{tradeListDateTime(trade)}</td>
+              <td>
+                <span className={`dir-pill dir-${trade.direction}`}>
+                  {directionActionLabel(trade.direction)}
+                </span>
+              </td>
+              <td className="strategy-cell">
+                {trade.preTrade.strategy || "—"}
+              </td>
+              <td>
+                <span
+                  className={`result-pill result-${trade.exit.result || "pending"}`}
+                >
+                  {resultShortLabel(trade.exit.result)}
+                </span>
+              </td>
+              <td className={`num pnl ${pnlTone}`}>
+                {fmtPnl(trade.pnl, selectedAccount?.currency)}
+              </td>
+              <td className={`num pnl ${growthTone}`}>
+                {fmtPercent(balance.growthPercent)}
+              </td>
+              <td className="recap-cell">
+                {trade.hasRecap ? (
+                  <span className="recap-status recap-status-done">
+                    <CheckCircle2 size={13} aria-hidden="true" />
+                    <span>Done</span>
+                  </span>
+                ) : (
+                  <button
+                    className="recap-action-button"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onCreateRecap(trade);
+                    }}
+                    title="Create trade recap"
+                  >
+                    <AlertTriangle size={13} aria-hidden="true" />
+                    <span>Create</span>
+                  </button>
+                )}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+type TradesCalendarViewProps = {
+  month: Date;
+  selectedAccount: TradingAccount | null;
+  trades: Trade[];
+  onCreateRecap: (trade: Trade) => void;
+  onMonthChange: (month: Date) => void;
+  onSelectTrade: (tradeId: string) => void;
+};
+
+function TradesCalendarView({
+  month,
+  selectedAccount,
+  trades,
+  onCreateRecap,
+  onMonthChange,
+  onSelectTrade,
+}: TradesCalendarViewProps) {
+  const [openDayKey, setOpenDayKey] = useState<string | null>(null);
+  const days = calendarDays(month);
+  const today = todayInputValue();
+  const tradesByDate = useMemo(() => {
+    const grouped = new Map<string, Trade[]>();
+    for (const trade of trades) {
+      const dayTrades = grouped.get(trade.date) ?? [];
+      dayTrades.push(trade);
+      grouped.set(trade.date, dayTrades);
+    }
+    return grouped;
+  }, [trades]);
+  const openDayTrades = openDayKey ? (tradesByDate.get(openDayKey) ?? []) : [];
+  const openDaySummary = openDayKey
+    ? dayBalanceSummary(selectedAccount, trades, openDayKey)
+    : null;
+
+  function openDay(key: string, dayTrades: Trade[]) {
+    if (dayTrades.length === 0) return;
+    setOpenDayKey(key);
+  }
+
+  return (
+    <section className="panel trade-calendar-panel" aria-label="Trade calendar">
+      <div className="calendar-toolbar">
+        <button
+          className="icon-button"
+          type="button"
+          aria-label="Previous month"
+          onClick={() => {
+            setOpenDayKey(null);
+            onMonthChange(addMonths(month, -1));
+          }}
+        >
+          <ChevronLeft size={18} aria-hidden="true" />
+        </button>
+        <h3>{formatMonthLabel(month)}</h3>
+        <button
+          className="icon-button"
+          type="button"
+          aria-label="Next month"
+          onClick={() => {
+            setOpenDayKey(null);
+            onMonthChange(addMonths(month, 1));
+          }}
+        >
+          <ChevronRight size={18} aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className="calendar-grid">
+        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+          <div className="calendar-weekday" key={day}>
+            {day}
+          </div>
+        ))}
+
+        {days.map((day) => {
+          const key = dateKey(day);
+          const dayTrades = tradesByDate.get(key) ?? [];
+          const missingRecaps = missingRecapCount(dayTrades);
+          const daySummary = dayBalanceSummary(selectedAccount, trades, key);
+          const dayTone =
+            daySummary.pnl === null
+              ? ""
+              : daySummary.pnl > 0
+                ? "winning"
+                : daySummary.pnl < 0
+                  ? "losing"
+                  : "flat";
+
+          return (
+            <div
+              className={`calendar-day ${
+                sameMonth(day, month) ? "" : "outside"
+              } ${key === today ? "today" : ""} ${
+                dayTrades.length > 0 ? "has-trades" : ""
+              } ${dayTone}`}
+              aria-label={
+                dayTrades.length > 0
+                  ? `${formatDayDialogTitle(key)}, ${dayTrades.length} trades, ${missingRecaps} missing recaps`
+                  : undefined
+              }
+              key={key}
+              onDoubleClick={() => openDay(key, dayTrades)}
+              onKeyDown={(event) => {
+                if (
+                  dayTrades.length > 0 &&
+                  (event.key === "Enter" || event.key === " ")
+                ) {
+                  event.preventDefault();
+                  openDay(key, dayTrades);
+                }
+              }}
+              role={dayTrades.length > 0 ? "button" : undefined}
+              tabIndex={dayTrades.length > 0 ? 0 : undefined}
+            >
+              <div className="calendar-day-header">
+                <span>{day.getDate()}</span>
+                {missingRecaps > 0 ? (
+                  <span
+                    className="calendar-recap-warning"
+                    title={`${missingRecaps} missing ${missingRecaps === 1 ? "recap" : "recaps"}`}
+                    aria-label={`${missingRecaps} missing ${missingRecaps === 1 ? "recap" : "recaps"}`}
+                  >
+                    <AlertTriangle size={13} aria-hidden="true" />
+                    {missingRecaps > 1 ? <span>{missingRecaps}</span> : null}
+                  </span>
+                ) : null}
+              </div>
+              {dayTrades.length > 0 ? (
+                <div className="calendar-day-summary">
+                  <span>
+                    {dayTrades.length}{" "}
+                    {dayTrades.length === 1 ? "trade" : "trades"}
+                  </span>
+                  <strong className={pnlToneClass(daySummary.pnl)}>
+                    {fmtPnl(daySummary.pnl, selectedAccount?.currency)}
+                  </strong>
+                  <span className={pnlToneClass(daySummary.growthPercent)}>
+                    {fmtPercent(daySummary.growthPercent)}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      {openDayKey && openDaySummary ? (
+        <DayTradesDialog
+          accountTrades={trades}
+          dayKey={openDayKey}
+          daySummary={openDaySummary}
+          onClose={() => setOpenDayKey(null)}
+          onCreateRecap={onCreateRecap}
+          onSelectTrade={onSelectTrade}
+          selectedAccount={selectedAccount}
+          trades={openDayTrades}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+type DayTradesDialogProps = {
+  accountTrades: Trade[];
+  dayKey: string;
+  daySummary: ReturnType<typeof dayBalanceSummary>;
+  selectedAccount: TradingAccount | null;
+  trades: Trade[];
+  onClose: () => void;
+  onCreateRecap: (trade: Trade) => void;
+  onSelectTrade: (tradeId: string) => void;
+};
+
+function DayTradesDialog({
+  accountTrades,
+  dayKey,
+  daySummary,
+  selectedAccount,
+  trades,
+  onClose,
+  onCreateRecap,
+  onSelectTrade,
+}: DayTradesDialogProps) {
+  return (
+    <div
+      className="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="day-trades-title"
+      onMouseDown={onClose}
+    >
+      <div
+        className="modal-card day-trades-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="modal-header">
+          <div>
+            <h3 id="day-trades-title">{formatDayDialogTitle(dayKey)}</h3>
+            <p className="modal-subtitle">
+              {trades.length} {trades.length === 1 ? "trade" : "trades"}
+            </p>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Close day trades"
+            onClick={onClose}
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="modal-body">
+          <div className="day-trades-summary">
+            <div>
+              <span>P&L</span>
+              <strong className={pnlToneClass(daySummary.pnl)}>
+                {fmtPnl(daySummary.pnl, selectedAccount?.currency)}
+              </strong>
+            </div>
+            <div>
+              <span>Growth</span>
+              <strong className={pnlToneClass(daySummary.growthPercent)}>
+                {fmtPercent(daySummary.growthPercent)}
+              </strong>
+            </div>
+            <div>
+              <span>Trades</span>
+              <strong>{trades.length}</strong>
+            </div>
+          </div>
+
+          <div className="day-trades-table">
+            <TradesListTable
+              accountTrades={accountTrades}
+              selectedAccount={selectedAccount}
+              trades={trades}
+              onCreateRecap={onCreateRecap}
+              onSelectTrade={onSelectTrade}
+            />
+          </div>
+        </div>
+
+        <footer className="modal-footer">
+          <button className="secondary-button" type="button" onClick={onClose}>
+            Close
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+type TradeRecapDialogProps = {
+  account: TradingAccount | null;
+  trade: Trade;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+};
+
+function createDefaultTradeRecap(trade: Trade): TradeRecapInput {
+  return (
+    trade.recap ?? {
+      grade: "",
+      followedPlan: "",
+      setupQuality: 5,
+      entryQuality: 5,
+      managementQuality: 5,
+      exitQuality: 5,
+      mistakeTags: [],
+      positiveTags: [],
+      emotionTag: "none",
+      ruleBroken: false,
+      lesson: "",
+      nextAction: "",
+      body: "",
+    }
+  );
+}
+
+function TradeRecapDialog({
+  account,
+  trade,
+  onClose,
+  onSaved,
+}: TradeRecapDialogProps) {
+  const [form, setForm] = useState<TradeRecapInput>(() =>
+    createDefaultTradeRecap(trade),
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const currency = account?.currency ?? "USD";
+
+  function update<K extends keyof TradeRecapInput>(
+    key: K,
+    value: TradeRecapInput[K],
+  ) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function toggleTag(key: "mistakeTags" | "positiveTags", tag: string) {
+    setForm((current) => {
+      const currentTags = current[key];
+      return {
+        ...current,
+        [key]: currentTags.includes(tag)
+          ? currentTags.filter((item) => item !== tag)
+          : [...currentTags, tag],
+      };
+    });
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!form.grade || !form.followedPlan || !form.lesson.trim()) {
+      setError("Grade, plan follow, and lesson are required.");
+      return;
+    }
+
+    setError(null);
+    setSaving(true);
+    try {
+      await saveRecap(trade.id, form);
+      await onSaved();
+    } catch (saveError) {
+      console.error(saveError);
+      setError("Could not save recap. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Create trade recap"
+      onMouseDown={onClose}
+    >
+      <form
+        className="modal-card trade-recap-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={handleSubmit}
+      >
+        <header className="modal-header">
+          <div>
+            <h3>Create recap - {trade.pair}</h3>
+            <p className="modal-subtitle">
+              {trade.date} {tradeListTime(trade)} -{" "}
+              {directionActionLabel(trade.direction)}
+            </p>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Close recap"
+            onClick={onClose}
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="modal-body recap-form">
+          <div className="recap-auto-summary">
+            <SummaryMetric
+              label="Result"
+              value={resultShortLabel(trade.exit.result)}
+            />
+            <SummaryMetric
+              label="P&L"
+              value={fmtPnl(trade.pnl, currency)}
+              tone={pnlToneClass(trade.pnl)}
+            />
+            <SummaryMetric
+              label="Planned RR"
+              value={fmtRMultiple(plannedRiskReward(trade))}
+            />
+            <SummaryMetric
+              label="Actual RR"
+              value={fmtRMultiple(actualRiskReward(trade))}
+              tone={pnlToneClass(trade.pnl)}
+            />
+            <SummaryMetric
+              label="Before"
+              value={
+                trade.preTrade.feeling ? `${trade.preTrade.feeling}/10` : "—"
+              }
+            />
+            <SummaryMetric
+              label="After"
+              value={trade.exit.feeling ? `${trade.exit.feeling}/10` : "—"}
+            />
+          </div>
+
+          <section className="recap-section">
+            <h4>Review score</h4>
+            <div className="form-grid">
+              <label className="field">
+                <span>Trade grade</span>
+                <select
+                  value={form.grade}
+                  onChange={(event) =>
+                    update(
+                      "grade",
+                      event.target.value as TradeRecapInput["grade"],
+                    )
+                  }
+                >
+                  <option value="">Pick grade</option>
+                  {TRADE_RECAP_GRADES.map((grade) => (
+                    <option value={grade} key={grade}>
+                      {grade}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Followed plan?</span>
+                <select
+                  value={form.followedPlan}
+                  onChange={(event) =>
+                    update(
+                      "followedPlan",
+                      event.target.value as TradeRecapInput["followedPlan"],
+                    )
+                  }
+                >
+                  <option value="">Pick one</option>
+                  {PLAN_FOLLOWED_OPTIONS.map((option) => (
+                    <option value={option.value} key={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field recap-rule-toggle">
+                <span>Rule broken?</span>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={form.ruleBroken}
+                    onChange={(event) =>
+                      update("ruleBroken", event.target.checked)
+                    }
+                  />
+                  <span>{form.ruleBroken ? "Yes" : "No"}</span>
+                </label>
+              </label>
+            </div>
+
+            <div className="recap-score-grid">
+              <RecapScoreField
+                label="Setup quality"
+                value={form.setupQuality ?? 5}
+                onChange={(value) => update("setupQuality", value)}
+              />
+              <RecapScoreField
+                label="Entry quality"
+                value={form.entryQuality ?? 5}
+                onChange={(value) => update("entryQuality", value)}
+              />
+              <RecapScoreField
+                label="Management quality"
+                value={form.managementQuality ?? 5}
+                onChange={(value) => update("managementQuality", value)}
+              />
+              <RecapScoreField
+                label="Exit quality"
+                value={form.exitQuality ?? 5}
+                onChange={(value) => update("exitQuality", value)}
+              />
+            </div>
+          </section>
+
+          <section className="recap-section">
+            <h4>Patterns</h4>
+            <label className="field">
+              <span>Emotional mistake</span>
+              <select
+                value={form.emotionTag}
+                onChange={(event) => update("emotionTag", event.target.value)}
+              >
+                {EMOTION_TAGS.map((tag) => (
+                  <option value={tag} key={tag}>
+                    {tag === "none" ? "None" : tag}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <RecapTagGroup
+              label="Main mistake"
+              options={MISTAKE_TAGS}
+              selected={form.mistakeTags}
+              onToggle={(tag) => toggleTag("mistakeTags", tag)}
+            />
+            <RecapTagGroup
+              label="What went well"
+              options={POSITIVE_TAGS}
+              selected={form.positiveTags}
+              onToggle={(tag) => toggleTag("positiveTags", tag)}
+            />
+          </section>
+
+          <section className="recap-section">
+            <h4>Lesson</h4>
+            <div className="form-grid">
+              <label className="field field-wide">
+                <span>Lesson learned</span>
+                <textarea
+                  rows={4}
+                  value={form.lesson}
+                  onChange={(event) => update("lesson", event.target.value)}
+                  placeholder="What did this trade teach you?"
+                />
+              </label>
+              <label className="field field-wide">
+                <span>Next time</span>
+                <textarea
+                  rows={4}
+                  value={form.nextAction}
+                  onChange={(event) => update("nextAction", event.target.value)}
+                  placeholder="What will you do differently next time?"
+                />
+              </label>
+              <label className="field field-wide">
+                <span>Extra notes</span>
+                <textarea
+                  rows={3}
+                  value={form.body}
+                  onChange={(event) => update("body", event.target.value)}
+                  placeholder="Anything else worth remembering"
+                />
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <footer className="modal-footer">
+          {error ? (
+            <p className="modal-save-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+          >
+            Cancel
+          </button>
+          <button className="primary-button" type="submit" disabled={saving}>
+            {saving ? "Saving..." : "Save recap"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function RecapScoreField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="field recap-score-field">
+      <span className="scale-label">
+        <span>{label}</span>
+        <strong>{value}/10</strong>
+      </span>
+      <input
+        type="range"
+        min={1}
+        max={10}
+        step={1}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="feeling-slider"
+      />
+      <ScaleBars value={value} />
+    </label>
+  );
+}
+
+function RecapTagGroup({
+  label,
+  options,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  options: string[];
+  selected: string[];
+  onToggle: (tag: string) => void;
+}) {
+  return (
+    <fieldset className="recap-tag-group">
+      <legend>{label}</legend>
+      <div className="recap-tag-grid">
+        {options.map((option) => (
+          <label className="recap-tag-option" key={option}>
+            <input
+              type="checkbox"
+              checked={selected.includes(option)}
+              onChange={() => onToggle(option)}
+            />
+            <span>{option}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+type WeeklyTradesListProps = {
+  collapsedWeeks: Record<string, boolean>;
+  selectedAccount: TradingAccount | null;
+  trades: Trade[];
+  onCreateRecap: (trade: Trade) => void;
+  onSelectTrade: (tradeId: string) => void;
+  onToggleWeek: (weekKey: string) => void;
+};
+
+function WeeklyTradesList({
+  collapsedWeeks,
+  selectedAccount,
+  trades,
+  onCreateRecap,
+  onSelectTrade,
+  onToggleWeek,
+}: WeeklyTradesListProps) {
+  const weekGroups = useMemo(() => {
+    const grouped = new Map<string, { start: Date; trades: Trade[] }>();
+    for (const trade of trades) {
+      const start = startOfWeek(parseTradeDate(trade.date));
+      const key = dateKey(start);
+      const group = grouped.get(key) ?? { start, trades: [] };
+      group.trades.push(trade);
+      grouped.set(key, group);
+    }
+    return Array.from(grouped.entries())
+      .sort(([a], [b]) => (a < b ? 1 : -1))
+      .map(([key, group]) => ({ key, ...group }));
+  }, [trades]);
+
+  return (
+    <div className="trade-week-list">
+      {weekGroups.map((group) => {
+        const isCollapsed = collapsedWeeks[group.key] ?? false;
+        const weekPnl = tradePnlTotal(group.trades);
+        const missingRecaps = missingRecapCount(group.trades);
+
+        return (
+          <section className="trade-week-group" key={group.key}>
+            <button
+              className="trade-week-header"
+              type="button"
+              aria-expanded={!isCollapsed}
+              onClick={() => onToggleWeek(group.key)}
+            >
+              <span className="trade-week-title">
+                {isCollapsed ? (
+                  <ChevronRight size={16} aria-hidden="true" />
+                ) : (
+                  <ChevronDown size={16} aria-hidden="true" />
+                )}
+                <span>{formatWeekLabel(group.start)}</span>
+              </span>
+              <span className="trade-week-meta">
+                {missingRecaps > 0 ? (
+                  <span className="trade-week-recap-warning">
+                    <AlertTriangle size={13} aria-hidden="true" />
+                    {missingRecaps} missing
+                  </span>
+                ) : null}
+                <span>{group.trades.length} trades</span>
+                <strong className={pnlToneClass(weekPnl)}>
+                  {fmtPnl(weekPnl, selectedAccount?.currency)}
+                </strong>
+              </span>
+            </button>
+            {isCollapsed ? null : (
+              <TradesListTable
+                accountTrades={trades}
+                selectedAccount={selectedAccount}
+                trades={group.trades}
+                onCreateRecap={onCreateRecap}
+                onSelectTrade={onSelectTrade}
+              />
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }
