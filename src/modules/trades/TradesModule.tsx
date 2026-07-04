@@ -125,6 +125,10 @@ function tradeListTime(trade: Trade) {
   return trade.entry.time ?? trade.exit.time ?? "—";
 }
 
+function tradeListDateTime(trade: Trade) {
+  return `${trade.date} ${tradeListTime(trade)}`;
+}
+
 function plannedRiskReward(trade: Trade): number | null {
   const { price, stopLoss, takeProfit } = trade.entry;
   if (price === null || stopLoss === null || takeProfit === null) return null;
@@ -337,8 +341,7 @@ export function TradesModule({
           <table className="trades-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Time</th>
+                <th>Date / Time</th>
                 <th>Buy/Sell</th>
                 <th>Strategy</th>
                 <th>Win/Loss/BE</th>
@@ -362,8 +365,7 @@ export function TradesModule({
                     className="trades-row"
                     onClick={() => setSelectedId(trade.id)}
                   >
-                    <td>{trade.date}</td>
-                    <td>{tradeListTime(trade)}</td>
+                    <td>{tradeListDateTime(trade)}</td>
                     <td>
                       <span className={`dir-pill dir-${trade.direction}`}>
                         {directionActionLabel(trade.direction)}
