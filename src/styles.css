@@ -1273,7 +1273,8 @@ button {
 }
 
 .dash-stat-grid {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(92px, 1fr);
 }
 
 .dash-stat-strip {
@@ -1320,6 +1321,56 @@ button {
   background: var(--bg-app);
 }
 
+.dash-stat-card.is-split {
+  align-content: stretch;
+}
+
+.dash-stat-split {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: center;
+}
+
+.dash-stat-mini {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.dash-stat-mini + .dash-stat-mini {
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+
+.dash-stat-card .dash-stat-mini span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dash-stat-card .dash-stat-mini strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-stat-card .dash-stat-mini small {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dash-stat-card strong {
   overflow: hidden;
   color: var(--text);
@@ -1336,8 +1387,17 @@ button {
   white-space: nowrap;
 }
 
-.dash-detail-modal {
-  max-width: 760px;
+.modal-card.dash-detail-modal {
+  width: fit-content;
+  max-width: min(1320px, calc(100vw - 24px));
+}
+
+.modal-card.dash-detail-modal.is-rate-chart {
+  width: min(1120px, calc(100vw - 24px));
+}
+
+.modal-card.dash-detail-modal.is-ranking {
+  width: min(760px, calc(100vw - 24px));
 }
 
 .modal-card.dash-chart-detail-modal {
@@ -1461,6 +1521,38 @@ button {
   gap: 1px;
 }
 
+.dash-rate-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.dash-detail-tabs {
+  width: fit-content;
+}
+
+.modal-card.is-rate-table .dash-rate-detail {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.modal-card.is-rate-table .dash-rate-detail-table {
+  width: max-content;
+  max-width: 100%;
+}
+
+.dash-rate-detail-table > div {
+  grid-template-columns:
+    minmax(150px, 1.2fr) 70px 64px 74px 96px 88px 88px 78px
+    minmax(116px, 1fr);
+  min-width: 0;
+}
+
+.dash-rate-detail-table.is-day > div {
+  grid-template-columns:
+    54px 70px 64px 74px 96px 88px 88px 78px
+    minmax(116px, 1fr);
+}
+
 .dash-ranking-table > div {
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.8fr) 72px minmax(0, 1fr);
 }
@@ -1477,6 +1569,97 @@ button {
 
 .dash-detail-table strong {
   color: var(--text);
+}
+
+.dash-rate-bar-chart {
+  width: min(100%, 1080px);
+  min-width: 0;
+  display: grid;
+  justify-self: center;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel-elev);
+}
+
+.dash-rate-chart-scale,
+.dash-rate-bar-row {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) 56px;
+  gap: 12px;
+  align-items: center;
+}
+
+.dash-rate-chart-scale {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dash-rate-chart-scale > div {
+  display: flex;
+  justify-content: space-between;
+  padding-inline: 34px 28px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dash-rate-chart-scale > span:last-child {
+  text-align: right;
+}
+
+.dash-rate-bar-row {
+  min-width: 0;
+}
+
+.dash-rate-bar-row > strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.dash-rate-bar-row > span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.dash-rate-bars {
+  display: grid;
+  gap: 3px;
+  align-content: center;
+}
+
+.dash-rate-bar-line {
+  min-width: 0;
+  display: block;
+}
+
+.dash-rate-bar-track {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-app);
+}
+
+.dash-rate-bar-track i {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+}
+
+.dash-rate-bar-track i.positive {
+  background: linear-gradient(90deg, rgba(76, 200, 130, 0.45), #6cd49a);
+}
+
+.dash-rate-bar-track i.negative {
+  background: linear-gradient(90deg, rgba(232, 88, 90, 0.45), #f08688);
+}
+
+.dash-rate-bar-track i.warning {
+  background: linear-gradient(90deg, rgba(245, 184, 108, 0.45), #f5b86c);
 }
 
 @media (max-width: 1280px) {

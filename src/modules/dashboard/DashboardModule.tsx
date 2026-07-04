@@ -35,6 +35,7 @@ type OutcomePoint = {
 };
 
 type RateRow = {
+  beRate: number | null;
   breakEvens: number;
   label: string;
   losses: number;
@@ -118,6 +119,7 @@ type SummaryData = {
 type DetailState =
   | {
       rows: RateRow[];
+      scope?: "day";
       title: string;
       type: "rate";
     }
@@ -136,6 +138,7 @@ const DASHBOARD_TABS: { id: DashboardTab; label: string }[] = [
 ];
 
 const RING_CIRCUMFERENCE = 263.89;
+const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function pad(value: number) {
   return value.toString().padStart(2, "0");
@@ -244,9 +247,8 @@ function timeOfDayLabel(trade: Trade) {
 }
 
 function dayLabel(trade: Trade) {
-  return new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(
-    parseDate(trade.date),
-  );
+  const day = parseDate(trade.date).getDay();
+  return WEEKDAY_LABELS[day === 0 ? 6 : day - 1];
 }
 
 function directionLabel(trade: Trade) {
@@ -763,6 +765,7 @@ function rateGroups(
     const row =
       groups.get(label) ??
       ({
+        beRate: null,
         breakEvens: 0,
         label,
         losses: 0,
@@ -783,6 +786,7 @@ function rateGroups(
 
   const rows = Array.from(groups.values()).map((row) => ({
     ...row,
+    beRate: row.trades === 0 ? null : (row.breakEvens / row.trades) * 100,
     lossRate: row.trades === 0 ? null : (row.losses / row.trades) * 100,
     winRate: row.trades === 0 ? null : (row.wins / row.trades) * 100,
   }));
@@ -800,6 +804,28 @@ function rateGroups(
     rows: rows.sort((a, b) => b.pnl - a.pnl),
     worstWin,
   };
+}
+
+function emptyRateRow(label: string): RateRow {
+  return {
+    beRate: null,
+    breakEvens: 0,
+    label,
+    losses: 0,
+    lossRate: null,
+    pnl: 0,
+    trades: 0,
+    winRate: null,
+    wins: 0,
+  };
+}
+
+function detailRateRows(rows: RateRow[], scope?: "day") {
+  if (scope !== "day") return rows;
+  const rowMap = new Map(rows.map((row) => [row.label, row]));
+  return WEEKDAY_LABELS.map(
+    (label) => rowMap.get(label) ?? emptyRateRow(label),
+  );
 }
 
 function buildTradeOutcomes(
@@ -1618,15 +1644,45 @@ function ChartPanel({
 }
 
 function RateStatsCard({
+  leaders,
   onOpen,
-  rows,
   title,
+  variant = "bestWorst",
 }: {
+  leaders: RateLeaders;
   onOpen: () => void;
-  rows: RateRow[];
   title: string;
+  variant?: "bestWorst" | "buySell" | "simple";
 }) {
-  const top = rows[0] ?? null;
+  const top = leaders.rows[0] ?? null;
+  const buy = leaders.rows.find((row) => row.label === "Buy") ?? null;
+  const sell = leaders.rows.find((row) => row.label === "Sell") ?? null;
+
+  if (variant !== "simple") {
+    const left = variant === "buySell" ? buy : leaders.bestWin;
+    const right = variant === "buySell" ? sell : leaders.worstWin;
+
+    return (
+      <button
+        className="dash-stat-card is-split"
+        type="button"
+        onClick={onOpen}
+      >
+        <span>{title}</span>
+        <div className="dash-stat-split">
+          <RateStatMini
+            caption={variant === "buySell" ? "Buy" : "Best win rate"}
+            row={left}
+          />
+          <RateStatMini
+            caption={variant === "buySell" ? "Sell" : "Worst win rate"}
+            row={right}
+          />
+        </div>
+      </button>
+    );
+  }
+
   return (
     <button className="dash-stat-card" type="button" onClick={onOpen}>
       <span>{title}</span>
@@ -1639,6 +1695,22 @@ function RateStatsCard({
           : "No data"}
       </small>
     </button>
+  );
+}
+
+function RateStatMini({
+  caption,
+  row,
+}: {
+  caption: string;
+  row: RateRow | null;
+}) {
+  return (
+    <div className="dash-stat-mini">
+      <span>{caption}</span>
+      <strong>{row?.label ?? "-"}</strong>
+      <small>{row ? `${fmtCompactPercent(row.winRate)} win` : "No data"}</small>
+    </div>
   );
 }
 
@@ -1676,7 +1748,21 @@ function StatsDetailModal({
   detail: DetailState;
   onClose: () => void;
 }) {
+  const [rateView, setRateView] = useState<"chart" | "table">("table");
+  useEffect(() => {
+    setRateView("table");
+  }, [detail?.title]);
+
   if (!detail) return null;
+
+  const rateRows =
+    detail.type === "rate" ? detailRateRows(detail.rows, detail.scope) : [];
+  const rateNameLabel =
+    detail.type === "rate" && detail.scope === "day" ? "Day" : "Name";
+  const modalClassName =
+    detail.type === "rate"
+      ? `modal-card dash-detail-modal is-rate-${rateView}`
+      : "modal-card dash-detail-modal is-ranking";
 
   return (
     <div
@@ -1687,7 +1773,7 @@ function StatsDetailModal({
       onMouseDown={onClose}
     >
       <div
-        className="modal-card dash-detail-modal"
+        className={modalClassName}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="modal-header">
@@ -1710,29 +1796,71 @@ function StatsDetailModal({
         </header>
         <div className="modal-body">
           {detail.type === "rate" ? (
-            <div className="dash-detail-table">
-              <div>
-                <span>Name</span>
-                <span>Trades</span>
-                <span>Win rate</span>
-                <span>Loss rate</span>
-                <span>P&L</span>
+            <div className="dash-rate-detail">
+              <div
+                className="dash-detail-tabs tab-bar"
+                role="tablist"
+                aria-label={`${detail.title} view`}
+              >
+                <button
+                  className={`tab ${rateView === "table" ? "active" : ""}`}
+                  role="tab"
+                  aria-selected={rateView === "table"}
+                  type="button"
+                  onClick={() => setRateView("table")}
+                >
+                  Table
+                </button>
+                <button
+                  className={`tab ${rateView === "chart" ? "active" : ""}`}
+                  role="tab"
+                  aria-selected={rateView === "chart"}
+                  type="button"
+                  onClick={() => setRateView("chart")}
+                >
+                  Chart
+                </button>
               </div>
-              {detail.rows.map((row) => (
-                <div key={row.label}>
-                  <strong>{row.label}</strong>
-                  <span>{row.trades}</span>
-                  <span className="positive">
-                    {fmtCompactPercent(row.winRate)}
-                  </span>
-                  <span className="negative">
-                    {fmtCompactPercent(row.lossRate)}
-                  </span>
-                  <span className={toneFromNumber(row.pnl)}>
-                    {fmtCurrency(row.pnl, currency, true)}
-                  </span>
+              {rateView === "table" ? (
+                <div
+                  className={`dash-detail-table dash-rate-detail-table ${
+                    detail.scope === "day" ? "is-day" : ""
+                  }`}
+                >
+                  <div>
+                    <span>{rateNameLabel}</span>
+                    <span>Trades</span>
+                    <span>Wins</span>
+                    <span>Losses</span>
+                    <span>Breakeven</span>
+                    <span>Win rate</span>
+                    <span>Loss rate</span>
+                    <span>BE rate</span>
+                    <span>Net P&L</span>
+                  </div>
+                  {rateRows.map((row) => (
+                    <div key={row.label}>
+                      <strong>{row.label}</strong>
+                      <span>{row.trades}</span>
+                      <span className="positive">{row.wins}</span>
+                      <span className="negative">{row.losses}</span>
+                      <span>{row.breakEvens}</span>
+                      <span className="positive">
+                        {fmtCompactPercent(row.winRate)}
+                      </span>
+                      <span className="negative">
+                        {fmtCompactPercent(row.lossRate)}
+                      </span>
+                      <span>{fmtCompactPercent(row.beRate)}</span>
+                      <span className={toneFromNumber(row.pnl)}>
+                        {fmtCurrency(row.pnl, currency, true)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <RateBarChart rows={rateRows} />
+              )}
             </div>
           ) : (
             <div className="dash-detail-table dash-ranking-table">
@@ -1755,6 +1883,82 @@ function StatsDetailModal({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function RateBarChart({ rows }: { rows: RateRow[] }) {
+  const maxCount = Math.max(
+    1,
+    ...rows.flatMap((row) => [row.wins, row.losses, row.breakEvens]),
+  );
+  const midCount = Math.ceil(maxCount / 2);
+  const scaleTicks = maxCount === 1 ? [0, 1] : [0, midCount, maxCount];
+
+  return (
+    <div
+      className="dash-rate-bar-chart"
+      role="img"
+      aria-label="Sideways trade result bar chart"
+    >
+      <div className="dash-rate-chart-scale" aria-hidden="true">
+        <span />
+        <div>
+          {scaleTicks.map((tick) => (
+            <span key={tick}>{tick}</span>
+          ))}
+        </div>
+        <span>Trades</span>
+      </div>
+      {rows.map((row) => (
+        <div className="dash-rate-bar-row" key={row.label}>
+          <strong>{row.label}</strong>
+          <div className="dash-rate-bars">
+            <RateBar
+              label="Win"
+              tone="positive"
+              value={row.wins}
+              max={maxCount}
+            />
+            <RateBar
+              label="Loss"
+              tone="negative"
+              value={row.losses}
+              max={maxCount}
+            />
+            <RateBar
+              label="BE"
+              tone="warning"
+              value={row.breakEvens}
+              max={maxCount}
+            />
+          </div>
+          <span>{row.trades}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RateBar({
+  label,
+  max,
+  tone,
+  value,
+}: {
+  label: string;
+  max: number;
+  tone: Tone;
+  value: number;
+}) {
+  const width = max <= 0 ? 0 : (value / max) * 100;
+  const detail = `${label}: ${value}`;
+
+  return (
+    <div className="dash-rate-bar-line" aria-label={detail} title={detail}>
+      <div className="dash-rate-bar-track">
+        <i className={tone} style={{ width: `${width}%` }} />
       </div>
     </div>
   );
@@ -2303,10 +2507,11 @@ export function DashboardModule({
           <div className="dash-stat-grid">
             <RateStatsCard
               title="Days"
-              rows={dashboard.total.rateGroups.day.rows}
+              leaders={dashboard.total.rateGroups.day}
               onOpen={() =>
                 setDetail({
                   rows: dashboard.total.rateGroups.day.rows,
+                  scope: "day",
                   title: "Day statistics",
                   type: "rate",
                 })
@@ -2314,7 +2519,7 @@ export function DashboardModule({
             />
             <RateStatsCard
               title="Sessions"
-              rows={dashboard.total.rateGroups.session.rows}
+              leaders={dashboard.total.rateGroups.session}
               onOpen={() =>
                 setDetail({
                   rows: dashboard.total.rateGroups.session.rows,
@@ -2325,7 +2530,7 @@ export function DashboardModule({
             />
             <RateStatsCard
               title="Time of day"
-              rows={dashboard.total.rateGroups.time.rows}
+              leaders={dashboard.total.rateGroups.time}
               onOpen={() =>
                 setDetail({
                   rows: dashboard.total.rateGroups.time.rows,
@@ -2336,7 +2541,8 @@ export function DashboardModule({
             />
             <RateStatsCard
               title="Buy / Sell"
-              rows={dashboard.total.rateGroups.direction.rows}
+              leaders={dashboard.total.rateGroups.direction}
+              variant="buySell"
               onOpen={() =>
                 setDetail({
                   rows: dashboard.total.rateGroups.direction.rows,
@@ -2347,7 +2553,7 @@ export function DashboardModule({
             />
             <RateStatsCard
               title="Currency pair"
-              rows={dashboard.total.rateGroups.pair.rows}
+              leaders={dashboard.total.rateGroups.pair}
               onOpen={() =>
                 setDetail({
                   rows: dashboard.total.rateGroups.pair.rows,
@@ -2358,7 +2564,8 @@ export function DashboardModule({
             />
             <RateStatsCard
               title="Strategy"
-              rows={dashboard.total.rateGroups.strategy.rows}
+              leaders={dashboard.total.rateGroups.strategy}
+              variant="simple"
               onOpen={() =>
                 setDetail({
                   rows: dashboard.total.rateGroups.strategy.rows,

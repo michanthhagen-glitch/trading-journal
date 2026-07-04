@@ -20,7 +20,11 @@ Owns the compact account control room: total/month/week summaries, risk/goal rea
 - Top summary rings reveal segment values on hover or focus instead of showing permanent legends below the ring.
 - Dashboard detail content belongs in tabs below the summary bands.
 - Lower dashboard detail uses a 50/50 layout: daily-balance line graph on the left, top winning/losing trade/day/week/month rankings on the right.
-- The Statistics tab groups all closed trades by day, session, time of day, buy/sell direction, currency pair, and strategy.
+- The Statistics tab groups all closed trades by day, session, time of day, buy/sell direction, currency pair, and strategy; six cards should sit as three columns by two rows on desktop.
+- Statistics cards compare best/worst win rate where useful; Buy/Sell compares both sides directly, while Strategy can stay as a simple top-result card to avoid cramped names.
+- Statistics detail popups use Table and Chart tabs; Day detail must always show Monday through Sunday, including days with zero trades.
+- Statistics detail table popups should shrink around the table content without empty right-side space; chart views should stay capped so they do not over-expand.
+- Statistics chart bars should keep Loss centered between Win and BE, with only total trades visible by default; per-result counts belong on hover.
 - Daily-balance charts include the starting balance point, a dotted starting-balance level line, balance grid labels, day ticks, per-dot P&L hover details, and growth in the footer.
 - Daily-balance history fills quiet calendar days through today by carrying forward the last balance, and shows tomorrow as a tick-only placeholder until local midnight.
 - Dashboard current month/week calculations refresh at local midnight while the app stays open.
