@@ -31,11 +31,16 @@ type RecapStats = {
   closed: number;
   commonEmotion: string;
   commonMistake: string;
+  commonPositive: string;
   growthPercent: number | null;
   losses: number;
   missingRecaps: number;
   netPnl: number | null;
+  planFollowed: number;
+  planPartial: number;
+  planNotFollowed: number;
   recapped: number;
+  ruleBreaks: number;
   totalTrades: number;
   winRate: number | null;
   wins: number;
@@ -48,28 +53,11 @@ const CADENCES: { id: Cadence; label: string; icon: ReactNode }[] = [
   { id: "monthly", label: "Monthly", icon: <CalendarRange size={16} /> },
 ];
 
-const RECAP_FIELDS: Record<Cadence, { key: string; label: string }[]> = {
-  daily: [
-    { key: "plan", label: "Did I follow the plan?" },
-    { key: "mistake", label: "Main mistake" },
-    { key: "emotion", label: "Emotional state" },
-    { key: "lesson", label: "Lesson of the day" },
-    { key: "focus", label: "Tomorrow's focus" },
-  ],
-  weekly: [
-    { key: "risk", label: "Risk management" },
-    { key: "pattern", label: "Repeated pattern" },
-    { key: "mistake", label: "Biggest repeated mistake" },
-    { key: "improvement", label: "Biggest improvement" },
-    { key: "focus", label: "Focus for next week" },
-  ],
-  monthly: [
-    { key: "keep", label: "What to keep" },
-    { key: "change", label: "What to change" },
-    { key: "lesson", label: "Biggest lesson" },
-    { key: "goal", label: "Goal for next month" },
-  ],
-};
+const MANUAL_RECAP_FIELDS = [
+  { key: "mistakesMade", label: "Mistakes made" },
+  { key: "wentWell", label: "What went well" },
+  { key: "couldImprove", label: "What could be done better" },
+];
 
 function pad(value: number) {
   return value.toString().padStart(2, "0");
@@ -339,11 +327,21 @@ function recapStats(
     closed: closedTrades.length,
     commonEmotion: mostCommon(recapRows.map((recap) => recap.emotionTag)),
     commonMistake: mostCommon(recapRows.flatMap((recap) => recap.mistakeTags)),
+    commonPositive: mostCommon(
+      recapRows.flatMap((recap) => recap.positiveTags),
+    ),
     growthPercent,
     losses,
     missingRecaps: periodTrades.filter((trade) => !trade.hasRecap).length,
     netPnl,
+    planFollowed: recapRows.filter((recap) => recap.followedPlan === "yes")
+      .length,
+    planNotFollowed: recapRows.filter((recap) => recap.followedPlan === "no")
+      .length,
+    planPartial: recapRows.filter((recap) => recap.followedPlan === "partial")
+      .length,
     recapped: periodTrades.filter((trade) => trade.hasRecap).length,
+    ruleBreaks: recapRows.filter((recap) => recap.ruleBroken).length,
     totalTrades: periodTrades.length,
     winRate:
       closedTrades.length === 0 ? null : (wins / closedTrades.length) * 100,
@@ -357,6 +355,23 @@ function defaultTitle(cadence: Cadence, range: PeriodRange) {
   return `${label} recap - ${range.label}`;
 }
 
+function extractManualNotes(body: string) {
+  const notes = Object.fromEntries(
+    MANUAL_RECAP_FIELDS.map((field) => [field.key, ""]),
+  );
+  const lines = body.split("\n").map((line) => line.trim());
+
+  for (const field of MANUAL_RECAP_FIELDS) {
+    const prefix = `- ${field.label}:`;
+    const matchingLine = lines.find((line) => line.startsWith(prefix));
+    if (matchingLine) {
+      notes[field.key] = matchingLine.slice(prefix.length).trim();
+    }
+  }
+
+  return notes;
+}
+
 function buildBody(
   cadence: Cadence,
   range: PeriodRange,
@@ -364,8 +379,7 @@ function buildBody(
   notes: Record<string, string>,
   currency: string,
 ) {
-  const labels = RECAP_FIELDS[cadence];
-  const manualLines = labels.map(
+  const manualLines = MANUAL_RECAP_FIELDS.map(
     (field) => `- ${field.label}: ${notes[field.key]?.trim() || "-"}`,
   );
   const bestTrade = stats.bestTrade
@@ -395,12 +409,16 @@ function buildBody(
         ? "-"
         : `${stats.averageQuality.toFixed(1)}/10`
     }`,
+    "",
+    "Auto process",
+    `- Plan followed: ${stats.planFollowed} yes / ${stats.planPartial} partial / ${stats.planNotFollowed} no`,
+    `- Rule breaks: ${stats.ruleBreaks}`,
+    `- Repeated good behavior: ${stats.commonPositive}`,
     `- Common mistake: ${stats.commonMistake}`,
     `- Common emotion: ${stats.commonEmotion}`,
     "",
     "Manual review",
     ...manualLines,
-    notes.extra?.trim() ? `- Extra notes: ${notes.extra.trim()}` : "",
   ]
     .filter((line) => line !== "")
     .join("\n");
@@ -648,21 +666,18 @@ function JournalRecapDialog({
     () => recapStats(account, trades, range),
     [account, range, trades],
   );
-  const [title, setTitle] = useState(
-    () => initialRecap?.title ?? defaultTitle(cadence, range),
-  );
   const [notes, setNotes] = useState<Record<string, string>>(() => {
-    const fields = Object.fromEntries(
-      RECAP_FIELDS[cadence].map((field) => [field.key, ""]),
-    );
-    return {
-      ...fields,
-      extra: initialRecap?.body ?? "",
-    };
+    return initialRecap
+      ? extractManualNotes(initialRecap.body)
+      : Object.fromEntries(MANUAL_RECAP_FIELDS.map((field) => [field.key, ""]));
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const currency = account?.currency ?? "USD";
+  const title =
+    initialRecap && initialRecap.period === range.period
+      ? initialRecap.title
+      : defaultTitle(cadence, range);
 
   function updateNote(key: string, value: string) {
     setNotes((current) => ({ ...current, [key]: value }));
@@ -723,34 +738,28 @@ function JournalRecapDialog({
         </header>
 
         <div className="modal-body journal-recap-body">
-          <div className="form-grid">
-            <label className="field field-wide">
-              <span>Title</span>
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-              />
-            </label>
+          <div className="journal-recap-period-row">
             <label className="field">
               <span>{cadence === "monthly" ? "Month" : "Period date"}</span>
               <input
                 type={cadence === "monthly" ? "month" : "date"}
                 value={anchor}
                 onChange={(event) => {
-                  const nextAnchor = event.target.value;
-                  const nextRange = periodRange(cadence, nextAnchor);
-                  setAnchor(nextAnchor);
-                  if (!initialRecap) setTitle(defaultTitle(cadence, nextRange));
+                  setAnchor(event.target.value);
                 }}
               />
             </label>
+            <div className="journal-auto-title">
+              <span>Auto title</span>
+              <strong>{title}</strong>
+            </div>
           </div>
 
           <RecapStatsGrid stats={stats} currency={currency} />
 
           <section className="journal-manual-fields">
-            {RECAP_FIELDS[cadence].map((field) => (
-              <label className="field field-wide" key={field.key}>
+            {MANUAL_RECAP_FIELDS.map((field) => (
+              <label className="field journal-manual-field" key={field.key}>
                 <span>{field.label}</span>
                 <textarea
                   rows={3}
@@ -761,14 +770,6 @@ function JournalRecapDialog({
                 />
               </label>
             ))}
-            <label className="field field-wide">
-              <span>Extra notes</span>
-              <textarea
-                rows={4}
-                value={notes.extra ?? ""}
-                onChange={(event) => updateNote("extra", event.target.value)}
-              />
-            </label>
           </section>
         </div>
 

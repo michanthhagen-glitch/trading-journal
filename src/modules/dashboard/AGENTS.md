@@ -2,16 +2,34 @@
 
 ## Purpose
 
-Owns the performance overview: KPIs, equity curve placeholder, and recent activity.
+Owns the compact account control room: total/month/week summaries, risk/goal readouts, result rings, history visuals, and dashboard detail tabs.
 
 ## Ownership
 
-- `DashboardModule.tsx`: dashboard layout, KPI cards, and mock activity data.
+- `DashboardModule.tsx`: total/month/week summary cards, dashboard tabs, graphs, and detail modal.
 
 ## Local Contracts
 
 - Dashboard metrics read selected-account trades through shared data helpers.
 - Balance and growth are derived from the selected account starting balance plus closed/open trade P&L.
+- The top dashboard area should show Total, Current Month, and Current Week as compact side-by-side summary cards when width allows.
+- Top summary cards may use roughly 35% of the visible workspace height when the extra room improves readability.
+- Top summary cards use result tiles for last 10 trades/months/weeks; keep graph-style visuals in the lower detail tabs.
+- In top summary cards, keep best/worst rate or weekly risk details in the upper insight area, and place result rings directly above the last-10 tiles.
+- Worst win rate means the lowest win percentage, not the highest loss percentage.
+- Top summary rings reveal segment values on hover or focus instead of showing permanent legends below the ring.
+- Dashboard detail content belongs in tabs below the summary bands.
+- Lower dashboard detail uses a 50/50 layout: daily-balance line graph on the left, top winning/losing trade/day/week/month rankings on the right.
+- The Statistics tab groups all closed trades by day, session, time of day, buy/sell direction, currency pair, and strategy.
+- Daily-balance charts include the starting balance point, a dotted starting-balance level line, balance grid labels, day ticks, per-dot P&L hover details, and growth in the footer.
+- Daily-balance history fills quiet calendar days through today by carrying forward the last balance, and shows tomorrow as a tick-only placeholder until local midnight.
+- Dashboard current month/week calculations refresh at local midnight while the app stays open.
+- The lower Total tab daily-balance chart shows all account history from the first logged trade through today, with tomorrow as a tick-only placeholder.
+- The lower Month tab daily-balance chart shows the current month; double-click opens year tabs with month-by-month chart history from first trade month through the current month.
+- The lower Week tab daily-balance chart shows the current Monday-to-Sunday week, labels ticks as `M T W T F S S`, double-click opens year tabs with saved week summary list rows, and week rows open a deeper week graph.
+- The chart history detail view should fit four monthly charts per row on desktop, so a full year is visible as three rows.
+- The Total daily-balance chart uses account-scale bounds: starting balance sits at one-third of the value range, with the top at 200% growth, then 300%, 400%, etc. when exceeded.
+- The dashboard should stay compact, summary-first, and warning-oriented.
 - Real charts should connect through shared data helpers, not inline Tauri APIs.
 - Keep the view scan-friendly and compact.
 
