@@ -1060,6 +1060,16 @@ export async function closeTrade(
   );
 }
 
+export async function deleteTrade(id: string): Promise<void> {
+  if (!isTauri()) {
+    memoryTrades.delete(id);
+    return;
+  }
+
+  const db = await getDb();
+  await db.execute("DELETE FROM trades WHERE id = $1", [id]);
+}
+
 export async function saveRecap(tradeId: string, body: string): Promise<void> {
   const id = `R-${Date.now().toString().slice(-10)}`;
 

@@ -1,8 +1,9 @@
-import { ArrowLeft, FileText, Plus, X } from "lucide-react";
+import { ArrowLeft, FileText, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   addScreenshot,
   closeTrade,
+  deleteTrade,
   insertTrade,
   listAccountWorkspace,
   listTrades,
@@ -284,6 +285,10 @@ export function TradesWorkspace({
         trade={selected}
         onBack={() => setSelectedId(null)}
         onChanged={reload}
+        onDeleted={async () => {
+          setSelectedId(null);
+          await reload();
+        }}
       />
     );
   }
@@ -1064,6 +1069,7 @@ type TradeDetailProps = {
   trade: Trade;
   onBack: () => void;
   onChanged: () => Promise<void>;
+  onDeleted: () => void | Promise<void>;
 };
 
 function TradeDetail({
@@ -1072,14 +1078,41 @@ function TradeDetail({
   trade,
   onBack,
   onChanged,
+  onDeleted,
 }: TradeDetailProps) {
   const [preTradeOpen, setPreTradeOpen] = useState(false);
   const [entryOpen, setEntryOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const plannedRr = plannedRiskReward(trade);
   const actualRr = actualRiskReward(trade);
   const currency = account?.currency ?? "USD";
   const balance = tradeBalanceSummary(account, accountTrades, trade);
+
+  async function handleDeleteTrade() {
+    const confirmed = window.confirm(
+      "Delete this trade? Notes, screenshots, and recap links will be removed.",
+    );
+    if (!confirmed) return;
+
+    setDeleteError(null);
+    setDeleting(true);
+    try {
+      await Promise.allSettled(
+        trade.screenshots.map((screenshot) =>
+          deleteScreenshotFile(screenshot.path),
+        ),
+      );
+      await deleteTrade(trade.id);
+      await onDeleted();
+    } catch (error) {
+      console.error(error);
+      setDeleteError("Delete failed. Restart the app and try again.");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <div className="trade-detail">
@@ -1116,7 +1149,21 @@ function TradeDetail({
             tone={pnlToneClass(balance.growthPercent)}
           />
         </div>
+        <button
+          className="ghost-button danger-button trade-delete-button"
+          type="button"
+          onClick={handleDeleteTrade}
+          disabled={deleting}
+        >
+          <Trash2 size={15} aria-hidden="true" />
+          <span>{deleting ? "Deleting..." : "Delete"}</span>
+        </button>
       </header>
+      {deleteError ? (
+        <p className="trade-delete-error" role="alert">
+          {deleteError}
+        </p>
+      ) : null}
 
       <section className="trade-cards">
         <PreTradeCard
