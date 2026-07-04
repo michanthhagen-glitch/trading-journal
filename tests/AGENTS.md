@@ -6,7 +6,7 @@ Owns Vitest tests for app behavior and project contracts.
 
 ## Ownership
 
-- `workspaceRegistry.test.ts`: smoke test for sidebar workspace registration.
+- `moduleRegistry.test.ts`: smoke test for sidebar module registration.
 
 ## Local Contracts
 

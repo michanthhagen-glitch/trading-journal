@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Owns all sidebar workspaces. Each module owns its own workspace surface and local UI.
+Owns all sidebar modules. Each module owns its own main content surface and local UI.
 
 ## Ownership
 
@@ -14,7 +14,7 @@ Owns all sidebar workspaces. Each module owns its own workspace surface and loca
 
 ## Local Contracts
 
-- Each module exports one workspace component for `src/app/moduleRegistry.tsx`.
+- Each module exports one module component for `src/app/moduleRegistry.tsx`.
 - Module-local components stay inside that module.
 - Shared data access goes through `src/shared/db`.
 - Do not add extra shell chrome inside modules unless the module truly needs it.
@@ -32,8 +32,8 @@ Owns all sidebar workspaces. Each module owns its own workspace surface and loca
 
 ## Child DOX Index
 
-- `dashboard/AGENTS.md` - Dashboard workspace.
+- `dashboard/AGENTS.md` - Dashboard module.
 - `account/AGENTS.md` - Account, strategy, and risk management setup.
-- `trades/AGENTS.md` - Trades workspace and trade lifecycle UI.
-- `journal/AGENTS.md` - Journal recap workspace.
-- `settings/AGENTS.md` - Settings workspace.
+- `trades/AGENTS.md` - Trades module and trade lifecycle UI.
+- `journal/AGENTS.md` - Journal recap module.
+- `settings/AGENTS.md` - Settings module.

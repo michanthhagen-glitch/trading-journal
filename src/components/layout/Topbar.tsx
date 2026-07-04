@@ -1,10 +1,10 @@
 import { Bell, Search, Wallet } from "lucide-react";
-import type { WorkspaceModule } from "../../app/types";
+import type { AppModule } from "../../app/types";
 import type { TradingAccount } from "../../shared/db/database";
 
 type TopbarProps = {
   accounts: TradingAccount[];
-  activeModule: WorkspaceModule;
+  activeModule: AppModule;
   selectedAccountId: string | null;
   onSelectAccount: (accountId: string) => void;
 };

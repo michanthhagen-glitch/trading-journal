@@ -2,31 +2,31 @@ import { useState } from "react";
 import { Sidebar } from "../components/layout/Sidebar";
 import { Topbar } from "../components/layout/Topbar";
 import type { TradingAccount } from "../shared/db/database";
-import type { WorkspaceModule, WorkspaceSection } from "./types";
+import type { AppModule } from "./types";
 
 type AppShellProps = {
   accounts: TradingAccount[];
-  activeModule: WorkspaceModule;
+  activeModule: AppModule;
+  modules: AppModule[];
   selectedAccount: TradingAccount | null;
   selectedAccountId: string | null;
   onAccountsChanged: () => void | Promise<void>;
   onSelectAccount: (accountId: string) => void;
   onSelectModule: (moduleId: string) => void;
-  sections: WorkspaceSection[];
 };
 
 export function AppShell({
   accounts,
   activeModule,
+  modules,
   selectedAccount,
   selectedAccountId,
   onAccountsChanged,
   onSelectAccount,
   onSelectModule,
-  sections,
 }: AppShellProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const ActiveWorkspace = activeModule.Workspace;
+  const ActiveModule = activeModule.Component;
 
   return (
     <div
@@ -37,9 +37,9 @@ export function AppShell({
       <Sidebar
         activeModuleId={activeModule.id}
         isCollapsed={isSidebarCollapsed}
+        modules={modules}
         onSelectModule={onSelectModule}
         onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
-        sections={sections}
       />
 
       <div className="app-main">
@@ -51,10 +51,10 @@ export function AppShell({
         />
 
         <main
-          className="workspace"
-          aria-label={`${activeModule.label} workspace`}
+          className="app-content"
+          aria-label={`${activeModule.label} module`}
         >
-          <ActiveWorkspace
+          <ActiveModule
             selectedAccount={selectedAccount}
             selectedAccountId={selectedAccountId}
             onAccountsChanged={onAccountsChanged}

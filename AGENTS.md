@@ -36,7 +36,7 @@ npm run format          # prettier --write .
 
 ## Product Model
 
-- Workspaces: Dashboard, Trades, Journal, Settings.
+- Modules: Dashboard, Account, Trades, Journal, Settings.
 - Trade workflow: pre-trade, entry, exit.
 - Per-trade recaps stay on the trade.
 - Recaps are a separate feature from the trade entry/exit workflow.
@@ -52,7 +52,7 @@ npm run format          # prettier --write .
 ## Global Work Guidance
 
 - Keep answers and docs short, simple, and practical.
-- Keep the module-owned structure: shell in `src/app`, workspaces in `src/modules`, reusable UI in `src/components`, shared helpers in `src/shared`.
+- Keep the module-owned structure: shell in `src/app`, modules in `src/modules`, reusable UI in `src/components`, shared helpers in `src/shared`.
 - Use lucide icons for UI icons.
 - Do not add new top-level folders unless the boundary is durable.
 - Keep root docs broad; put concrete local rules in child AGENTS.md files.

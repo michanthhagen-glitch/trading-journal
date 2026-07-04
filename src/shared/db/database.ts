@@ -547,7 +547,7 @@ function rowToAccount(
   };
 }
 
-export async function listAccountWorkspace(): Promise<{
+export async function listAccountSetup(): Promise<{
   accounts: TradingAccount[];
   strategies: Strategy[];
   riskPlans: RiskManagementPlan[];

@@ -5,7 +5,7 @@ import {
   closeTrade,
   deleteTrade,
   insertTrade,
-  listAccountWorkspace,
+  listAccountSetup,
   listTrades,
   saveEntry,
   type EntryData,
@@ -17,7 +17,7 @@ import {
   type TradeResult,
   type TradingAccount,
 } from "../../shared/db/database";
-import type { WorkspaceContext } from "../../app/types";
+import type { ModuleContext } from "../../app/types";
 import { PreTradeCard } from "./components/PreTradeCard";
 import { PreTradeForm } from "./components/PreTradeForm";
 import {
@@ -224,10 +224,10 @@ function currentTimeInputValue() {
   return `${padTimePart(now.getHours())}:${padTimePart(now.getMinutes())}`;
 }
 
-export function TradesWorkspace({
+export function TradesModule({
   selectedAccount,
   selectedAccountId,
-}: WorkspaceContext) {
+}: ModuleContext) {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [riskPlans, setRiskPlans] = useState<RiskManagementPlan[]>([]);
@@ -240,7 +240,7 @@ export function TradesWorkspace({
     try {
       const [loadedTrades, accountSetup] = await Promise.all([
         listTrades(selectedAccountId),
-        listAccountWorkspace(),
+        listAccountSetup(),
       ]);
       setTrades(loadedTrades);
       setStrategies(accountSetup.strategies);

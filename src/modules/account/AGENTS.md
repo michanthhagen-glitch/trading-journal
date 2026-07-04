@@ -6,7 +6,7 @@ Owns account setup, strategy setup, and risk management setup.
 
 ## Ownership
 
-- `AccountWorkspace.tsx`: Accounts, Strategy, and Risk Management tabs.
+- `AccountModule.tsx`: Accounts, Strategy, and Risk Management tabs.
 - `features/createAccountSetup/`: modal creation flows for account setup records.
 
 ## Local Contracts

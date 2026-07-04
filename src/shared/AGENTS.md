@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Owns cross-module helpers and data access used by more than one workspace.
+Owns cross-module helpers and data access used by more than one module.
 
 ## Ownership
 

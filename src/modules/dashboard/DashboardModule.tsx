@@ -7,7 +7,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { WorkspaceContext } from "../../app/types";
+import type { ModuleContext } from "../../app/types";
 import { listTrades, type Trade } from "../../shared/db/database";
 
 type KpiCardProps = {
@@ -108,10 +108,10 @@ function buildActivity(trades: Trade[]): ActivityEntry[] {
   }));
 }
 
-export function DashboardWorkspace({
+export function DashboardModule({
   selectedAccount,
   selectedAccountId,
-}: WorkspaceContext) {
+}: ModuleContext) {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
 

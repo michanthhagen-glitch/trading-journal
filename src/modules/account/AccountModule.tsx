@@ -1,7 +1,7 @@
 import { ArrowLeft, Plus, ShieldCheck, Target, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
-  listAccountWorkspace,
+  listAccountSetup,
   type AccountType,
   type RiskManagementPlan,
   type Strategy,
@@ -11,7 +11,7 @@ import {
   CreateAccountSetupDialog,
   type AccountSetupCreateKind,
 } from "./features/createAccountSetup/CreateAccountSetupDialogs";
-import type { WorkspaceContext } from "../../app/types";
+import type { ModuleContext } from "../../app/types";
 
 type AccountTab = "accounts" | "strategies" | "risk";
 
@@ -102,7 +102,7 @@ function riskGoalLabel(plan: RiskManagementPlan) {
   )}`;
 }
 
-export function AccountWorkspace({ onAccountsChanged }: WorkspaceContext) {
+export function AccountModule({ onAccountsChanged }: ModuleContext) {
   const [activeTab, setActiveTab] = useState<AccountTab>("accounts");
   const [accounts, setAccounts] = useState<TradingAccount[]>([]);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
@@ -118,7 +118,7 @@ export function AccountWorkspace({ onAccountsChanged }: WorkspaceContext) {
   async function reload() {
     setLoading(true);
     try {
-      const data = await listAccountWorkspace();
+      const data = await listAccountSetup();
       setAccounts(data.accounts);
       setStrategies(data.strategies);
       setRiskPlans(data.riskPlans);
@@ -148,7 +148,7 @@ export function AccountWorkspace({ onAccountsChanged }: WorkspaceContext) {
   }
 
   return (
-    <div className="account-workspace">
+    <div className="account-module">
       <header className="page-header">
         <div>
           <h2>Account</h2>
@@ -398,7 +398,7 @@ function AccountDetailView({
     .filter((strategy): strategy is Strategy => Boolean(strategy));
 
   return (
-    <div className="account-workspace">
+    <div className="account-module">
       <header className="account-detail-header">
         <button
           className="icon-button back-button"

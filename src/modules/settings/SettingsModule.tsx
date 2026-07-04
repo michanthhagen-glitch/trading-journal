@@ -1,9 +1,9 @@
 import { Sparkles } from "lucide-react";
-import type { WorkspaceContext } from "../../app/types";
+import type { ModuleContext } from "../../app/types";
 
-export function SettingsWorkspace(_context: WorkspaceContext) {
+export function SettingsModule(_context: ModuleContext) {
   return (
-    <div className="placeholder-workspace">
+    <div className="placeholder-module">
       <div className="placeholder-card">
         <span className="placeholder-icon" aria-hidden="true">
           <Sparkles size={20} />

@@ -6,7 +6,7 @@ Owns daily, weekly, and monthly recap browsing.
 
 ## Ownership
 
-- `JournalWorkspace.tsx`: cadence tabs and recap list.
+- `JournalModule.tsx`: cadence tabs and recap list.
 
 ## Local Contracts
 

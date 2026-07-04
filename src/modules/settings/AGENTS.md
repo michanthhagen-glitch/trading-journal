@@ -6,7 +6,7 @@ Owns preferences and data-management UI.
 
 ## Ownership
 
-- `SettingsWorkspace.tsx`: current placeholder for account, broker connections, backup, and theme.
+- `SettingsModule.tsx`: current placeholder for account, broker connections, backup, and theme.
 
 ## Local Contracts
 

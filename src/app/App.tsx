@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  listAccountWorkspace,
-  type TradingAccount,
-} from "../shared/db/database";
+import { listAccountSetup, type TradingAccount } from "../shared/db/database";
 import { AppShell } from "./AppShell";
-import { workspaceModules, workspaceSections } from "./moduleRegistry";
+import { appModules } from "./moduleRegistry";
 
 const SELECTED_ACCOUNT_STORAGE_KEY = "trading-journal:selected-account-id";
 
 export function App() {
-  const [activeModuleId, setActiveModuleId] = useState(workspaceModules[0].id);
+  const [activeModuleId, setActiveModuleId] = useState(appModules[0].id);
   const [accounts, setAccounts] = useState<TradingAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
     () =>
@@ -20,13 +17,13 @@ export function App() {
 
   const activeModule = useMemo(
     () =>
-      workspaceModules.find((module) => module.id === activeModuleId) ??
-      workspaceModules[0],
+      appModules.find((module) => module.id === activeModuleId) ??
+      appModules[0],
     [activeModuleId],
   );
 
   async function reloadAccounts() {
-    const data = await listAccountWorkspace();
+    const data = await listAccountSetup();
     setAccounts(data.accounts);
     setSelectedAccountId((current) => {
       const stored =
@@ -71,12 +68,12 @@ export function App() {
     <AppShell
       accounts={accounts}
       activeModule={activeModule}
+      modules={appModules}
       onSelectModule={setActiveModuleId}
       onSelectAccount={handleSelectAccount}
       selectedAccount={selectedAccount}
       selectedAccountId={selectedAccountId}
       onAccountsChanged={reloadAccounts}
-      sections={workspaceSections}
     />
   );
 }

@@ -6,7 +6,7 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 
 ## Ownership
 
-- `TradesWorkspace.tsx`: trade table, selected trade detail, three-card new trade workflow, entry form, exit form.
+- `TradesModule.tsx`: trade table, selected trade detail, three-card new trade workflow, entry form, exit form.
 - `components/PreTradeCard.tsx`: pre-trade summary and screenshot gallery.
 - `components/PreTradeForm.tsx`: pre-trade editor, screenshot import, clipboard paste.
 - `components/ScreenshotTools.tsx`: reusable screenshot import and gallery controls for saved and draft trade screenshots.

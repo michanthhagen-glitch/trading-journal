@@ -75,7 +75,7 @@ button {
   min-height: 0;
 }
 
-.workspace {
+.app-content {
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -139,61 +139,11 @@ button {
   display: none;
 }
 
-.nav-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.nav-section {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.nav-section-button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  color: var(--text-dim);
-  font-weight: 500;
-}
-
-.nav-section-button:hover {
-  background: var(--bg-panel);
-  color: var(--text);
-}
-
-.nav-section-button.active {
-  color: var(--text);
-}
-
-.nav-section-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.nav-chevron {
-  display: inline-flex;
-  color: var(--text-muted);
-}
-
-.sidebar.collapsed .nav-section-title span:last-child,
-.sidebar.collapsed .nav-chevron {
-  display: none;
-}
-
 .nav-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin: 4px 0 6px;
-  padding-left: 4px;
+  margin: 2px 0 0;
 }
 
 .nav-item {
@@ -323,8 +273,8 @@ button {
   color: var(--text);
 }
 
-/* ============ Placeholder workspace ============ */
-.placeholder-workspace {
+/* ============ Placeholder module ============ */
+.placeholder-module {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -374,18 +324,18 @@ button {
 
 /* ============ Scrollbar polish ============ */
 .sidebar::-webkit-scrollbar,
-.workspace::-webkit-scrollbar {
+.app-content::-webkit-scrollbar {
   width: 10px;
 }
 
 .sidebar::-webkit-scrollbar-thumb,
-.workspace::-webkit-scrollbar-thumb {
+.app-content::-webkit-scrollbar-thumb {
   background: var(--border-strong);
   border-radius: 6px;
 }
 
 .sidebar::-webkit-scrollbar-track,
-.workspace::-webkit-scrollbar-track {
+.app-content::-webkit-scrollbar-track {
   background: transparent;
 }
 
@@ -1173,7 +1123,7 @@ button {
 }
 
 /* ============ Account ============ */
-.account-workspace {
+.account-module {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -2101,53 +2051,4 @@ button {
   .stage-field-grid {
     grid-template-columns: 1fr;
   }
-}
-
-/* ============ Placeholder (Settings) ============ */
-.placeholder-workspace {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: calc(100vh - var(--topbar-height) - 64px);
-}
-
-.placeholder-card {
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 36px 40px;
-  max-width: 520px;
-  text-align: center;
-  box-shadow: var(--shadow);
-}
-
-.placeholder-icon {
-  display: inline-flex;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 18px;
-}
-
-.placeholder-card h2 {
-  margin: 0 0 8px;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.placeholder-card p {
-  margin: 0 0 4px;
-  color: var(--text-dim);
-}
-
-.placeholder-foot {
-  margin-top: 18px !important;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
 }

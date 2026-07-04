@@ -6,7 +6,7 @@ Owns the performance overview: KPIs, equity curve placeholder, and recent activi
 
 ## Ownership
 
-- `DashboardWorkspace.tsx`: dashboard layout, KPI cards, and mock activity data.
+- `DashboardModule.tsx`: dashboard layout, KPI cards, and mock activity data.
 
 ## Local Contracts
 
@@ -19,7 +19,7 @@ Owns the performance overview: KPIs, equity curve placeholder, and recent activi
 
 - Replace placeholders with real data only when the source query exists in `src/shared/db`.
 - Keep chart-heavy detail secondary to the high-level summary.
-- Do not add a new analytics workspace here unless the sidebar registry changes intentionally.
+- Do not add a new analytics module here unless the sidebar registry changes intentionally.
 
 ## Verification
 

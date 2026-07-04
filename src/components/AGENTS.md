@@ -2,12 +2,12 @@
 
 ## Purpose
 
-Owns reusable renderer components that are not specific to one workspace.
+Owns reusable renderer components that are not specific to one module.
 
 ## Ownership
 
-- `layout/Sidebar.tsx`: collapsible navigation and workspace selection.
-- `layout/Topbar.tsx`: active workspace title, account picker, and top actions.
+- `layout/Sidebar.tsx`: collapsible module navigation.
+- `layout/Topbar.tsx`: active module title, account picker, and top actions.
 
 ## Local Contracts
 
@@ -19,7 +19,7 @@ Owns reusable renderer components that are not specific to one workspace.
 ## Work Guidance
 
 - Keep component props typed and small.
-- Do not import workspace data APIs from reusable components.
+- Do not import module data APIs from reusable components.
 - Keep accessibility labels on icon-only buttons.
 
 ## Verification

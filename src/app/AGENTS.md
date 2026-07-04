@@ -2,25 +2,25 @@
 
 ## Purpose
 
-Owns the fixed app shell and maps sidebar items to workspace components.
+Owns the fixed app shell and maps sidebar items to module components.
 
 ## Ownership
 
-- `App.tsx`: active workspace state.
-- `AppShell.tsx`: sidebar, topbar, and workspace slot.
+- `App.tsx`: active module state.
+- `AppShell.tsx`: sidebar, topbar, and module content slot.
 - `moduleRegistry.tsx`: Dashboard, Trades, Journal, Settings registration.
-- `types.ts`: workspace module and section types.
+- `types.ts`: app module and module context types.
 
 ## Local Contracts
 
-- `src/app` stays shell-only. Do not put workspace business logic here.
-- `moduleRegistry.tsx` is the single source for sidebar workspace order and icons.
-- `AppShell` renders exactly one active workspace inside `<main className="workspace">`.
-- The selected top-bar account is shell state and is passed to workspaces as context.
+- `src/app` stays shell-only. Do not put module business logic here.
+- `moduleRegistry.tsx` is the single source for sidebar module order and icons.
+- `AppShell` renders exactly one active module inside `<main className="app-content">`.
+- The selected top-bar account is shell state and is passed to modules as context.
 
 ## Work Guidance
 
-- Add new workspaces by creating `src/modules/<workspace>/`, then registering them in `moduleRegistry.tsx`.
+- Add new modules by creating `src/modules/<module>/`, then registering them in `moduleRegistry.tsx`.
 - Keep shell state minimal and stable.
 - Reusable layout pieces stay in `src/components/layout`.
 

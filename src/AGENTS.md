@@ -2,21 +2,21 @@
 
 ## Purpose
 
-Owns the React renderer: app shell, workspace modules, reusable UI, shared helpers, and global styles.
+Owns the React renderer: app shell, modules, reusable UI, shared helpers, and global styles.
 
 ## Ownership
 
 - `main.tsx`: React root.
 - `styles.css`: single global stylesheet and design tokens.
-- `app/`: fixed shell and workspace registry.
+- `app/`: fixed shell and module registry.
 - `components/`: reusable UI components.
-- `modules/`: sidebar workspaces.
+- `modules/`: sidebar modules.
 - `shared/`: cross-module helpers and data access.
 - `vite-env.d.ts`: Vite typing support.
 
 ## Local Contracts
 
-- Keep workspace layout non-scrollable at the shell level; scrolling belongs inside module content.
+- Keep app content non-scrollable at the shell level; scrolling belongs inside module content.
 - Keep CSS variables in `:root`; avoid ad-hoc colors.
 - Keep dark theme only until a real theme system exists.
 - Do not import Tauri SQL or filesystem plugins directly from modules; use `src/shared/db`.
@@ -35,7 +35,7 @@ Owns the React renderer: app shell, workspace modules, reusable UI, shared helpe
 
 ## Child DOX Index
 
-- `app/AGENTS.md` - fixed app shell, sidebar/topbar wiring, workspace registry.
+- `app/AGENTS.md` - fixed app shell, sidebar/topbar wiring, module registry.
 - `components/AGENTS.md` - reusable renderer components.
-- `modules/AGENTS.md` - workspace modules and module-local UI.
+- `modules/AGENTS.md` - app modules and module-local UI.
 - `shared/AGENTS.md` - shared helpers and data access.

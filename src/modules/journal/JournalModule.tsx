@@ -4,7 +4,7 @@ import {
   listJournalRecaps,
   type JournalRecapRow,
 } from "../../shared/db/database";
-import type { WorkspaceContext } from "../../app/types";
+import type { ModuleContext } from "../../app/types";
 
 type Cadence = "daily" | "weekly" | "monthly";
 
@@ -14,10 +14,10 @@ const CADENCES: { id: Cadence; label: string; icon: React.ReactNode }[] = [
   { id: "monthly", label: "Monthly", icon: <CalendarRange size={16} /> },
 ];
 
-export function JournalWorkspace({
+export function JournalModule({
   selectedAccount,
   selectedAccountId,
-}: WorkspaceContext) {
+}: ModuleContext) {
   const [cadence, setCadence] = useState<Cadence>("daily");
   const [recaps, setRecaps] = useState<JournalRecapRow[]>([]);
   const [loading, setLoading] = useState(true);
