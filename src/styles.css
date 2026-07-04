@@ -638,17 +638,17 @@ button {
 .trades-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .trades-table thead th {
   text-align: left;
   font-weight: 500;
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-muted);
-  padding: 12px 18px;
+  padding: 8px 14px;
   background: var(--bg-panel-elev);
   border-bottom: 1px solid var(--border);
 }
@@ -667,9 +667,10 @@ button {
 }
 
 .trades-row td {
-  padding: 12px 18px;
+  padding: 7px 14px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
+  line-height: 1.2;
 }
 
 .trades-row:last-child td {
@@ -681,19 +682,25 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-.pair-cell {
+.strategy-cell {
+  max-width: 260px;
+  overflow: hidden;
   font-weight: 600;
   color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dir-pill {
   display: inline-block;
-  padding: 2px 8px;
+  min-width: 34px;
+  padding: 1px 6px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.06em;
   border: 1px solid var(--border-strong);
+  text-align: center;
 }
 
 .dir-long {
@@ -708,34 +715,34 @@ button {
   background: rgba(232, 88, 90, 0.08);
 }
 
-.status-pill {
+.result-pill {
   display: inline-block;
-  padding: 2px 8px;
+  min-width: 34px;
+  padding: 1px 6px;
   border-radius: 999px;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   border: 1px solid var(--border-strong);
   color: var(--text-dim);
   background: var(--bg-panel-elev);
+  text-align: center;
+  text-transform: uppercase;
 }
 
-.status-open {
-  color: var(--accent-strong);
-  border-color: rgba(108, 140, 255, 0.35);
-  background: rgba(108, 140, 255, 0.08);
-}
-
-.status-closed {
-  color: var(--text-dim);
-}
-
-.status-reviewed {
+.result-win {
   color: #6cd49a;
   border-color: rgba(76, 200, 130, 0.35);
   background: rgba(76, 200, 130, 0.08);
 }
 
-.status-pre-trade {
+.result-loss {
+  color: #f08688;
+  border-color: rgba(232, 88, 90, 0.35);
+  background: rgba(232, 88, 90, 0.08);
+}
+
+.result-break-even {
   color: #f5b86c;
   border-color: rgba(245, 184, 108, 0.35);
   background: rgba(245, 184, 108, 0.08);

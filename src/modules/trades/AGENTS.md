@@ -25,6 +25,7 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - New trade risk % is checked against the selected account's risk plan without editing the plan.
 - Saved trade cards expose screenshot import for `pre-trade`, `entry`, and `exit`.
 - Screenshot buttons try TradingView capture first, then a window selector, then file import fallback.
+- The trade list stays compact and shows date, time, buy/sell, strategy, result, P&L, and growth %.
 - Recaps are separate from the pre-trade, entry, and exit workflow.
 - All persistence must use `src/shared/db/database.ts` and `src/shared/db/storage.ts`.
 

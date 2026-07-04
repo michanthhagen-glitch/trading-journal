@@ -29,19 +29,6 @@ import {
 } from "./components/ScreenshotTools";
 import { deleteScreenshotFile } from "../../shared/db/storage";
 
-function statusLabel(status: Trade["status"]) {
-  switch (status) {
-    case "pre-trade":
-      return "Pre-trade";
-    case "open":
-      return "Open";
-    case "closed":
-      return "Closed";
-    case "reviewed":
-      return "Reviewed";
-  }
-}
-
 function resultLabel(result: TradeResult) {
   switch (result) {
     case "win":
@@ -53,6 +40,23 @@ function resultLabel(result: TradeResult) {
     default:
       return "—";
   }
+}
+
+function resultShortLabel(result: TradeResult) {
+  switch (result) {
+    case "win":
+      return "Win";
+    case "loss":
+      return "Loss";
+    case "break-even":
+      return "BE";
+    default:
+      return "—";
+  }
+}
+
+function directionActionLabel(direction: Trade["direction"]) {
+  return direction === "long" ? "Buy" : "Sell";
 }
 
 function fmtMoney(value: number | null, currency = "USD") {
@@ -115,6 +119,10 @@ function tradeDuration(trade: Trade) {
   if (hours === 0) return `${remainder}m`;
   if (remainder === 0) return `${hours}h`;
   return `${hours}h ${remainder}m`;
+}
+
+function tradeListTime(trade: Trade) {
+  return trade.entry.time ?? trade.exit.time ?? "—";
 }
 
 function plannedRiskReward(trade: Trade): number | null {
@@ -330,48 +338,56 @@ export function TradesModule({
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Pair</th>
-                <th>Direction</th>
+                <th>Time</th>
+                <th>Buy/Sell</th>
                 <th>Strategy</th>
-                <th>Status</th>
+                <th>Win/Loss/BE</th>
                 <th className="num">P&amp;L</th>
+                <th className="num">Growth %</th>
               </tr>
             </thead>
             <tbody>
-              {trades.map((trade) => (
-                <tr
-                  key={trade.id}
-                  className="trades-row"
-                  onClick={() => setSelectedId(trade.id)}
-                >
-                  <td>{trade.date}</td>
-                  <td className="pair-cell">{trade.pair}</td>
-                  <td>
-                    <span className={`dir-pill dir-${trade.direction}`}>
-                      {trade.direction.toUpperCase()}
-                    </span>
-                  </td>
-                  <td>{trade.preTrade.strategy || "—"}</td>
-                  <td>
-                    <span className={`status-pill status-${trade.status}`}>
-                      {statusLabel(trade.status)}
-                    </span>
-                  </td>
-                  <td
-                    className={`num pnl ${
-                      trade.pnl === null
-                        ? ""
-                        : trade.pnl > 0
-                          ? "positive"
-                          : trade.pnl < 0
-                            ? "negative"
-                            : "flat"
-                    }`}
+              {trades.map((trade) => {
+                const balance = tradeBalanceSummary(
+                  selectedAccount,
+                  trades,
+                  trade,
+                );
+                const pnlTone = pnlToneClass(trade.pnl);
+                const growthTone = pnlToneClass(balance.growthPercent);
+
+                return (
+                  <tr
+                    key={trade.id}
+                    className="trades-row"
+                    onClick={() => setSelectedId(trade.id)}
                   >
-                    {fmtPnl(trade.pnl, selectedAccount?.currency)}
-                  </td>
-                </tr>
-              ))}
+                    <td>{trade.date}</td>
+                    <td>{tradeListTime(trade)}</td>
+                    <td>
+                      <span className={`dir-pill dir-${trade.direction}`}>
+                        {directionActionLabel(trade.direction)}
+                      </span>
+                    </td>
+                    <td className="strategy-cell">
+                      {trade.preTrade.strategy || "—"}
+                    </td>
+                    <td>
+                      <span
+                        className={`result-pill result-${trade.exit.result || "pending"}`}
+                      >
+                        {resultShortLabel(trade.exit.result)}
+                      </span>
+                    </td>
+                    <td className={`num pnl ${pnlTone}`}>
+                      {fmtPnl(trade.pnl, selectedAccount?.currency)}
+                    </td>
+                    <td className={`num pnl ${growthTone}`}>
+                      {fmtPercent(balance.growthPercent)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
