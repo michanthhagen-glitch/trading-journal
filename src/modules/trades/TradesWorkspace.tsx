@@ -54,11 +54,30 @@ function resultLabel(result: TradeResult) {
   }
 }
 
-function fmtPnl(pnl: number | null) {
+function fmtMoney(value: number | null, currency = "USD") {
+  if (value === null || !Number.isFinite(value)) return "—";
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${currency} ${value.toFixed(2)}`;
+  }
+}
+
+function fmtPnl(pnl: number | null, currency = "USD") {
   if (pnl === null) return "—";
-  if (pnl === 0) return "$0.00";
+  if (pnl === 0) return fmtMoney(0, currency);
   const sign = pnl > 0 ? "+" : "-";
-  return `${sign} $${Math.abs(pnl).toFixed(2)}`;
+  return `${sign} ${fmtMoney(Math.abs(pnl), currency)}`;
+}
+
+function fmtPercent(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return "—";
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
 function fmtPrice(value: number | null) {
@@ -135,6 +154,26 @@ function accountNetPnl(trades: Trade[]) {
 
 function accountBalance(account: TradingAccount | null, trades: Trade[]) {
   return account ? account.startingBalance + accountNetPnl(trades) : null;
+}
+
+function tradeBalanceSummary(
+  account: TradingAccount | null,
+  trades: Trade[],
+  trade: Trade,
+) {
+  if (!account) {
+    return { before: null, after: null, growthPercent: null };
+  }
+
+  const tradeIndex = trades.findIndex((row) => row.id === trade.id);
+  // Trades are loaded newest first, so rows after this one are older trades.
+  const olderTrades = tradeIndex >= 0 ? trades.slice(tradeIndex + 1) : [];
+  const before = account.startingBalance + accountNetPnl(olderTrades);
+  const after = trade.pnl === null ? null : before + trade.pnl;
+  const growthPercent =
+    after === null || before === 0 ? null : ((after - before) / before) * 100;
+
+  return { before, after, growthPercent };
 }
 
 function riskPlanMin(plan: RiskManagementPlan | null) {
@@ -240,6 +279,8 @@ export function TradesWorkspace({
   if (selected) {
     return (
       <TradeDetail
+        account={selectedAccount}
+        accountTrades={trades}
         trade={selected}
         onBack={() => setSelectedId(null)}
         onChanged={reload}
@@ -322,7 +363,7 @@ export function TradesWorkspace({
                             : "flat"
                     }`}
                   >
-                    {fmtPnl(trade.pnl)}
+                    {fmtPnl(trade.pnl, selectedAccount?.currency)}
                   </td>
                 </tr>
               ))}
@@ -1018,17 +1059,27 @@ function ScaleBars({ value }: { value: number }) {
 }
 
 type TradeDetailProps = {
+  account: TradingAccount | null;
+  accountTrades: Trade[];
   trade: Trade;
   onBack: () => void;
   onChanged: () => Promise<void>;
 };
 
-function TradeDetail({ trade, onBack, onChanged }: TradeDetailProps) {
+function TradeDetail({
+  account,
+  accountTrades,
+  trade,
+  onBack,
+  onChanged,
+}: TradeDetailProps) {
   const [preTradeOpen, setPreTradeOpen] = useState(false);
   const [entryOpen, setEntryOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
   const plannedRr = plannedRiskReward(trade);
   const actualRr = actualRiskReward(trade);
+  const currency = account?.currency ?? "USD";
+  const balance = tradeBalanceSummary(account, accountTrades, trade);
 
   return (
     <div className="trade-detail">
@@ -1044,15 +1095,26 @@ function TradeDetail({ trade, onBack, onChanged }: TradeDetailProps) {
         <div className="trade-summary-strip" aria-label="Trade summary">
           <SummaryMetric label="Date" value={trade.date} />
           <SummaryMetric label="Duration" value={tradeDuration(trade)} />
-          <SummaryMetric label="Balance before" value="—" />
-          <SummaryMetric label="Balance after" value="—" />
+          <SummaryMetric
+            label="Balance before"
+            value={fmtMoney(balance.before, currency)}
+          />
+          <SummaryMetric
+            label="Balance after"
+            value={fmtMoney(balance.after, currency)}
+            tone={pnlToneClass(trade.pnl)}
+          />
           <SummaryMetric label="Planned RR" value={fmtRMultiple(plannedRr)} />
           <SummaryMetric
             label="Actual RR"
             value={fmtRMultiple(actualRr)}
             tone={pnlToneClass(trade.pnl)}
           />
-          <SummaryMetric label="Account growth %" value="—" />
+          <SummaryMetric
+            label="Account growth %"
+            value={fmtPercent(balance.growthPercent)}
+            tone={pnlToneClass(balance.growthPercent)}
+          />
         </div>
       </header>
 
@@ -1068,6 +1130,7 @@ function TradeDetail({ trade, onBack, onChanged }: TradeDetailProps) {
           onChanged={onChanged}
         />
         <ExitCard
+          currency={currency}
           trade={trade}
           onEdit={() => setExitOpen(true)}
           onChanged={onChanged}
@@ -1225,10 +1288,12 @@ function EntryCard({
 }
 
 function ExitCard({
+  currency,
   trade,
   onEdit,
   onChanged,
 }: {
+  currency: string;
   trade: Trade;
   onEdit: () => void;
   onChanged: () => void | Promise<void>;
@@ -1290,7 +1355,7 @@ function ExitCard({
                       : "flat"
               }
             >
-              {fmtPnl(trade.pnl)}
+              {fmtPnl(trade.pnl, currency)}
             </dd>
           </div>
         </div>
