@@ -15,7 +15,8 @@ Owns daily, weekly, and monthly recap browsing.
 - Cadence values are `daily`, `weekly`, and `monthly`.
 - Journal recaps filter by the selected top-bar account.
 - Journal recap creation auto-fills period stats from trades and per-trade recap fields.
-- Daily, weekly, and monthly recaps use the same compact create/edit modal.
+- Daily, weekly, and monthly recaps use the same compact create/edit modal through the shared `ModalShell`.
+- Journal current recap and saved recap lists use compact table-style rows aligned with Trades/List.
 - Journal recap writing should stay limited to mistakes made, what went well, and what could be done better; the rest is generated from trades and trade recaps.
 
 ## Work Guidance

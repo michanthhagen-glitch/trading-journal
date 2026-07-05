@@ -22,6 +22,7 @@ Owns all sidebar modules. Each module owns its own main content surface and loca
 ## Work Guidance
 
 - Keep main views compact and summary-first.
+- Use Trades/List as the default visual density for list rows across modules.
 - Put deeper detail behind row open, modal, drawer, side panel, or details view.
 - Use local helper functions before creating shared abstractions.
 

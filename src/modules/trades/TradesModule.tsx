@@ -10,7 +10,6 @@ import {
   List as ListIcon,
   Plus,
   Trash2,
-  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
@@ -43,12 +42,22 @@ import {
   type DraftScreenshot,
 } from "./components/ScreenshotTools";
 import { deleteScreenshotFile } from "../../shared/db/storage";
+import { ModalShell } from "../../components/ModalShell";
+import { TRADE_RECAP_QUICK_MISTAKES } from "./tradeRecapMistakes";
+import { TRADE_RECAP_QUICK_POSITIVES } from "./tradeRecapPositives";
 
 type TradesView = "calendar" | "list";
+type TradeRecapTab = "pattern" | "lesson" | "score";
 
 const TRADE_VIEWS: { id: TradesView; label: string; icon: ReactNode }[] = [
   { id: "calendar", label: "Calendar", icon: <CalendarDays size={16} /> },
   { id: "list", label: "List", icon: <ListIcon size={16} /> },
+];
+
+const TRADE_RECAP_TABS: { id: TradeRecapTab; label: string }[] = [
+  { id: "pattern", label: "Pattern" },
+  { id: "lesson", label: "Lesson" },
+  { id: "score", label: "Score" },
 ];
 
 const TRADE_RECAP_GRADES: TradeRecapInput["grade"][] = ["A", "B", "C", "D"];
@@ -72,34 +81,55 @@ const EMOTION_TAGS = [
   "overconfidence",
 ];
 
-const MISTAKE_TAGS = [
-  "Entered too early",
-  "Entered too late",
-  "No valid setup",
-  "Ignored bias",
-  "Bad stop loss",
-  "Bad take profit",
-  "Moved stop loss",
-  "Closed too early",
-  "Held too long",
-  "Over-risked",
-  "Revenge trade",
-  "FOMO entry",
-  "Did not follow plan",
+const LESSON_OPTIONS = [
+  "Wait for confirmation",
+  "Do not chase price",
+  "Respect the risk plan",
+  "Trade only valid setups",
+  "Avoid trading during chop",
+  "Check news first",
+  "Exit only by plan",
+  "Do not move stop wider",
+  "Let winners run",
+  "Accept the loss",
+  "Stay patient",
+  "Follow the checklist",
 ];
 
-const POSITIVE_TAGS = [
-  "Followed plan",
-  "Waited for confirmation",
-  "Good entry",
-  "Good stop loss",
-  "Good take profit",
-  "Managed risk well",
-  "Stayed calm",
-  "Cut loss correctly",
-  "Let winner run",
-  "Skipped bad setup",
+const NEXT_TIME_OPTIONS = [
+  "Wait for candle close",
+  "Confirm higher timeframe",
+  "Use planned lot size",
+  "Set stop before entry",
+  "Take partials at target",
+  "Skip messy price action",
+  "Stop after daily loss",
+  "Journal before entry",
+  "Review setup checklist",
+  "Trade only session window",
+  "Let trade reach plan",
+  "Take only A+ setups",
 ];
+
+function quickTextParts(value: string) {
+  return value
+    .split(/\s*(?:;|\n)\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function toggleQuickTextValue(value: string, option: string) {
+  const parts = quickTextParts(value);
+  const nextParts = parts.includes(option)
+    ? parts.filter((part) => part !== option)
+    : [...parts, option];
+
+  return nextParts.join("; ");
+}
+
+function hasQuickTextValue(value: string, option: string) {
+  return quickTextParts(value).includes(option);
+}
 
 function resultLabel(result: TradeResult) {
   switch (result) {
@@ -882,72 +912,47 @@ function DayTradesDialog({
   onSelectTrade,
 }: DayTradesDialogProps) {
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="day-trades-title"
-      onMouseDown={onClose}
+    <ModalShell
+      ariaLabel={formatDayDialogTitle(dayKey)}
+      modalClassName="day-trades-modal"
+      onClose={onClose}
+      subtitle={`${trades.length} ${trades.length === 1 ? "trade" : "trades"}`}
+      title={formatDayDialogTitle(dayKey)}
+      footer={
+        <button className="secondary-button" type="button" onClick={onClose}>
+          Close
+        </button>
+      }
     >
-      <div
-        className="modal-card day-trades-modal"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header className="modal-header">
-          <div>
-            <h3 id="day-trades-title">{formatDayDialogTitle(dayKey)}</h3>
-            <p className="modal-subtitle">
-              {trades.length} {trades.length === 1 ? "trade" : "trades"}
-            </p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Close day trades"
-            onClick={onClose}
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </header>
-
-        <div className="modal-body">
-          <div className="day-trades-summary">
-            <div>
-              <span>P&L</span>
-              <strong className={pnlToneClass(daySummary.pnl)}>
-                {fmtPnl(daySummary.pnl, selectedAccount?.currency)}
-              </strong>
-            </div>
-            <div>
-              <span>Growth</span>
-              <strong className={pnlToneClass(daySummary.growthPercent)}>
-                {fmtPercent(daySummary.growthPercent)}
-              </strong>
-            </div>
-            <div>
-              <span>Trades</span>
-              <strong>{trades.length}</strong>
-            </div>
-          </div>
-
-          <div className="day-trades-table">
-            <TradesListTable
-              accountTrades={accountTrades}
-              selectedAccount={selectedAccount}
-              trades={trades}
-              onCreateRecap={onCreateRecap}
-              onSelectTrade={onSelectTrade}
-            />
-          </div>
+      <div className="day-trades-summary">
+        <div>
+          <span>P&L</span>
+          <strong className={pnlToneClass(daySummary.pnl)}>
+            {fmtPnl(daySummary.pnl, selectedAccount?.currency)}
+          </strong>
         </div>
-
-        <footer className="modal-footer">
-          <button className="secondary-button" type="button" onClick={onClose}>
-            Close
-          </button>
-        </footer>
+        <div>
+          <span>Growth</span>
+          <strong className={pnlToneClass(daySummary.growthPercent)}>
+            {fmtPercent(daySummary.growthPercent)}
+          </strong>
+        </div>
+        <div>
+          <span>Trades</span>
+          <strong>{trades.length}</strong>
+        </div>
       </div>
-    </div>
+
+      <div className="day-trades-table">
+        <TradesListTable
+          accountTrades={accountTrades}
+          selectedAccount={selectedAccount}
+          trades={trades}
+          onCreateRecap={onCreateRecap}
+          onSelectTrade={onSelectTrade}
+        />
+      </div>
+    </ModalShell>
   );
 }
 
@@ -984,6 +989,7 @@ function TradeRecapDialog({
   onClose,
   onSaved,
 }: TradeRecapDialogProps) {
+  const [activeTab, setActiveTab] = useState<TradeRecapTab>("pattern");
   const [form, setForm] = useState<TradeRecapInput>(() =>
     createDefaultTradeRecap(trade),
   );
@@ -1010,10 +1016,24 @@ function TradeRecapDialog({
     });
   }
 
+  function toggleQuickText(key: "lesson" | "nextAction", option: string) {
+    setForm((current) => ({
+      ...current,
+      [key]: toggleQuickTextValue(current[key], option),
+    }));
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!form.grade || !form.followedPlan || !form.lesson.trim()) {
-      setError("Grade, plan follow, and lesson are required.");
+    if (!form.lesson.trim()) {
+      setActiveTab("lesson");
+      setError("Lesson is required.");
+      return;
+    }
+
+    if (!form.grade || !form.followedPlan) {
+      setActiveTab("score");
+      setError("Grade and plan follow are required.");
       return;
     }
 
@@ -1031,212 +1051,22 @@ function TradeRecapDialog({
   }
 
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Create trade recap"
-      onMouseDown={onClose}
-    >
-      <form
-        className="modal-card trade-recap-modal"
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={handleSubmit}
-      >
-        <header className="modal-header">
-          <div>
-            <h3>Create recap - {trade.pair}</h3>
-            <p className="modal-subtitle">
-              {trade.date} {tradeListTime(trade)} -{" "}
-              {directionActionLabel(trade.direction)}
-            </p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Close recap"
-            onClick={onClose}
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </header>
-
-        <div className="modal-body recap-form">
-          <div className="recap-auto-summary">
-            <SummaryMetric
-              label="Result"
-              value={resultShortLabel(trade.exit.result)}
-            />
-            <SummaryMetric
-              label="P&L"
-              value={fmtPnl(trade.pnl, currency)}
-              tone={pnlToneClass(trade.pnl)}
-            />
-            <SummaryMetric
-              label="Planned RR"
-              value={fmtRMultiple(plannedRiskReward(trade))}
-            />
-            <SummaryMetric
-              label="Actual RR"
-              value={fmtRMultiple(actualRiskReward(trade))}
-              tone={pnlToneClass(trade.pnl)}
-            />
-            <SummaryMetric
-              label="Before"
-              value={
-                trade.preTrade.feeling ? `${trade.preTrade.feeling}/10` : "—"
-              }
-            />
-            <SummaryMetric
-              label="After"
-              value={trade.exit.feeling ? `${trade.exit.feeling}/10` : "—"}
-            />
-          </div>
-
-          <section className="recap-section">
-            <h4>Review score</h4>
-            <div className="form-grid">
-              <label className="field">
-                <span>Trade grade</span>
-                <select
-                  value={form.grade}
-                  onChange={(event) =>
-                    update(
-                      "grade",
-                      event.target.value as TradeRecapInput["grade"],
-                    )
-                  }
-                >
-                  <option value="">Pick grade</option>
-                  {TRADE_RECAP_GRADES.map((grade) => (
-                    <option value={grade} key={grade}>
-                      {grade}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Followed plan?</span>
-                <select
-                  value={form.followedPlan}
-                  onChange={(event) =>
-                    update(
-                      "followedPlan",
-                      event.target.value as TradeRecapInput["followedPlan"],
-                    )
-                  }
-                >
-                  <option value="">Pick one</option>
-                  {PLAN_FOLLOWED_OPTIONS.map((option) => (
-                    <option value={option.value} key={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field recap-rule-toggle">
-                <span>Rule broken?</span>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={form.ruleBroken}
-                    onChange={(event) =>
-                      update("ruleBroken", event.target.checked)
-                    }
-                  />
-                  <span>{form.ruleBroken ? "Yes" : "No"}</span>
-                </label>
-              </label>
-            </div>
-
-            <div className="recap-score-grid">
-              <RecapScoreField
-                label="Setup quality"
-                value={form.setupQuality ?? 5}
-                onChange={(value) => update("setupQuality", value)}
-              />
-              <RecapScoreField
-                label="Entry quality"
-                value={form.entryQuality ?? 5}
-                onChange={(value) => update("entryQuality", value)}
-              />
-              <RecapScoreField
-                label="Management quality"
-                value={form.managementQuality ?? 5}
-                onChange={(value) => update("managementQuality", value)}
-              />
-              <RecapScoreField
-                label="Exit quality"
-                value={form.exitQuality ?? 5}
-                onChange={(value) => update("exitQuality", value)}
-              />
-            </div>
-          </section>
-
-          <section className="recap-section">
-            <h4>Patterns</h4>
-            <label className="field">
-              <span>Emotional mistake</span>
-              <select
-                value={form.emotionTag}
-                onChange={(event) => update("emotionTag", event.target.value)}
-              >
-                {EMOTION_TAGS.map((tag) => (
-                  <option value={tag} key={tag}>
-                    {tag === "none" ? "None" : tag}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <RecapTagGroup
-              label="Main mistake"
-              options={MISTAKE_TAGS}
-              selected={form.mistakeTags}
-              onToggle={(tag) => toggleTag("mistakeTags", tag)}
-            />
-            <RecapTagGroup
-              label="What went well"
-              options={POSITIVE_TAGS}
-              selected={form.positiveTags}
-              onToggle={(tag) => toggleTag("positiveTags", tag)}
-            />
-          </section>
-
-          <section className="recap-section">
-            <h4>Lesson</h4>
-            <div className="form-grid">
-              <label className="field field-wide">
-                <span>Lesson learned</span>
-                <textarea
-                  rows={4}
-                  value={form.lesson}
-                  onChange={(event) => update("lesson", event.target.value)}
-                  placeholder="What did this trade teach you?"
-                />
-              </label>
-              <label className="field field-wide">
-                <span>Next time</span>
-                <textarea
-                  rows={4}
-                  value={form.nextAction}
-                  onChange={(event) => update("nextAction", event.target.value)}
-                  placeholder="What will you do differently next time?"
-                />
-              </label>
-              <label className="field field-wide">
-                <span>Extra notes</span>
-                <textarea
-                  rows={3}
-                  value={form.body}
-                  onChange={(event) => update("body", event.target.value)}
-                  placeholder="Anything else worth remembering"
-                />
-              </label>
-            </div>
-          </section>
-        </div>
-
-        <footer className="modal-footer">
+    <ModalShell
+      ariaLabel="Create trade recap"
+      bodyClassName="recap-form"
+      closeLabel="Close recap"
+      modalClassName="trade-recap-modal"
+      onClose={onClose}
+      onSubmit={handleSubmit}
+      title={`Create recap - ${trade.pair}`}
+      subtitle={
+        <>
+          {trade.date} {tradeListTime(trade)} -{" "}
+          {directionActionLabel(trade.direction)}
+        </>
+      }
+      footer={
+        <>
           {error ? (
             <p className="modal-save-error" role="alert">
               {error}
@@ -1253,9 +1083,277 @@ function TradeRecapDialog({
           <button className="primary-button" type="submit" disabled={saving}>
             {saving ? "Saving..." : "Save recap"}
           </button>
-        </footer>
-      </form>
-    </div>
+        </>
+      }
+    >
+      <div className="recap-sticky-head">
+        <div className="recap-auto-summary">
+          <SummaryMetric
+            label="Result"
+            value={resultShortLabel(trade.exit.result)}
+          />
+          <SummaryMetric
+            label="P&L"
+            value={fmtPnl(trade.pnl, currency)}
+            tone={pnlToneClass(trade.pnl)}
+          />
+          <SummaryMetric
+            label="Planned RR"
+            value={fmtRMultiple(plannedRiskReward(trade))}
+          />
+          <SummaryMetric
+            label="Actual RR"
+            value={fmtRMultiple(actualRiskReward(trade))}
+            tone={pnlToneClass(trade.pnl)}
+          />
+          <SummaryMetric
+            label="Before"
+            value={
+              trade.preTrade.feeling ? `${trade.preTrade.feeling}/10` : "—"
+            }
+          />
+          <SummaryMetric
+            label="After"
+            value={trade.exit.feeling ? `${trade.exit.feeling}/10` : "—"}
+          />
+        </div>
+
+        <div
+          className="recap-tab-bar"
+          role="tablist"
+          aria-label="Trade recap sections"
+        >
+          {TRADE_RECAP_TABS.map((tab) => (
+            <button
+              className={`recap-tab-button${activeTab === tab.id ? " is-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`recap-panel-${tab.id}`}
+              id={`recap-tab-${tab.id}`}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === "pattern" ? (
+        <section
+          className="recap-section"
+          role="tabpanel"
+          id="recap-panel-pattern"
+          aria-labelledby="recap-tab-pattern"
+        >
+          <h4>Patterns</h4>
+          <label className="field">
+            <span>Emotional mistake</span>
+            <select
+              value={form.emotionTag}
+              onChange={(event) => update("emotionTag", event.target.value)}
+            >
+              {EMOTION_TAGS.map((tag) => (
+                <option value={tag} key={tag}>
+                  {tag === "none" ? "None" : tag}
+                </option>
+              ))}
+            </select>
+          </label>
+          <RecapTagGroup
+            label="Main mistake"
+            options={TRADE_RECAP_QUICK_MISTAKES}
+            selected={form.mistakeTags}
+            onToggle={(tag) => toggleTag("mistakeTags", tag)}
+          />
+          <RecapTagGroup
+            label="What went well"
+            options={TRADE_RECAP_QUICK_POSITIVES}
+            selected={form.positiveTags}
+            onToggle={(tag) => toggleTag("positiveTags", tag)}
+          />
+        </section>
+      ) : null}
+
+      {activeTab === "lesson" ? (
+        <section
+          className="recap-section"
+          role="tabpanel"
+          id="recap-panel-lesson"
+          aria-labelledby="recap-tab-lesson"
+        >
+          <h4>Lesson</h4>
+          <div className="form-grid">
+            <div className="recap-text-block field-wide">
+              <label className="field">
+                <span>Lesson learned</span>
+                <textarea
+                  rows={3}
+                  value={form.lesson}
+                  onChange={(event) => update("lesson", event.target.value)}
+                  placeholder="What did this trade teach you?"
+                />
+              </label>
+              <RecapQuickTextGroup
+                label="Quick lessons"
+                options={LESSON_OPTIONS}
+                value={form.lesson}
+                onToggle={(option) => toggleQuickText("lesson", option)}
+              />
+            </div>
+            <div className="recap-text-block field-wide">
+              <label className="field">
+                <span>Next time</span>
+                <textarea
+                  rows={3}
+                  value={form.nextAction}
+                  onChange={(event) => update("nextAction", event.target.value)}
+                  placeholder="What will you do differently next time?"
+                />
+              </label>
+              <RecapQuickTextGroup
+                label="Quick next time"
+                options={NEXT_TIME_OPTIONS}
+                value={form.nextAction}
+                onToggle={(option) => toggleQuickText("nextAction", option)}
+              />
+            </div>
+            <label className="field field-wide">
+              <span>Extra notes</span>
+              <textarea
+                rows={3}
+                value={form.body}
+                onChange={(event) => update("body", event.target.value)}
+                placeholder="Anything else worth remembering"
+              />
+            </label>
+          </div>
+        </section>
+      ) : null}
+
+      {activeTab === "score" ? (
+        <section
+          className="recap-section"
+          role="tabpanel"
+          id="recap-panel-score"
+          aria-labelledby="recap-tab-score"
+        >
+          <h4>Review score</h4>
+          <div className="form-grid">
+            <label className="field">
+              <span>Trade grade</span>
+              <select
+                value={form.grade}
+                onChange={(event) =>
+                  update(
+                    "grade",
+                    event.target.value as TradeRecapInput["grade"],
+                  )
+                }
+              >
+                <option value="">Pick grade</option>
+                {TRADE_RECAP_GRADES.map((grade) => (
+                  <option value={grade} key={grade}>
+                    {grade}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Followed plan?</span>
+              <select
+                value={form.followedPlan}
+                onChange={(event) =>
+                  update(
+                    "followedPlan",
+                    event.target.value as TradeRecapInput["followedPlan"],
+                  )
+                }
+              >
+                <option value="">Pick one</option>
+                {PLAN_FOLLOWED_OPTIONS.map((option) => (
+                  <option value={option.value} key={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field recap-rule-toggle">
+              <span>Rule broken?</span>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={form.ruleBroken}
+                  onChange={(event) =>
+                    update("ruleBroken", event.target.checked)
+                  }
+                />
+                <span>{form.ruleBroken ? "Yes" : "No"}</span>
+              </label>
+            </label>
+          </div>
+
+          <div className="recap-score-grid">
+            <RecapScoreField
+              label="Setup quality"
+              value={form.setupQuality ?? 5}
+              onChange={(value) => update("setupQuality", value)}
+            />
+            <RecapScoreField
+              label="Entry quality"
+              value={form.entryQuality ?? 5}
+              onChange={(value) => update("entryQuality", value)}
+            />
+            <RecapScoreField
+              label="Management quality"
+              value={form.managementQuality ?? 5}
+              onChange={(value) => update("managementQuality", value)}
+            />
+            <RecapScoreField
+              label="Exit quality"
+              value={form.exitQuality ?? 5}
+              onChange={(value) => update("exitQuality", value)}
+            />
+          </div>
+        </section>
+      ) : null}
+    </ModalShell>
+  );
+}
+
+function RecapQuickTextGroup({
+  label,
+  options,
+  value,
+  onToggle,
+}: {
+  label: string;
+  options: string[];
+  value: string;
+  onToggle: (option: string) => void;
+}) {
+  return (
+    <fieldset className="recap-quick-group">
+      <legend>{label}</legend>
+      <div className="recap-quick-list">
+        {options.map((option) => {
+          const selected = hasQuickTextValue(value, option);
+
+          return (
+            <button
+              className={`recap-quick-option${selected ? " is-selected" : ""}`}
+              type="button"
+              aria-pressed={selected}
+              key={option}
+              onClick={() => onToggle(option)}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 
@@ -1661,311 +1759,15 @@ function NewTradeWorkflow({
   }
 
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label="New trade workflow"
-      onClick={handleClose}
-    >
-      <form
-        className="modal-card workflow-modal-card"
-        onClick={(event) => event.stopPropagation()}
-        onSubmit={handleSubmit}
-      >
-        <header className="modal-header">
-          <div>
-            <h3>New trade</h3>
-            <p className="modal-subtitle">
-              {account.name} / {riskPlanRangeLabel(riskPlan)}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Close"
-            onClick={handleClose}
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </header>
-
-        <div className="modal-body">
-          <div className="trade-workflow-grid">
-            <section className="workflow-card workflow-card-pre">
-              <WorkflowCardHeader
-                title="Pre-trade"
-                subtitle="Plan before the click"
-              />
-              <div className="stage-field-grid">
-                <label className="field">
-                  <span>Date</span>
-                  <input
-                    type="date"
-                    value={form.date}
-                    onChange={(event) => update("date", event.target.value)}
-                    required
-                  />
-                </label>
-                <label className="field">
-                  <span>Pair</span>
-                  <input
-                    type="text"
-                    placeholder="EURUSD"
-                    value={form.pair}
-                    onChange={(event) => update("pair", event.target.value)}
-                    required
-                  />
-                </label>
-                <label className="field">
-                  <span>Strategy</span>
-                  <select
-                    value={form.strategy}
-                    onChange={(event) => update("strategy", event.target.value)}
-                    disabled={strategies.length === 0}
-                  >
-                    {strategies.length === 0 ? (
-                      <option value="">No linked strategy</option>
-                    ) : (
-                      strategies.map((strategy) => (
-                        <option key={strategy.id} value={strategy.name}>
-                          {strategy.name}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Risk %</span>
-                  <input
-                    type="number"
-                    step="any"
-                    min={riskPlanMin(riskPlan) ?? undefined}
-                    max={riskPlanMax(riskPlan) ?? undefined}
-                    value={form.riskPercent}
-                    onChange={(event) => updateRiskPercent(event.target.value)}
-                  />
-                  <small>{riskPlanRangeLabel(riskPlan)}</small>
-                </label>
-                <label className="field">
-                  <span>Risk amount</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={form.riskAmount}
-                    readOnly
-                  />
-                  <small>
-                    Balance:{" "}
-                    {accountBalance === null
-                      ? "not available"
-                      : `${account.currency} ${accountBalance.toFixed(2)}`}
-                  </small>
-                </label>
-                <label className="field field-wide">
-                  <span>Bias</span>
-                  <input
-                    type="text"
-                    value={form.bias}
-                    onChange={(event) => update("bias", event.target.value)}
-                    placeholder="Long from demand / short from supply"
-                  />
-                </label>
-                <label className="field field-wide workflow-notes-field">
-                  <span>Setup notes</span>
-                  <textarea
-                    rows={7}
-                    value={form.setupNotes}
-                    onChange={(event) =>
-                      update("setupNotes", event.target.value)
-                    }
-                    placeholder="Why this trade is worth taking"
-                  />
-                </label>
-              </div>
-              <div className="workflow-card-footer">
-                <WorkflowScreenshotSlot
-                  stage="pre-trade"
-                  screenshots={screenshots["pre-trade"]}
-                  onImported={(path) => addDraftScreenshot("pre-trade", path)}
-                  onDelete={(id) => removeDraftScreenshot("pre-trade", id)}
-                />
-                <ScaleField
-                  label="Feeling before trade"
-                  value={form.feelingBefore}
-                  onChange={(value) => update("feelingBefore", value)}
-                />
-              </div>
-            </section>
-
-            <section className="workflow-card workflow-card-entry">
-              <WorkflowCardHeader title="Entry" subtitle="Execution details" />
-              <div className="stage-field-grid">
-                <label className="field">
-                  <span>Entry time</span>
-                  <input
-                    type="time"
-                    value={form.entryTime}
-                    onChange={(event) =>
-                      update("entryTime", event.target.value)
-                    }
-                  />
-                </label>
-                <label className="field">
-                  <span>Direction</span>
-                  <select
-                    value={form.direction}
-                    onChange={(event) =>
-                      update(
-                        "direction",
-                        event.target.value as "long" | "short",
-                      )
-                    }
-                  >
-                    <option value="long">Long</option>
-                    <option value="short">Short</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Entry price</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={form.entryPrice}
-                    onChange={(event) =>
-                      update("entryPrice", event.target.value)
-                    }
-                  />
-                </label>
-                <label className="field">
-                  <span>Lot size</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={form.lotSize}
-                    onChange={(event) => update("lotSize", event.target.value)}
-                  />
-                </label>
-                <label className="field">
-                  <span>Stop loss</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={form.stopLoss}
-                    onChange={(event) => update("stopLoss", event.target.value)}
-                  />
-                </label>
-                <label className="field">
-                  <span>Take profit</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={form.takeProfit}
-                    onChange={(event) =>
-                      update("takeProfit", event.target.value)
-                    }
-                  />
-                </label>
-                <label className="field field-wide workflow-notes-field">
-                  <span>Entry notes</span>
-                  <textarea
-                    rows={7}
-                    value={form.entryNotes}
-                    onChange={(event) =>
-                      update("entryNotes", event.target.value)
-                    }
-                    placeholder="What happened at execution"
-                  />
-                </label>
-              </div>
-              <div className="workflow-card-footer">
-                <WorkflowScreenshotSlot
-                  stage="entry"
-                  screenshots={screenshots.entry}
-                  onImported={(path) => addDraftScreenshot("entry", path)}
-                  onDelete={(id) => removeDraftScreenshot("entry", id)}
-                />
-                <ScaleField
-                  label="Confidence"
-                  value={form.confidence}
-                  onChange={(value) => update("confidence", value)}
-                />
-              </div>
-            </section>
-
-            <section className="workflow-card workflow-card-exit">
-              <WorkflowCardHeader title="Exit" subtitle="Outcome only" />
-              <div className="stage-field-grid">
-                <label className="field">
-                  <span>Exit time</span>
-                  <input
-                    type="time"
-                    value={form.exitTime}
-                    onChange={(event) => update("exitTime", event.target.value)}
-                  />
-                </label>
-                <label className="field">
-                  <span>Exit price</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={form.exitPrice}
-                    onChange={(event) =>
-                      update("exitPrice", event.target.value)
-                    }
-                  />
-                </label>
-                <label className="field">
-                  <span>Result</span>
-                  <select
-                    value={form.result}
-                    onChange={(event) =>
-                      update("result", event.target.value as TradeResult)
-                    }
-                  >
-                    <option value="">Not closed</option>
-                    <option value="win">Win</option>
-                    <option value="loss">Loss</option>
-                    <option value="break-even">Break-even</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>P&amp;L</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={form.pnl}
-                    onChange={(event) => update("pnl", event.target.value)}
-                  />
-                </label>
-                <label className="field field-wide workflow-notes-field">
-                  <span>Exit note</span>
-                  <textarea
-                    rows={8}
-                    value={form.exitNote}
-                    onChange={(event) => update("exitNote", event.target.value)}
-                    placeholder="How the exit happened"
-                  />
-                </label>
-              </div>
-              <div className="workflow-card-footer">
-                <WorkflowScreenshotSlot
-                  stage="exit"
-                  screenshots={screenshots.exit}
-                  onImported={(path) => addDraftScreenshot("exit", path)}
-                  onDelete={(id) => removeDraftScreenshot("exit", id)}
-                />
-                <ScaleField
-                  label="Feeling after trade"
-                  value={form.feelingAfter}
-                  onChange={(value) => update("feelingAfter", value)}
-                />
-              </div>
-            </section>
-          </div>
-        </div>
-
-        <footer className="modal-footer">
+    <ModalShell
+      ariaLabel="New trade workflow"
+      modalClassName="workflow-modal-card"
+      onClose={handleClose}
+      onSubmit={handleSubmit}
+      subtitle={`${account.name} / ${riskPlanRangeLabel(riskPlan)}`}
+      title="New trade"
+      footer={
+        <>
           {saveError ? (
             <p className="modal-save-error" role="alert">
               {saveError}
@@ -1982,9 +1784,267 @@ function NewTradeWorkflow({
           <button type="submit" className="primary-button" disabled={saving}>
             {saving ? "Saving..." : "Save trade"}
           </button>
-        </footer>
-      </form>
-    </div>
+        </>
+      }
+    >
+      <div className="trade-workflow-grid">
+        <section className="workflow-card workflow-card-pre">
+          <WorkflowCardHeader
+            title="Pre-trade"
+            subtitle="Plan before the click"
+          />
+          <div className="stage-field-grid">
+            <label className="field">
+              <span>Date</span>
+              <input
+                type="date"
+                value={form.date}
+                onChange={(event) => update("date", event.target.value)}
+                required
+              />
+            </label>
+            <label className="field">
+              <span>Pair</span>
+              <input
+                type="text"
+                placeholder="EURUSD"
+                value={form.pair}
+                onChange={(event) => update("pair", event.target.value)}
+                required
+              />
+            </label>
+            <label className="field">
+              <span>Strategy</span>
+              <select
+                value={form.strategy}
+                onChange={(event) => update("strategy", event.target.value)}
+                disabled={strategies.length === 0}
+              >
+                {strategies.length === 0 ? (
+                  <option value="">No linked strategy</option>
+                ) : (
+                  strategies.map((strategy) => (
+                    <option key={strategy.id} value={strategy.name}>
+                      {strategy.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+            <label className="field">
+              <span>Risk %</span>
+              <input
+                type="number"
+                step="any"
+                min={riskPlanMin(riskPlan) ?? undefined}
+                max={riskPlanMax(riskPlan) ?? undefined}
+                value={form.riskPercent}
+                onChange={(event) => updateRiskPercent(event.target.value)}
+              />
+              <small>{riskPlanRangeLabel(riskPlan)}</small>
+            </label>
+            <label className="field">
+              <span>Risk amount</span>
+              <input
+                type="number"
+                step="any"
+                value={form.riskAmount}
+                readOnly
+              />
+              <small>
+                Balance:{" "}
+                {accountBalance === null
+                  ? "not available"
+                  : `${account.currency} ${accountBalance.toFixed(2)}`}
+              </small>
+            </label>
+            <label className="field field-wide">
+              <span>Bias</span>
+              <input
+                type="text"
+                value={form.bias}
+                onChange={(event) => update("bias", event.target.value)}
+                placeholder="Long from demand / short from supply"
+              />
+            </label>
+            <label className="field field-wide workflow-notes-field">
+              <span>Setup notes</span>
+              <textarea
+                rows={7}
+                value={form.setupNotes}
+                onChange={(event) => update("setupNotes", event.target.value)}
+                placeholder="Why this trade is worth taking"
+              />
+            </label>
+          </div>
+          <div className="workflow-card-footer">
+            <WorkflowScreenshotSlot
+              stage="pre-trade"
+              screenshots={screenshots["pre-trade"]}
+              onImported={(path) => addDraftScreenshot("pre-trade", path)}
+              onDelete={(id) => removeDraftScreenshot("pre-trade", id)}
+            />
+            <ScaleField
+              label="Feeling before trade"
+              value={form.feelingBefore}
+              onChange={(value) => update("feelingBefore", value)}
+            />
+          </div>
+        </section>
+
+        <section className="workflow-card workflow-card-entry">
+          <WorkflowCardHeader title="Entry" subtitle="Execution details" />
+          <div className="stage-field-grid">
+            <label className="field">
+              <span>Entry time</span>
+              <input
+                type="time"
+                value={form.entryTime}
+                onChange={(event) => update("entryTime", event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>Direction</span>
+              <select
+                value={form.direction}
+                onChange={(event) =>
+                  update("direction", event.target.value as "long" | "short")
+                }
+              >
+                <option value="long">Long</option>
+                <option value="short">Short</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Entry price</span>
+              <input
+                type="number"
+                step="any"
+                value={form.entryPrice}
+                onChange={(event) => update("entryPrice", event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>Lot size</span>
+              <input
+                type="number"
+                step="any"
+                value={form.lotSize}
+                onChange={(event) => update("lotSize", event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>Stop loss</span>
+              <input
+                type="number"
+                step="any"
+                value={form.stopLoss}
+                onChange={(event) => update("stopLoss", event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>Take profit</span>
+              <input
+                type="number"
+                step="any"
+                value={form.takeProfit}
+                onChange={(event) => update("takeProfit", event.target.value)}
+              />
+            </label>
+            <label className="field field-wide workflow-notes-field">
+              <span>Entry notes</span>
+              <textarea
+                rows={7}
+                value={form.entryNotes}
+                onChange={(event) => update("entryNotes", event.target.value)}
+                placeholder="What happened at execution"
+              />
+            </label>
+          </div>
+          <div className="workflow-card-footer">
+            <WorkflowScreenshotSlot
+              stage="entry"
+              screenshots={screenshots.entry}
+              onImported={(path) => addDraftScreenshot("entry", path)}
+              onDelete={(id) => removeDraftScreenshot("entry", id)}
+            />
+            <ScaleField
+              label="Confidence"
+              value={form.confidence}
+              onChange={(value) => update("confidence", value)}
+            />
+          </div>
+        </section>
+
+        <section className="workflow-card workflow-card-exit">
+          <WorkflowCardHeader title="Exit" subtitle="Outcome only" />
+          <div className="stage-field-grid">
+            <label className="field">
+              <span>Exit time</span>
+              <input
+                type="time"
+                value={form.exitTime}
+                onChange={(event) => update("exitTime", event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>Exit price</span>
+              <input
+                type="number"
+                step="any"
+                value={form.exitPrice}
+                onChange={(event) => update("exitPrice", event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>Result</span>
+              <select
+                value={form.result}
+                onChange={(event) =>
+                  update("result", event.target.value as TradeResult)
+                }
+              >
+                <option value="">Not closed</option>
+                <option value="win">Win</option>
+                <option value="loss">Loss</option>
+                <option value="break-even">Break-even</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>P&amp;L</span>
+              <input
+                type="number"
+                step="any"
+                value={form.pnl}
+                onChange={(event) => update("pnl", event.target.value)}
+              />
+            </label>
+            <label className="field field-wide workflow-notes-field">
+              <span>Exit note</span>
+              <textarea
+                rows={8}
+                value={form.exitNote}
+                onChange={(event) => update("exitNote", event.target.value)}
+                placeholder="How the exit happened"
+              />
+            </label>
+          </div>
+          <div className="workflow-card-footer">
+            <WorkflowScreenshotSlot
+              stage="exit"
+              screenshots={screenshots.exit}
+              onImported={(path) => addDraftScreenshot("exit", path)}
+              onDelete={(id) => removeDraftScreenshot("exit", id)}
+            />
+            <ScaleField
+              label="Feeling after trade"
+              value={form.feelingAfter}
+              onChange={(value) => update("feelingAfter", value)}
+            />
+          </div>
+        </section>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -2495,103 +2555,13 @@ function EntryForm({ trade, onClose, onSaved }: EntryFormProps) {
   }
 
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Entry details"
-      onClick={onClose}
-    >
-      <form
-        className="modal-card"
-        onClick={(event) => event.stopPropagation()}
-        onSubmit={handleSubmit}
-      >
-        <header className="modal-header">
-          <h3>Entry - {trade.pair}</h3>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Close"
-            onClick={onClose}
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </header>
-        <div className="modal-body">
-          <div className="form-grid">
-            <label className="field">
-              <span>Entry time</span>
-              <input
-                type="time"
-                value={form.time}
-                onChange={(event) => update("time", event.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span>Direction</span>
-              <select
-                value={form.direction}
-                onChange={(event) =>
-                  update("direction", event.target.value as "long" | "short")
-                }
-              >
-                <option value="long">Long</option>
-                <option value="short">Short</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Entry price</span>
-              <input
-                type="number"
-                step="any"
-                value={form.price}
-                onChange={(event) => update("price", event.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span>Lot size</span>
-              <input
-                type="number"
-                step="any"
-                value={form.lotSize}
-                onChange={(event) => update("lotSize", event.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span>Stop loss</span>
-              <input
-                type="number"
-                step="any"
-                value={form.stopLoss}
-                onChange={(event) => update("stopLoss", event.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span>Take profit</span>
-              <input
-                type="number"
-                step="any"
-                value={form.takeProfit}
-                onChange={(event) => update("takeProfit", event.target.value)}
-              />
-            </label>
-            <label className="field field-wide">
-              <span>Entry notes</span>
-              <textarea
-                rows={4}
-                value={form.notes}
-                onChange={(event) => update("notes", event.target.value)}
-              />
-            </label>
-            <ScaleField
-              label="Confidence"
-              value={form.confidence}
-              onChange={(value) => update("confidence", value)}
-            />
-          </div>
-        </div>
-        <footer className="modal-footer">
+    <ModalShell
+      ariaLabel="Entry details"
+      onClose={onClose}
+      onSubmit={handleSubmit}
+      title={`Entry - ${trade.pair}`}
+      footer={
+        <>
           <button
             type="button"
             className="ghost-button"
@@ -2603,9 +2573,81 @@ function EntryForm({ trade, onClose, onSaved }: EntryFormProps) {
           <button type="submit" className="primary-button" disabled={saving}>
             {saving ? "Saving..." : "Save entry"}
           </button>
-        </footer>
-      </form>
-    </div>
+        </>
+      }
+    >
+      <div className="form-grid">
+        <label className="field">
+          <span>Entry time</span>
+          <input
+            type="time"
+            value={form.time}
+            onChange={(event) => update("time", event.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>Direction</span>
+          <select
+            value={form.direction}
+            onChange={(event) =>
+              update("direction", event.target.value as "long" | "short")
+            }
+          >
+            <option value="long">Long</option>
+            <option value="short">Short</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>Entry price</span>
+          <input
+            type="number"
+            step="any"
+            value={form.price}
+            onChange={(event) => update("price", event.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>Lot size</span>
+          <input
+            type="number"
+            step="any"
+            value={form.lotSize}
+            onChange={(event) => update("lotSize", event.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>Stop loss</span>
+          <input
+            type="number"
+            step="any"
+            value={form.stopLoss}
+            onChange={(event) => update("stopLoss", event.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>Take profit</span>
+          <input
+            type="number"
+            step="any"
+            value={form.takeProfit}
+            onChange={(event) => update("takeProfit", event.target.value)}
+          />
+        </label>
+        <label className="field field-wide">
+          <span>Entry notes</span>
+          <textarea
+            rows={4}
+            value={form.notes}
+            onChange={(event) => update("notes", event.target.value)}
+          />
+        </label>
+        <ScaleField
+          label="Confidence"
+          value={form.confidence}
+          onChange={(value) => update("confidence", value)}
+        />
+      </div>
+    </ModalShell>
   );
 }
 
@@ -2653,87 +2695,13 @@ function ExitForm({ trade, onClose, onSaved }: ExitFormProps) {
   }
 
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Exit details"
-      onClick={onClose}
-    >
-      <form
-        className="modal-card"
-        onClick={(event) => event.stopPropagation()}
-        onSubmit={handleSubmit}
-      >
-        <header className="modal-header">
-          <h3>Exit - {trade.pair}</h3>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Close"
-            onClick={onClose}
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </header>
-        <div className="modal-body">
-          <div className="form-grid">
-            <label className="field">
-              <span>Exit time</span>
-              <input
-                type="time"
-                value={form.time}
-                onChange={(event) => update("time", event.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span>Exit price</span>
-              <input
-                type="number"
-                step="any"
-                value={form.price}
-                onChange={(event) => update("price", event.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span>Result</span>
-              <select
-                value={form.result}
-                onChange={(event) =>
-                  update("result", event.target.value as TradeResult)
-                }
-              >
-                <option value="">Not closed</option>
-                <option value="win">Win</option>
-                <option value="loss">Loss</option>
-                <option value="break-even">Break-even</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>P&amp;L</span>
-              <input
-                type="number"
-                step="any"
-                value={form.pnl}
-                onChange={(event) => update("pnl", event.target.value)}
-              />
-            </label>
-            <label className="field field-wide">
-              <span>Exit note</span>
-              <textarea
-                rows={5}
-                value={form.note}
-                onChange={(event) => update("note", event.target.value)}
-              />
-            </label>
-            <ScaleField
-              label="Feeling after trade"
-              value={form.feeling}
-              onChange={(value) => update("feeling", value)}
-            />
-          </div>
-        </div>
-        <footer className="modal-footer">
+    <ModalShell
+      ariaLabel="Exit details"
+      onClose={onClose}
+      onSubmit={handleSubmit}
+      title={`Exit - ${trade.pair}`}
+      footer={
+        <>
           <button
             type="button"
             className="ghost-button"
@@ -2745,8 +2713,64 @@ function ExitForm({ trade, onClose, onSaved }: ExitFormProps) {
           <button type="submit" className="primary-button" disabled={saving}>
             {saving ? "Saving..." : "Save exit"}
           </button>
-        </footer>
-      </form>
-    </div>
+        </>
+      }
+    >
+      <div className="form-grid">
+        <label className="field">
+          <span>Exit time</span>
+          <input
+            type="time"
+            value={form.time}
+            onChange={(event) => update("time", event.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>Exit price</span>
+          <input
+            type="number"
+            step="any"
+            value={form.price}
+            onChange={(event) => update("price", event.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>Result</span>
+          <select
+            value={form.result}
+            onChange={(event) =>
+              update("result", event.target.value as TradeResult)
+            }
+          >
+            <option value="">Not closed</option>
+            <option value="win">Win</option>
+            <option value="loss">Loss</option>
+            <option value="break-even">Break-even</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>P&amp;L</span>
+          <input
+            type="number"
+            step="any"
+            value={form.pnl}
+            onChange={(event) => update("pnl", event.target.value)}
+          />
+        </label>
+        <label className="field field-wide">
+          <span>Exit note</span>
+          <textarea
+            rows={5}
+            value={form.note}
+            onChange={(event) => update("note", event.target.value)}
+          />
+        </label>
+        <ScaleField
+          label="Feeling after trade"
+          value={form.feeling}
+          onChange={(value) => update("feeling", value)}
+        />
+      </div>
+    </ModalShell>
   );
 }

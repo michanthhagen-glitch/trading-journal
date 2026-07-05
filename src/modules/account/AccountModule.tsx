@@ -111,6 +111,12 @@ export function AccountModule({ onAccountsChanged }: ModuleContext) {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
     null,
   );
+  const [selectedStrategyId, setSelectedStrategyId] = useState<string | null>(
+    null,
+  );
+  const [selectedRiskPlanId, setSelectedRiskPlanId] = useState<string | null>(
+    null,
+  );
   const [createModal, setCreateModal] = useState<AccountSetupCreateKind | null>(
     null,
   );
@@ -135,6 +141,33 @@ export function AccountModule({ onAccountsChanged }: ModuleContext) {
     () => accounts.find((account) => account.id === selectedAccountId) ?? null,
     [accounts, selectedAccountId],
   );
+  const selectedStrategy = useMemo(
+    () =>
+      strategies.find((strategy) => strategy.id === selectedStrategyId) ?? null,
+    [strategies, selectedStrategyId],
+  );
+  const selectedRiskPlan = useMemo(
+    () => riskPlans.find((plan) => plan.id === selectedRiskPlanId) ?? null,
+    [riskPlans, selectedRiskPlanId],
+  );
+
+  function openAccount(accountId: string) {
+    setSelectedAccountId(accountId);
+    setSelectedStrategyId(null);
+    setSelectedRiskPlanId(null);
+  }
+
+  function openStrategy(strategyId: string) {
+    setSelectedAccountId(null);
+    setSelectedStrategyId(strategyId);
+    setSelectedRiskPlanId(null);
+  }
+
+  function openRiskPlan(riskPlanId: string) {
+    setSelectedAccountId(null);
+    setSelectedStrategyId(null);
+    setSelectedRiskPlanId(riskPlanId);
+  }
 
   if (selectedAccount) {
     return (
@@ -143,6 +176,24 @@ export function AccountModule({ onAccountsChanged }: ModuleContext) {
         strategies={strategies}
         riskPlans={riskPlans}
         onBack={() => setSelectedAccountId(null)}
+      />
+    );
+  }
+
+  if (selectedStrategy) {
+    return (
+      <StrategyDetailView
+        strategy={selectedStrategy}
+        onBack={() => setSelectedStrategyId(null)}
+      />
+    );
+  }
+
+  if (selectedRiskPlan) {
+    return (
+      <RiskPlanDetailView
+        plan={selectedRiskPlan}
+        onBack={() => setSelectedRiskPlanId(null)}
       />
     );
   }
@@ -182,7 +233,7 @@ export function AccountModule({ onAccountsChanged }: ModuleContext) {
           strategies={strategies}
           riskPlans={riskPlans}
           loading={loading}
-          onOpenAccount={setSelectedAccountId}
+          onOpenAccount={openAccount}
           onCreate={() => setCreateModal("accounts")}
         />
       ) : null}
@@ -191,6 +242,8 @@ export function AccountModule({ onAccountsChanged }: ModuleContext) {
           title="Strategies"
           emptyText="No strategies yet."
           loading={loading}
+          openHint="Double-click a strategy to open details."
+          onOpenItem={openStrategy}
           onCreate={() => setCreateModal("strategies")}
           items={strategies.map((strategy) => ({
             id: strategy.id,
@@ -204,6 +257,8 @@ export function AccountModule({ onAccountsChanged }: ModuleContext) {
           title="Risk management plans"
           emptyText="No risk plans yet."
           loading={loading}
+          openHint="Double-click a risk plan to open details."
+          onOpenItem={openRiskPlan}
           onCreate={() => setCreateModal("risk")}
           items={riskPlans.map((plan) => ({
             id: plan.id,
@@ -276,51 +331,54 @@ function AccountsList({
       ) : accounts.length === 0 ? (
         <p className="empty-state">No accounts yet.</p>
       ) : (
-        accounts.map((account) => (
-          <article
-            className="account-card account-card-clickable"
-            key={account.id}
-            onDoubleClick={() => onOpenAccount(account.id)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") onOpenAccount(account.id);
-            }}
-            tabIndex={0}
-            title="Double-click to open details"
-          >
-            <header>
-              <div>
-                <h3>{account.name}</h3>
-                <span>{accountTypeLabel(account.accountType)}</span>
-              </div>
-              <strong>
-                {money(account.startingBalance, account.currency)}
-              </strong>
-            </header>
-            <dl>
-              <div>
-                <dt>Commission</dt>
-                <dd>{money(account.commission, account.currency)}/lot</dd>
-              </div>
-              <div>
-                <dt>Strategies</dt>
-                <dd>
-                  {account.strategyIds
-                    .map((id) => strategyMap.get(id)?.name)
-                    .filter(Boolean)
-                    .join(", ") || "-"}
-                </dd>
-              </div>
-              <div>
-                <dt>Risk plan</dt>
-                <dd>
-                  {account.riskPlanId
-                    ? riskMap.get(account.riskPlanId)?.name || "-"
-                    : "-"}
-                </dd>
-              </div>
-            </dl>
-          </article>
-        ))
+        <div className="list-table-shell">
+          <table className="list-table account-accounts-table">
+            <thead>
+              <tr>
+                <th>Account</th>
+                <th>Type</th>
+                <th>Commission</th>
+                <th>Strategies</th>
+                <th>Risk plan</th>
+                <th className="num">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {accounts.map((account) => (
+                <tr
+                  className="list-table-row list-table-row-clickable"
+                  key={account.id}
+                  onDoubleClick={() => onOpenAccount(account.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") onOpenAccount(account.id);
+                  }}
+                  tabIndex={0}
+                  title="Double-click to open details"
+                >
+                  <td>
+                    <strong>{account.name}</strong>
+                  </td>
+                  <td>{accountTypeLabel(account.accountType)}</td>
+                  <td>{money(account.commission, account.currency)}/lot</td>
+                  <td>
+                    {account.strategyIds
+                      .map((id) => strategyMap.get(id)?.name)
+                      .filter(Boolean)
+                      .join(", ") || "-"}
+                  </td>
+                  <td>
+                    {account.riskPlanId
+                      ? riskMap.get(account.riskPlanId)?.name || "-"
+                      : "-"}
+                  </td>
+                  <td className="num account-balance-cell">
+                    {money(account.startingBalance, account.currency)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );
@@ -331,20 +389,26 @@ function SimpleList({
   loading,
   emptyText,
   items,
+  openHint,
+  onOpenItem,
   onCreate,
 }: {
   title: string;
   loading: boolean;
   emptyText: string;
   items: { id: string; title: string; subtitle: string; body?: string }[];
+  openHint?: string;
+  onOpenItem?: (itemId: string) => void;
   onCreate: () => void;
 }) {
+  const hasBody = items.some((item) => item.body);
+
   return (
     <section className="account-list">
       <header className="account-list-header">
         <div>
           <h3>{title}</h3>
-          <span>{items.length} saved</span>
+          <span>{openHint ?? `${items.length} saved`}</span>
         </div>
         <button
           className="ghost-button account-create-button"
@@ -360,19 +424,212 @@ function SimpleList({
       ) : items.length === 0 ? (
         <p className="empty-state">{emptyText}</p>
       ) : (
-        items.map((item) => (
-          <article className="account-card" key={item.id}>
-            <header>
-              <div>
-                <h3>{item.title}</h3>
-                <span>{item.subtitle}</span>
-              </div>
-            </header>
-            {item.body ? <p>{item.body}</p> : null}
-          </article>
-        ))
+        <div className="list-table-shell">
+          <table
+            className={`list-table account-setup-table ${
+              hasBody ? "has-body" : ""
+            }`}
+          >
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Details</th>
+                {hasBody ? <th>Goals</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr
+                  className={`list-table-row ${
+                    onOpenItem ? "list-table-row-clickable" : ""
+                  }`}
+                  key={item.id}
+                  onDoubleClick={() => onOpenItem?.(item.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") onOpenItem?.(item.id);
+                  }}
+                  tabIndex={onOpenItem ? 0 : undefined}
+                  title={onOpenItem ? "Double-click to open details" : ""}
+                >
+                  <td>
+                    <strong>{item.title}</strong>
+                  </td>
+                  <td>{item.subtitle}</td>
+                  {hasBody ? <td>{item.body || "-"}</td> : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
+  );
+}
+
+function StrategyDetailView({
+  strategy,
+  onBack,
+}: {
+  strategy: Strategy;
+  onBack: () => void;
+}) {
+  return (
+    <div className="account-module">
+      <header className="account-detail-header">
+        <button
+          className="icon-button back-button"
+          type="button"
+          onClick={onBack}
+          aria-label="Back to strategies"
+        >
+          <ArrowLeft size={18} aria-hidden="true" />
+        </button>
+        <div>
+          <h2>{strategy.name}</h2>
+          <p className="page-subtitle">Strategy details.</p>
+        </div>
+      </header>
+
+      <section className="account-detail-grid">
+        <article className="account-detail-panel">
+          <h3>Strategy</h3>
+          <p>{strategy.strategy || "No strategy details yet."}</p>
+        </article>
+
+        <article className="account-detail-panel">
+          <h3>Rules</h3>
+          <dl>
+            <div>
+              <dt>Entry rules</dt>
+              <dd>{strategy.entryRules || "-"}</dd>
+            </div>
+            <div>
+              <dt>SL and TP rules</dt>
+              <dd>{strategy.slTpRules || "-"}</dd>
+            </div>
+            <div>
+              <dt>Invalidation rules</dt>
+              <dd>{strategy.invalidationRules || "-"}</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article className="account-detail-panel">
+          <h3>Notes</h3>
+          <p>{strategy.notes || "No notes yet."}</p>
+        </article>
+      </section>
+    </div>
+  );
+}
+
+function RiskPlanDetailView({
+  plan,
+  onBack,
+}: {
+  plan: RiskManagementPlan;
+  onBack: () => void;
+}) {
+  return (
+    <div className="account-module">
+      <header className="account-detail-header">
+        <button
+          className="icon-button back-button"
+          type="button"
+          onClick={onBack}
+          aria-label="Back to risk management plans"
+        >
+          <ArrowLeft size={18} aria-hidden="true" />
+        </button>
+        <div>
+          <h2>{plan.name}</h2>
+          <p className="page-subtitle">Risk management plan details.</p>
+        </div>
+      </header>
+
+      <section className="account-detail-grid">
+        <article className="account-detail-panel">
+          <h3>Risk limits</h3>
+          <dl>
+            <div>
+              <dt>Risk per trade</dt>
+              <dd>
+                {percentRangeValue(
+                  plan.riskPerTradeMinPercent,
+                  plan.riskPerTradeMaxPercent,
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Risk per day</dt>
+              <dd>
+                {percentTripleValue(
+                  plan.riskPerDayMinPercent,
+                  plan.riskPerDayMidPercent,
+                  plan.riskPerDayMaxPercent,
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Risk per week</dt>
+              <dd>
+                {percentRangeValue(
+                  plan.riskPerWeekMinPercent,
+                  plan.riskPerWeekMaxPercent,
+                )}
+              </dd>
+            </div>
+          </dl>
+        </article>
+
+        <article className="account-detail-panel">
+          <h3>Trade limits</h3>
+          <dl>
+            <div>
+              <dt>Max trades per day</dt>
+              <dd>{amountValue(plan.maxTradesPerDay)}</dd>
+            </div>
+            <div>
+              <dt>Max losing trades/day</dt>
+              <dd>{amountValue(plan.maxLosingTradesPerDay)}</dd>
+            </div>
+            <div>
+              <dt>Max losing days row</dt>
+              <dd>{amountValue(plan.maxLosingDaysInRow)}</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article className="account-detail-panel">
+          <h3>Goals</h3>
+          <dl>
+            <div>
+              <dt>Daily goal</dt>
+              <dd>
+                {percentRangeValue(
+                  plan.dailyGoalMinPercent,
+                  plan.dailyGoalMaxPercent,
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Weekly goal</dt>
+              <dd>
+                {percentTripleValue(
+                  plan.weeklyGoalMinPercent,
+                  plan.weeklyGoalMidPercent,
+                  plan.weeklyGoalMaxPercent,
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Notes</dt>
+              <dd>{plan.notes || "-"}</dd>
+            </div>
+          </dl>
+        </article>
+      </section>
+    </div>
   );
 }
 

@@ -6,12 +6,14 @@ Owns reusable renderer components that are not specific to one module.
 
 ## Ownership
 
+- `ModalShell.tsx`: shared single-panel modal shell for reusable popup layout.
 - `layout/Sidebar.tsx`: collapsible module navigation.
 - `layout/Topbar.tsx`: active module title, account picker, and top actions.
 
 ## Local Contracts
 
 - Components here must be reusable across modules or part of the shared shell.
+- Single-panel popups should use `ModalShell` before adding module-local modal chrome.
 - Module-specific components belong inside `src/modules/<module>/`.
 - Use lucide-react for icons.
 - `Topbar` receives account data through props; it must not query the database directly.
@@ -28,4 +30,4 @@ Owns reusable renderer components that are not specific to one module.
 
 ## Child DOX Index
 
-No child DOX files.
+- `layout/AGENTS.md` - reusable shell layout components.

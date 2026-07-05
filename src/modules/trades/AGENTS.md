@@ -7,6 +7,8 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 ## Ownership
 
 - `TradesModule.tsx`: trade table, selected trade detail, three-card new trade workflow, entry form, exit form.
+- `tradeRecapMistakes.ts`: categorized starter catalog for trade recap mistake tags.
+- `tradeRecapPositives.ts`: categorized starter catalog for trade recap positive tags.
 - `components/PreTradeCard.tsx`: pre-trade summary and screenshot gallery.
 - `components/PreTradeForm.tsx`: pre-trade editor, screenshot import, clipboard paste.
 - `components/ScreenshotTools.tsx`: reusable screenshot import and gallery controls for saved and draft trade screenshots.
@@ -30,6 +32,12 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - Missing per-trade recaps show a small warning on calendar days, weekly groups, and trade rows.
 - Calendar day detail and list rows can create a missing per-trade recap.
 - Per-trade recap creation collects structured automation fields: grade, plan follow, quality scores, mistake tags, positive tags, emotion, rule-broken, lesson, and next action.
+- Recap mistake tags start from `tradeRecapMistakes.ts`; keep the catalog grouped even if the UI later flattens it.
+- Recap positive tags start from `tradeRecapPositives.ts`; keep the catalog grouped even if the UI later flattens it.
+- Recap quick tag buttons use quick exports from the catalog files, not duplicate local arrays.
+- Recap lesson and next action fields use quick options plus free text so journaling stays fast.
+- Recap modal keeps the summary row and tabs sticky; tabs navigate Pattern, Lesson, and Score.
+- Trade popups use the shared `ModalShell` for popup chrome, including recap, day details, trade workflow, entry/exit forms, pre-trade, and screenshot previews.
 - The trade list stays compact and shows date/time, buy/sell, strategy, result, P&L, and growth %.
 - Recaps are separate from the pre-trade, entry, and exit workflow.
 - All persistence must use `src/shared/db/database.ts` and `src/shared/db/storage.ts`.
@@ -49,4 +57,4 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 
 ## Child DOX Index
 
-No child DOX files.
+- `components/AGENTS.md` - module-local trade UI components.

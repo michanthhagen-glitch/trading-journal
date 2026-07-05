@@ -20,6 +20,7 @@ Owns the React renderer: app shell, modules, reusable UI, shared helpers, and gl
 - Keep CSS variables in `:root`; avoid ad-hoc colors.
 - Keep dark theme only until a real theme system exists.
 - Do not import Tauri SQL or filesystem plugins directly from modules; use `src/shared/db`.
+- Use shared `list-table` CSS classes for compact framed lists before adding module-specific table copies.
 
 ## Work Guidance
 
@@ -27,6 +28,7 @@ Owns the React renderer: app shell, modules, reusable UI, shared helpers, and gl
 - Keep module-specific UI inside its module.
 - Put only reusable UI in `src/components`.
 - Keep tabs calm and stable: switching tabs changes content only.
+- Shared modals open below the top bar instead of vertically centering around their content height.
 
 ## Verification
 

@@ -65,6 +65,7 @@ npm run format          # prettier --write .
 
 ## Child DOX Index
 
+- `docs/AGENTS.md` - project notes, checkpoints, and handoff documentation.
 - `src/AGENTS.md` - React renderer, app shell, modules, shared frontend code, and global CSS.
 - `src-tauri/AGENTS.md` - Tauri desktop shell, plugins, permissions, and SQLite migrations.
 - `tests/AGENTS.md` - Vitest tests.

@@ -1,10 +1,12 @@
-import { BarChart3, ChevronRight, LineChart, X } from "lucide-react";
+import { BarChart3, ChevronRight, LineChart } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ModuleContext } from "../../app/types";
+import { ModalShell } from "../../components/ModalShell";
 import {
   listAccountSetup,
   listTrades,
   type RiskManagementPlan,
+  type Strategy,
   type Trade,
 } from "../../shared/db/database";
 
@@ -119,7 +121,7 @@ type SummaryData = {
 type DetailState =
   | {
       rows: RateRow[];
-      scope?: "day";
+      scope?: RateDetailScope;
       title: string;
       type: "rate";
     }
@@ -137,8 +139,21 @@ const DASHBOARD_TABS: { id: DashboardTab; label: string }[] = [
   { id: "statistics", label: "Statistics" },
 ];
 
+const DIRECTION_LABELS = ["Long", "Short"];
 const RING_CIRCUMFERENCE = 263.89;
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const SESSION_LABELS = [
+  "Tokyo",
+  "Tokyo-London",
+  "London",
+  "London/New York",
+  "New York",
+  "New York-Tokyo",
+];
+const TIME_INTERVAL_LABELS = Array.from({ length: 96 }, (_, index) =>
+  timeIntervalLabel(index),
+);
+type RateDetailScope = "day" | "direction" | "session" | "time";
 
 function pad(value: number) {
   return value.toString().padStart(2, "0");
@@ -223,27 +238,38 @@ function tradeSortValue(trade: Trade) {
   return `${trade.date} ${tradeTime(trade)}`;
 }
 
+function clockLabel(minutes: number) {
+  const normalized = ((minutes % 1440) + 1440) % 1440;
+  return `${pad(Math.floor(normalized / 60))}:${pad(normalized % 60)}`;
+}
+
+function timeIntervalLabel(index: number) {
+  const start = index * 15;
+  return `${clockLabel(start)}-${clockLabel(start + 15)}`;
+}
+
+function minutesFromTrade(trade: Trade) {
+  const [hour, minute] = tradeTime(trade).split(":").map(Number);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return 0;
+  return Math.max(0, Math.min(1439, hour * 60 + minute));
+}
+
 function hourFromTrade(trade: Trade) {
-  const [hour] = tradeTime(trade).split(":").map(Number);
-  return Number.isFinite(hour) ? hour : 0;
+  return Math.floor(minutesFromTrade(trade) / 60);
 }
 
 function sessionLabel(trade: Trade) {
   const hour = hourFromTrade(trade);
-  if (hour < 7) return "Asia";
+  if (hour < 7) return "Tokyo";
+  if (hour < 8) return "Tokyo-London";
   if (hour < 13) return "London";
+  if (hour < 17) return "London/New York";
   if (hour < 21) return "New York";
-  return "Late";
+  return "New York-Tokyo";
 }
 
 function timeOfDayLabel(trade: Trade) {
-  const hour = hourFromTrade(trade);
-  if (hour < 4) return "00-04";
-  if (hour < 8) return "04-08";
-  if (hour < 12) return "08-12";
-  if (hour < 16) return "12-16";
-  if (hour < 20) return "16-20";
-  return "20-24";
+  return TIME_INTERVAL_LABELS[Math.floor(minutesFromTrade(trade) / 15)];
 }
 
 function dayLabel(trade: Trade) {
@@ -252,7 +278,7 @@ function dayLabel(trade: Trade) {
 }
 
 function directionLabel(trade: Trade) {
-  return trade.direction === "long" ? "Buy" : "Sell";
+  return trade.direction === "long" ? "Long" : "Short";
 }
 
 function pairLabel(trade: Trade) {
@@ -820,12 +846,31 @@ function emptyRateRow(label: string): RateRow {
   };
 }
 
-function detailRateRows(rows: RateRow[], scope?: "day") {
-  if (scope !== "day") return rows;
+function detailRateRows(rows: RateRow[], scope?: RateDetailScope) {
+  if (!scope) return rows;
   const rowMap = new Map(rows.map((row) => [row.label, row]));
-  return WEEKDAY_LABELS.map(
-    (label) => rowMap.get(label) ?? emptyRateRow(label),
-  );
+  const labels =
+    scope === "day"
+      ? WEEKDAY_LABELS
+      : scope === "direction"
+        ? DIRECTION_LABELS
+        : scope === "session"
+          ? SESSION_LABELS
+          : TIME_INTERVAL_LABELS;
+  return labels.map((label) => rowMap.get(label) ?? emptyRateRow(label));
+}
+
+function rateRowsWithLabels(rows: RateRow[], labels: string[]) {
+  const rowMap = new Map(rows.map((row) => [row.label, row]));
+  const seen = new Set<string>();
+  const fixedRows = labels.flatMap((label) => {
+    const cleanLabel = label.trim();
+    if (!cleanLabel || seen.has(cleanLabel)) return [];
+    seen.add(cleanLabel);
+    return [rowMap.get(cleanLabel) ?? emptyRateRow(cleanLabel)];
+  });
+  const extraRows = rows.filter((row) => !seen.has(row.label));
+  return [...fixedRows, ...extraRows];
 }
 
 function buildTradeOutcomes(
@@ -1655,12 +1700,12 @@ function RateStatsCard({
   variant?: "bestWorst" | "buySell" | "simple";
 }) {
   const top = leaders.rows[0] ?? null;
-  const buy = leaders.rows.find((row) => row.label === "Buy") ?? null;
-  const sell = leaders.rows.find((row) => row.label === "Sell") ?? null;
+  const long = leaders.rows.find((row) => row.label === "Long") ?? null;
+  const short = leaders.rows.find((row) => row.label === "Short") ?? null;
 
   if (variant !== "simple") {
-    const left = variant === "buySell" ? buy : leaders.bestWin;
-    const right = variant === "buySell" ? sell : leaders.worstWin;
+    const left = variant === "buySell" ? long : leaders.bestWin;
+    const right = variant === "buySell" ? short : leaders.worstWin;
 
     return (
       <button
@@ -1671,11 +1716,11 @@ function RateStatsCard({
         <span>{title}</span>
         <div className="dash-stat-split">
           <RateStatMini
-            caption={variant === "buySell" ? "Buy" : "Best win rate"}
+            caption={variant === "buySell" ? "Long" : "Best win rate"}
             row={left}
           />
           <RateStatMini
-            caption={variant === "buySell" ? "Sell" : "Worst win rate"}
+            caption={variant === "buySell" ? "Short" : "Worst win rate"}
             row={right}
           />
         </div>
@@ -1758,133 +1803,120 @@ function StatsDetailModal({
   const rateRows =
     detail.type === "rate" ? detailRateRows(detail.rows, detail.scope) : [];
   const rateNameLabel =
-    detail.type === "rate" && detail.scope === "day" ? "Day" : "Name";
+    detail.type === "rate" && detail.scope === "day"
+      ? "Day"
+      : detail.type === "rate" && detail.scope === "direction"
+        ? "Direction"
+        : detail.type === "rate" && detail.scope === "session"
+          ? "Session"
+          : detail.type === "rate" && detail.scope === "time"
+            ? "Time"
+            : "Name";
   const modalClassName =
     detail.type === "rate"
-      ? `modal-card dash-detail-modal is-rate-${rateView}`
-      : "modal-card dash-detail-modal is-ranking";
+      ? `dash-detail-modal is-rate-${rateView}`
+      : "dash-detail-modal is-ranking";
 
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-label={detail.title}
-      aria-modal="true"
-      onMouseDown={onClose}
+    <ModalShell
+      ariaLabel={detail.title}
+      modalClassName={modalClassName}
+      onClose={onClose}
+      subtitle={
+        detail.type === "rate"
+          ? "Detailed win, loss, and P&L view."
+          : "Top 10 ranked by net P&L."
+      }
+      title={detail.title}
     >
-      <div
-        className={modalClassName}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header className="modal-header">
-          <div>
-            <h3>{detail.title}</h3>
-            <p className="modal-subtitle">
-              {detail.type === "rate"
-                ? "Detailed win, loss, and P&L view."
-                : "Top 10 ranked by net P&L."}
-            </p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Close dashboard detail"
-            onClick={onClose}
+      {detail.type === "rate" ? (
+        <div className="dash-rate-detail">
+          <div
+            className="dash-detail-tabs tab-bar"
+            role="tablist"
+            aria-label={`${detail.title} view`}
           >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </header>
-        <div className="modal-body">
-          {detail.type === "rate" ? (
-            <div className="dash-rate-detail">
-              <div
-                className="dash-detail-tabs tab-bar"
-                role="tablist"
-                aria-label={`${detail.title} view`}
-              >
-                <button
-                  className={`tab ${rateView === "table" ? "active" : ""}`}
-                  role="tab"
-                  aria-selected={rateView === "table"}
-                  type="button"
-                  onClick={() => setRateView("table")}
-                >
-                  Table
-                </button>
-                <button
-                  className={`tab ${rateView === "chart" ? "active" : ""}`}
-                  role="tab"
-                  aria-selected={rateView === "chart"}
-                  type="button"
-                  onClick={() => setRateView("chart")}
-                >
-                  Chart
-                </button>
-              </div>
-              {rateView === "table" ? (
-                <div
-                  className={`dash-detail-table dash-rate-detail-table ${
-                    detail.scope === "day" ? "is-day" : ""
-                  }`}
-                >
-                  <div>
-                    <span>{rateNameLabel}</span>
-                    <span>Trades</span>
-                    <span>Wins</span>
-                    <span>Losses</span>
-                    <span>Breakeven</span>
-                    <span>Win rate</span>
-                    <span>Loss rate</span>
-                    <span>BE rate</span>
-                    <span>Net P&L</span>
-                  </div>
-                  {rateRows.map((row) => (
-                    <div key={row.label}>
-                      <strong>{row.label}</strong>
-                      <span>{row.trades}</span>
-                      <span className="positive">{row.wins}</span>
-                      <span className="negative">{row.losses}</span>
-                      <span>{row.breakEvens}</span>
-                      <span className="positive">
-                        {fmtCompactPercent(row.winRate)}
-                      </span>
-                      <span className="negative">
-                        {fmtCompactPercent(row.lossRate)}
-                      </span>
-                      <span>{fmtCompactPercent(row.beRate)}</span>
-                      <span className={toneFromNumber(row.pnl)}>
-                        {fmtCurrency(row.pnl, currency, true)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <RateBarChart rows={rateRows} />
-              )}
-            </div>
-          ) : (
-            <div className="dash-detail-table dash-ranking-table">
+            <button
+              className={`tab ${rateView === "table" ? "active" : ""}`}
+              role="tab"
+              aria-selected={rateView === "table"}
+              type="button"
+              onClick={() => setRateView("table")}
+            >
+              Table
+            </button>
+            <button
+              className={`tab ${rateView === "chart" ? "active" : ""}`}
+              role="tab"
+              aria-selected={rateView === "chart"}
+              type="button"
+              onClick={() => setRateView("chart")}
+            >
+              Chart
+            </button>
+          </div>
+          {rateView === "table" ? (
+            <div
+              className={`dash-detail-table dash-rate-detail-table ${
+                detail.scope === "day" ? "is-day" : ""
+              }`}
+            >
               <div>
-                <span>Name</span>
-                <span>Detail</span>
+                <span>{rateNameLabel}</span>
                 <span>Trades</span>
-                <span>P&L</span>
+                <span>Wins</span>
+                <span>Losses</span>
+                <span>Breakeven</span>
+                <span>Win rate</span>
+                <span>Loss rate</span>
+                <span>BE rate</span>
+                <span>Net P&L</span>
               </div>
-              {detail.rows.map((row) => (
-                <div key={row.id}>
+              {rateRows.map((row) => (
+                <div key={row.label}>
                   <strong>{row.label}</strong>
-                  <span>{row.meta}</span>
                   <span>{row.trades}</span>
-                  <span className={toneFromNumber(row.value)}>
-                    {fmtCurrency(row.value, currency, true)}
+                  <span className="positive">{row.wins}</span>
+                  <span className="negative">{row.losses}</span>
+                  <span>{row.breakEvens}</span>
+                  <span className="positive">
+                    {fmtCompactPercent(row.winRate)}
+                  </span>
+                  <span className="negative">
+                    {fmtCompactPercent(row.lossRate)}
+                  </span>
+                  <span>{fmtCompactPercent(row.beRate)}</span>
+                  <span className={toneFromNumber(row.pnl)}>
+                    {fmtCurrency(row.pnl, currency, true)}
                   </span>
                 </div>
               ))}
             </div>
+          ) : (
+            <RateBarChart rows={rateRows} />
           )}
         </div>
-      </div>
-    </div>
+      ) : (
+        <div className="dash-detail-table dash-ranking-table">
+          <div>
+            <span>Name</span>
+            <span>Detail</span>
+            <span>Trades</span>
+            <span>P&L</span>
+          </div>
+          {detail.rows.map((row) => (
+            <div key={row.id}>
+              <strong>{row.label}</strong>
+              <span>{row.meta}</span>
+              <span>{row.trades}</span>
+              <span className={toneFromNumber(row.value)}>
+                {fmtCurrency(row.value, currency, true)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </ModalShell>
   );
 }
 
@@ -1989,63 +2021,43 @@ function ChartHistoryDetailModal({
   );
 
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-label="Monthly balance chart history"
-      aria-modal="true"
-      onMouseDown={onClose}
+    <ModalShell
+      ariaLabel="Monthly balance chart history"
+      bodyClassName="dash-chart-detail-body"
+      modalClassName="dash-chart-detail-modal"
+      onClose={onClose}
+      title="Monthly balance charts"
     >
       <div
-        className="modal-card dash-chart-detail-modal"
-        onMouseDown={(event) => event.stopPropagation()}
+        className="dash-chart-year-tabs tab-bar"
+        role="tablist"
+        aria-label="Balance chart year"
       >
-        <header className="modal-header">
-          <div>
-            <h3>Monthly balance charts</h3>
-          </div>
+        {years.map((year) => (
           <button
-            className="icon-button"
+            className={`tab ${activeYear === year ? "active" : ""}`}
+            key={year}
+            role="tab"
+            aria-selected={activeYear === year}
             type="button"
-            aria-label="Close monthly balance chart history"
-            onClick={onClose}
+            onClick={() => setActiveYear(year)}
           >
-            <X size={18} aria-hidden="true" />
+            {year}
           </button>
-        </header>
-        <div
-          className="dash-chart-year-tabs tab-bar"
-          role="tablist"
-          aria-label="Balance chart year"
-        >
-          {years.map((year) => (
-            <button
-              className={`tab ${activeYear === year ? "active" : ""}`}
-              key={year}
-              role="tab"
-              aria-selected={activeYear === year}
-              type="button"
-              onClick={() => setActiveYear(year)}
-            >
-              {year}
-            </button>
-          ))}
-        </div>
-        <div className="modal-body dash-chart-detail-body">
-          {visibleCharts.map((chart) => (
-            <ChartPanel
-              currency={currency}
-              growth={chart.growth}
-              icon={<LineChart size={14} aria-hidden="true" />}
-              key={chart.id}
-              points={chart.points}
-              scope="month"
-              title={chart.label}
-            />
-          ))}
-        </div>
+        ))}
       </div>
-    </div>
+      {visibleCharts.map((chart) => (
+        <ChartPanel
+          currency={currency}
+          growth={chart.growth}
+          icon={<LineChart size={14} aria-hidden="true" />}
+          key={chart.id}
+          points={chart.points}
+          scope="month"
+          title={chart.label}
+        />
+      ))}
+    </ModalShell>
   );
 }
 
@@ -2076,83 +2088,63 @@ function WeekHistoryDetailModal({
     .sort((a, b) => (a.id < b.id ? 1 : -1));
 
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-label="Weekly balance history"
-      aria-modal="true"
-      onMouseDown={onClose}
+    <ModalShell
+      ariaLabel="Weekly balance history"
+      bodyClassName="dash-week-detail-body"
+      modalClassName="dash-chart-detail-modal"
+      onClose={onClose}
+      title="Weekly balance history"
     >
       <div
-        className="modal-card dash-chart-detail-modal"
-        onMouseDown={(event) => event.stopPropagation()}
+        className="dash-chart-year-tabs tab-bar"
+        role="tablist"
+        aria-label="Weekly balance year"
       >
-        <header className="modal-header">
-          <div>
-            <h3>Weekly balance history</h3>
-          </div>
+        {years.map((year) => (
           <button
-            className="icon-button"
+            className={`tab ${activeYear === year ? "active" : ""}`}
+            key={year}
+            role="tab"
+            aria-selected={activeYear === year}
             type="button"
-            aria-label="Close weekly balance history"
-            onClick={onClose}
+            onClick={() => setActiveYear(year)}
           >
-            <X size={18} aria-hidden="true" />
+            {year}
           </button>
-        </header>
-        <div
-          className="dash-chart-year-tabs tab-bar"
-          role="tablist"
-          aria-label="Weekly balance year"
-        >
-          {years.map((year) => (
-            <button
-              className={`tab ${activeYear === year ? "active" : ""}`}
-              key={year}
-              role="tab"
-              aria-selected={activeYear === year}
-              type="button"
-              onClick={() => setActiveYear(year)}
-            >
-              {year}
-            </button>
-          ))}
-        </div>
-        <div className="modal-body dash-week-detail-body">
-          <div className="trade-week-list dash-week-history-list">
-            {visibleCards.map((card) => {
-              const { summary } = card;
-              return (
-                <section className="trade-week-group" key={card.id}>
-                  <button
-                    className="trade-week-header dash-week-history-row"
-                    type="button"
-                    onClick={() => onOpenGraph(card)}
-                  >
-                    <span className="trade-week-title">
-                      <ChevronRight size={16} aria-hidden="true" />
-                      <span>Week {card.weekNumber}</span>
-                      <span className="dash-week-range">{card.label}</span>
-                    </span>
-                    <span className="trade-week-meta dash-week-history-meta">
-                      <span>{summary.closed} closed</span>
-                      <span>
-                        {summary.wins}W / {summary.losses}L /{" "}
-                        {summary.breakEvens}BE
-                      </span>
-                      <span>Growth {fmtPercent(summary.growth)}</span>
-                      <strong className={toneFromNumber(summary.netPnl)}>
-                        {fmtCurrency(summary.netPnl, currency, true)}
-                      </strong>
-                    </span>
-                  </button>
-                </section>
-              );
-            })}
-          </div>
-        </div>
+        ))}
       </div>
-    </div>
+
+      <div className="trade-week-list dash-week-history-list">
+        {visibleCards.map((card) => {
+          const { summary } = card;
+          return (
+            <section className="trade-week-group" key={card.id}>
+              <button
+                className="trade-week-header dash-week-history-row"
+                type="button"
+                onClick={() => onOpenGraph(card)}
+              >
+                <span className="trade-week-title">
+                  <ChevronRight size={16} aria-hidden="true" />
+                  <span>Week {card.weekNumber}</span>
+                  <span className="dash-week-range">{card.label}</span>
+                </span>
+                <span className="trade-week-meta dash-week-history-meta">
+                  <span>{summary.closed} closed</span>
+                  <span>
+                    {summary.wins}W / {summary.losses}L / {summary.breakEvens}BE
+                  </span>
+                  <span>Growth {fmtPercent(summary.growth)}</span>
+                  <strong className={toneFromNumber(summary.netPnl)}>
+                    {fmtCurrency(summary.netPnl, currency, true)}
+                  </strong>
+                </span>
+              </button>
+            </section>
+          );
+        })}
+      </div>
+    </ModalShell>
   );
 }
 
@@ -2168,44 +2160,22 @@ function WeekChartDetailModal({
   if (!card) return null;
 
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-label={`Week ${card.weekNumber} ${card.label} balance graph`}
-      aria-modal="true"
-      onMouseDown={onClose}
+    <ModalShell
+      ariaLabel={`Week ${card.weekNumber} ${card.label} balance graph`}
+      bodyClassName="dash-week-chart-body"
+      modalClassName="dash-week-chart-modal"
+      onClose={onClose}
+      title={`Week ${card.weekNumber} · ${card.label}`}
     >
-      <div
-        className="modal-card dash-week-chart-modal"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header className="modal-header">
-          <div>
-            <h3>
-              Week {card.weekNumber} · {card.label}
-            </h3>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Close weekly balance graph"
-            onClick={onClose}
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </header>
-        <div className="modal-body dash-week-chart-body">
-          <ChartPanel
-            currency={currency}
-            growth={card.summary.growth}
-            icon={<LineChart size={14} aria-hidden="true" />}
-            points={card.points}
-            scope="week"
-            title="Week balance"
-          />
-        </div>
-      </div>
-    </div>
+      <ChartPanel
+        currency={currency}
+        growth={card.summary.growth}
+        icon={<LineChart size={14} aria-hidden="true" />}
+        points={card.points}
+        scope="week"
+        title="Week balance"
+      />
+    </ModalShell>
   );
 }
 
@@ -2215,6 +2185,7 @@ export function DashboardModule({
 }: ModuleContext) {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [riskPlan, setRiskPlan] = useState<RiskManagementPlan | null>(null);
+  const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [activeTab, setActiveTab] = useState<DashboardTab>("total");
   const [detail, setDetail] = useState<DetailState>(null);
   const [chartDetailKind, setChartDetailKind] = useState<
@@ -2235,6 +2206,7 @@ export function DashboardModule({
       if (cancelled) return;
 
       setTrades(tradeRows);
+      setStrategies(setup.strategies);
       setRiskPlan(
         setup.riskPlans.find(
           (plan) =>
@@ -2396,6 +2368,14 @@ export function DashboardModule({
       : activeTab === "week"
         ? dashboard.weekRankings
         : dashboard.totalRankings;
+  const strategyDetailRows = useMemo(
+    () =>
+      rateRowsWithLabels(
+        dashboard.total.rateGroups.strategy.rows,
+        strategies.map((strategy) => strategy.name),
+      ),
+    [dashboard.total.rateGroups.strategy.rows, strategies],
+  );
   const currentMonthChart = dashboard.monthlyCharts[
     dashboard.monthlyCharts.length - 1
   ] ?? {
@@ -2523,6 +2503,7 @@ export function DashboardModule({
               onOpen={() =>
                 setDetail({
                   rows: dashboard.total.rateGroups.session.rows,
+                  scope: "session",
                   title: "Session statistics",
                   type: "rate",
                 })
@@ -2534,19 +2515,21 @@ export function DashboardModule({
               onOpen={() =>
                 setDetail({
                   rows: dashboard.total.rateGroups.time.rows,
+                  scope: "time",
                   title: "Time statistics",
                   type: "rate",
                 })
               }
             />
             <RateStatsCard
-              title="Buy / Sell"
+              title="Direction"
               leaders={dashboard.total.rateGroups.direction}
               variant="buySell"
               onOpen={() =>
                 setDetail({
                   rows: dashboard.total.rateGroups.direction.rows,
-                  title: "Buy / Sell statistics",
+                  scope: "direction",
+                  title: "Direction statistics",
                   type: "rate",
                 })
               }
@@ -2568,7 +2551,7 @@ export function DashboardModule({
               variant="simple"
               onOpen={() =>
                 setDetail({
-                  rows: dashboard.total.rateGroups.strategy.rows,
+                  rows: strategyDetailRows,
                   title: "Strategy statistics",
                   type: "rate",
                 })

@@ -1,5 +1,5 @@
-import { X } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
+import { ModalShell } from "../../../../components/ModalShell";
 import {
   createRiskManagementPlan,
   createStrategy,
@@ -724,31 +724,14 @@ function CreateModalShell({
   children: ReactNode;
 }) {
   return (
-    <div className="modal-backdrop">
-      <section
-        className="modal-card account-create-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={`${formId}-title`}
-      >
-        <header className="modal-header">
-          <div>
-            <h3 id={`${formId}-title`}>{title}</h3>
-            <p className="modal-subtitle">{subtitle}</p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={16} aria-hidden="true" />
-          </button>
-        </header>
-
-        <div className="modal-body">{children}</div>
-
-        <footer className="modal-footer">
+    <ModalShell
+      ariaLabel={title}
+      modalClassName="account-create-modal"
+      onClose={onClose}
+      subtitle={subtitle}
+      title={title}
+      footer={
+        <>
           {error ? <p className="modal-save-error">{error}</p> : null}
           <button
             className="ghost-button"
@@ -766,8 +749,10 @@ function CreateModalShell({
           >
             {saving ? "Saving..." : submitLabel}
           </button>
-        </footer>
-      </section>
-    </div>
+        </>
+      }
+    >
+      {children}
+    </ModalShell>
   );
 }

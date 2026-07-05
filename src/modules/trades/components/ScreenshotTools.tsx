@@ -1,5 +1,6 @@
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { ModalShell } from "../../../components/ModalShell";
 import {
   addScreenshot,
   deleteScreenshot,
@@ -235,50 +236,15 @@ function WindowSelectorModal({
   onSelect,
 }: WindowSelectorModalProps) {
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Select screenshot window"
-      onClick={onCancel}
-    >
-      <div
-        className="modal-card window-selector-modal"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="modal-header">
-          <div>
-            <h3>Select window</h3>
-            <p className="modal-subtitle">TradingView was not found.</p>
-          </div>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Close"
-            onClick={onCancel}
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </header>
-        <div className="modal-body window-selector-body">
-          {windows.map((window) => (
-            <button
-              key={window.id}
-              type="button"
-              className="window-selector-row"
-              onClick={() => onSelect(window.id)}
-            >
-              <span className="window-selector-title">
-                {window.title || window.appName}
-              </span>
-              <span className="window-selector-meta">
-                {window.appName || "Window"} · {window.width}x{window.height}
-                {window.isFocused ? " · Active" : ""}
-              </span>
-            </button>
-          ))}
-        </div>
-        <footer className="modal-footer">
+    <ModalShell
+      ariaLabel="Select screenshot window"
+      bodyClassName="window-selector-body"
+      modalClassName="window-selector-modal"
+      onClose={onCancel}
+      subtitle="TradingView was not found."
+      title="Select window"
+      footer={
+        <>
           <button type="button" className="ghost-button" onClick={onCancel}>
             Cancel
           </button>
@@ -289,9 +255,26 @@ function WindowSelectorModal({
           >
             Import file
           </button>
-        </footer>
-      </div>
-    </div>
+        </>
+      }
+    >
+      {windows.map((window) => (
+        <button
+          key={window.id}
+          type="button"
+          className="window-selector-row"
+          onClick={() => onSelect(window.id)}
+        >
+          <span className="window-selector-title">
+            {window.title || window.appName}
+          </span>
+          <span className="window-selector-meta">
+            {window.appName || "Window"} · {window.width}x{window.height}
+            {window.isFocused ? " · Active" : ""}
+          </span>
+        </button>
+      ))}
+    </ModalShell>
   );
 }
 
@@ -484,13 +467,18 @@ function ScreenshotLightbox({
   }, [screenshot.path]);
 
   return (
-    <div className="lightbox-backdrop" onClick={onClose} role="dialog">
+    <ModalShell
+      ariaLabel={screenshot.caption || "Screenshot preview"}
+      bodyClassName="screenshot-lightbox-body"
+      modalClassName="screenshot-lightbox-modal"
+      onClose={onClose}
+      title={screenshot.caption || "Screenshot preview"}
+    >
       <img
         className="lightbox-image"
         src={url}
         alt={screenshot.caption || "Screenshot"}
-        onClick={(event) => event.stopPropagation()}
       />
-    </div>
+    </ModalShell>
   );
 }

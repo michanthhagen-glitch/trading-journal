@@ -1,5 +1,6 @@
-import { CalendarDays, CalendarRange, Edit3, Plus, X } from "lucide-react";
+import { CalendarDays, CalendarRange, Edit3, Plus } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ModalShell } from "../../components/ModalShell";
 import {
   listJournalRecaps,
   listTrades,
@@ -521,22 +522,60 @@ export function JournalModule({
         ))}
       </div>
 
-      <section className="journal-current panel">
-        <div className="journal-current-head">
-          <div>
-            <span className="recap-date">{currentRange.label}</span>
-            <h3>Current {cadence} recap</h3>
-          </div>
-          <span
-            className={`journal-status ${currentRecap ? "done" : "missing"}`}
-          >
-            {currentRecap ? "Done" : "Missing"}
-          </span>
+      <section className="journal-current-list" aria-label="Current recap">
+        <div className="list-table-shell">
+          <table className="list-table journal-current-table">
+            <thead>
+              <tr>
+                <th>Period</th>
+                <th>Status</th>
+                <th>Trades</th>
+                <th>Win / Loss / BE</th>
+                <th>Net P&amp;L</th>
+                <th>Growth</th>
+                <th>Trade recaps</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="list-table-row">
+                <td>
+                  <strong>Current {cadence}</strong>
+                  <span>{currentRange.label}</span>
+                </td>
+                <td>
+                  <span
+                    className={`journal-status ${
+                      currentRecap ? "done" : "missing"
+                    }`}
+                  >
+                    {currentRecap ? "Done" : "Missing"}
+                  </span>
+                </td>
+                <td>{currentStats.totalTrades}</td>
+                <td>
+                  {currentStats.wins} / {currentStats.losses} /{" "}
+                  {currentStats.breakEven}
+                </td>
+                <td className={pnlTone(currentStats.netPnl)}>
+                  {fmtPnl(currentStats.netPnl, currency)}
+                </td>
+                <td className={pnlTone(currentStats.growthPercent)}>
+                  {fmtPercent(currentStats.growthPercent)}
+                </td>
+                <td
+                  className={
+                    currentStats.missingRecaps > 0 ? "negative" : "positive"
+                  }
+                >
+                  {currentStats.recapped}/{currentStats.totalTrades}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <RecapStatsGrid stats={currentStats} currency={currency} />
       </section>
 
-      <div className="recap-list">
+      <div className="recap-list" aria-label={`${cadence} recaps`}>
         {loading ? (
           <p className="empty-state">Loading recaps...</p>
         ) : recaps.length === 0 ? (
@@ -544,28 +583,42 @@ export function JournalModule({
             No {cadence} recaps yet - start with "New {cadence} recap".
           </p>
         ) : (
-          recaps.map((recap) => (
-            <article className="recap-card" key={recap.id}>
-              <header className="recap-card-header">
-                <div>
-                  <h3>{recap.title}</h3>
-                  <span className="recap-date">{recap.period}</span>
-                </div>
-                <button
-                  className="ghost-button ghost-button-sm"
-                  type="button"
-                  onClick={() => {
-                    setEditorRecap(recap);
-                    setEditorOpen(true);
-                  }}
-                >
-                  <Edit3 size={13} aria-hidden="true" />
-                  <span>Edit</span>
-                </button>
-              </header>
-              <p>{bodyPreview(recap.body)}</p>
-            </article>
-          ))
+          <div className="list-table-shell">
+            <table className="list-table journal-recap-table">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Period</th>
+                  <th>Summary</th>
+                  <th className="list-table-action-column">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recaps.map((recap) => (
+                  <tr className="list-table-row" key={recap.id}>
+                    <td>
+                      <strong>{recap.title}</strong>
+                    </td>
+                    <td>{recap.period}</td>
+                    <td>{bodyPreview(recap.body)}</td>
+                    <td className="list-table-action-cell">
+                      <button
+                        className="ghost-button ghost-button-sm"
+                        type="button"
+                        onClick={() => {
+                          setEditorRecap(recap);
+                          setEditorOpen(true);
+                        }}
+                      >
+                        <Edit3 size={13} aria-hidden="true" />
+                        <span>Edit</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -708,72 +761,16 @@ function JournalRecapDialog({
   }
 
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${cadence} recap`}
-      onMouseDown={onClose}
-    >
-      <form
-        className="modal-card journal-recap-modal"
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={handleSubmit}
-      >
-        <header className="modal-header">
-          <div>
-            <h3>
-              {initialRecap ? "Edit" : "Create"} {cadence} recap
-            </h3>
-            <p className="modal-subtitle">{range.label}</p>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Close recap"
-            onClick={onClose}
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </header>
-
-        <div className="modal-body journal-recap-body">
-          <div className="journal-recap-period-row">
-            <label className="field">
-              <span>{cadence === "monthly" ? "Month" : "Period date"}</span>
-              <input
-                type={cadence === "monthly" ? "month" : "date"}
-                value={anchor}
-                onChange={(event) => {
-                  setAnchor(event.target.value);
-                }}
-              />
-            </label>
-            <div className="journal-auto-title">
-              <span>Auto title</span>
-              <strong>{title}</strong>
-            </div>
-          </div>
-
-          <RecapStatsGrid stats={stats} currency={currency} />
-
-          <section className="journal-manual-fields">
-            {MANUAL_RECAP_FIELDS.map((field) => (
-              <label className="field journal-manual-field" key={field.key}>
-                <span>{field.label}</span>
-                <textarea
-                  rows={3}
-                  value={notes[field.key] ?? ""}
-                  onChange={(event) =>
-                    updateNote(field.key, event.target.value)
-                  }
-                />
-              </label>
-            ))}
-          </section>
-        </div>
-
-        <footer className="modal-footer">
+    <ModalShell
+      ariaLabel={`${cadence} recap`}
+      bodyClassName="journal-recap-body"
+      modalClassName="journal-recap-modal"
+      onClose={onClose}
+      onSubmit={handleSubmit}
+      subtitle={range.label}
+      title={`${initialRecap ? "Edit" : "Create"} ${cadence} recap`}
+      footer={
+        <>
           {error ? (
             <p className="modal-save-error" role="alert">
               {error}
@@ -790,8 +787,40 @@ function JournalRecapDialog({
           <button className="primary-button" type="submit" disabled={saving}>
             {saving ? "Saving..." : "Save recap"}
           </button>
-        </footer>
-      </form>
-    </div>
+        </>
+      }
+    >
+      <div className="journal-recap-period-row">
+        <label className="field">
+          <span>{cadence === "monthly" ? "Month" : "Period date"}</span>
+          <input
+            type={cadence === "monthly" ? "month" : "date"}
+            value={anchor}
+            onChange={(event) => {
+              setAnchor(event.target.value);
+            }}
+          />
+        </label>
+        <div className="journal-auto-title">
+          <span>Auto title</span>
+          <strong>{title}</strong>
+        </div>
+      </div>
+
+      <RecapStatsGrid stats={stats} currency={currency} />
+
+      <section className="journal-manual-fields">
+        {MANUAL_RECAP_FIELDS.map((field) => (
+          <label className="field journal-manual-field" key={field.key}>
+            <span>{field.label}</span>
+            <textarea
+              rows={3}
+              value={notes[field.key] ?? ""}
+              onChange={(event) => updateNote(field.key, event.target.value)}
+            />
+          </label>
+        ))}
+      </section>
+    </ModalShell>
   );
 }

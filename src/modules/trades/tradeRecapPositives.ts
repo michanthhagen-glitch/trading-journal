@@ -1,0 +1,165 @@
+export type TradeRecapPositiveGroup = {
+  group: string;
+  positives: string[];
+};
+
+export const TRADE_RECAP_POSITIVE_GROUPS: TradeRecapPositiveGroup[] = [
+  {
+    group: "Emotional Strengths",
+    positives: [
+      "Stayed calm",
+      "No FOMO",
+      "No revenge trading",
+      "Accepted loss calmly",
+      "Did not panic close",
+      "Waited patiently",
+      "Stayed focused",
+      "Controlled greed",
+      "Trusted the plan",
+      "Did not chase price",
+    ],
+  },
+  {
+    group: "Trade Entry Strengths",
+    positives: [
+      "Entered at planned level",
+      "Waited for confirmation",
+      "Good entry timing",
+      "Clean entry location",
+      "Entered after candle close",
+      "Avoided bad entry",
+      "Did not enter too early",
+      "Took valid setup only",
+      "Good confluence",
+      "Good limit order placement",
+    ],
+  },
+  {
+    group: "Trading Plan / Risk Strengths",
+    positives: [
+      "Followed risk plan",
+      "Correct position size",
+      "Stop loss placed correctly",
+      "Risk/reward was good",
+      "Did not over-risk",
+      "Respected max loss",
+      "Respected trade limit",
+      "Did not add to loser",
+      "Protected account",
+      "Trade matched plan",
+    ],
+  },
+  {
+    group: "Trade Management Strengths",
+    positives: [
+      "Managed trade calmly",
+      "Followed trade plan",
+      "Moved stop as planned",
+      "Took partials correctly",
+      "Let winner run",
+      "Protected profit",
+      "Did not overmanage",
+      "Held through normal pullback",
+      "Adapted correctly",
+      "Stayed objective",
+    ],
+  },
+  {
+    group: "Exit Strengths",
+    positives: [
+      "Took profit at planned target",
+      "Exited at valid reason",
+      "Closed when setup failed",
+      "Respected stop loss",
+      "Did not exit from fear",
+      "Good profit taking",
+      "Good loss control",
+      "Avoided holding too long",
+      "Exit matched plan",
+      "Accepted break-even correctly",
+    ],
+  },
+  {
+    group: "Analysis Strengths",
+    positives: [
+      "Read market direction correctly",
+      "Used higher timeframe well",
+      "Key level was correct",
+      "Good support/resistance read",
+      "Good structure read",
+      "Spotted liquidity well",
+      "Avoided unclear market",
+      "News awareness was good",
+      "Volatility read was good",
+      "Strong confluence",
+    ],
+  },
+  {
+    group: "Rule Discipline Strengths",
+    positives: [
+      "Followed entry rule",
+      "Followed exit rule",
+      "Followed session rule",
+      "Followed strategy rule",
+      "Followed news rule",
+      "Followed checklist",
+      "Stayed within plan",
+      "Avoided unplanned setup",
+      "Respected no-trade rule",
+      "Journaled properly",
+    ],
+  },
+  {
+    group: "Process Strengths",
+    positives: [
+      "Good preparation",
+      "Clear pre-trade plan",
+      "Screenshot captured",
+      "Notes were clear",
+      "Reviewed previous mistakes",
+      "Focus was good",
+      "Routine followed",
+      "Decision was not rushed",
+      "Trade was documented well",
+      "Lesson was clear",
+    ],
+  },
+  {
+    group: "Market Condition Strengths",
+    positives: [
+      "Traded good volume",
+      "Avoided high spread",
+      "Avoided news risk",
+      "Avoided chop",
+      "Traded with trend",
+      "Waited for clean price action",
+      "Good session timing",
+      "Avoided poor liquidity",
+      "Avoided messy market",
+      "Picked good trading window",
+    ],
+  },
+  {
+    group: "Execution Strengths",
+    positives: [
+      "Correct lot size",
+      "Correct direction",
+      "Correct pair",
+      "Correct stop placement",
+      "Correct take-profit placement",
+      "Order placed cleanly",
+      "No platform mistakes",
+      "Checked order details",
+      "Good timing on execution",
+      "Costs were considered",
+    ],
+  },
+];
+
+export const TRADE_RECAP_POSITIVES = TRADE_RECAP_POSITIVE_GROUPS.flatMap(
+  (group) => group.positives,
+);
+
+export const TRADE_RECAP_QUICK_POSITIVES = TRADE_RECAP_POSITIVE_GROUPS.flatMap(
+  (group) => group.positives.slice(0, 2),
+);
