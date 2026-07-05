@@ -36,11 +36,11 @@ npm run format          # prettier --write .
 
 ## Product Model
 
-- Modules: Dashboard, Account, Trades, Journal, Settings.
+- Modules: Dashboard, Account, Trades, Recaps, Settings.
 - Trade workflow: pre-trade, entry, exit.
 - Per-trade recaps stay on the trade.
 - Recaps are a separate feature from the trade entry/exit workflow.
-- Journal recaps are time-bounded: daily, weekly, monthly.
+- Recaps are time-bounded: daily, weekly, monthly.
 
 ## Root Ownership
 

@@ -11,6 +11,15 @@ import {
   type TradingAccount,
 } from "../../shared/db/database";
 import type { ModuleContext } from "../../app/types";
+import {
+  formatCurrencyValue,
+  formatDateRangeValue,
+  formatDateValue,
+  formatPercentValue,
+  formatTimeForDateValue,
+  startOfWeekByPreference,
+  type AppPreferences,
+} from "../../shared/appPreferences";
 
 type Cadence = JournalRecapRow["cadence"];
 
@@ -85,10 +94,8 @@ function addDays(date: Date, amount: number) {
   return next;
 }
 
-function startOfWeek(date: Date) {
-  const day = date.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  return addDays(date, diff);
+function startOfWeek(date: Date, appPreferences: AppPreferences) {
+  return startOfWeekByPreference(date, appPreferences);
 }
 
 function monthInputValue(date: Date) {
@@ -100,7 +107,11 @@ function defaultAnchor(cadence: Cadence) {
   return cadence === "monthly" ? monthInputValue(now) : dateKey(now);
 }
 
-function periodRange(cadence: Cadence, anchor: string): PeriodRange {
+function periodRange(
+  cadence: Cadence,
+  anchor: string,
+  appPreferences: AppPreferences,
+): PeriodRange {
   if (cadence === "monthly") {
     const [year, month] = anchor.split("-").map(Number);
     const start = new Date(year, month - 1, 1);
@@ -119,21 +130,23 @@ function periodRange(cadence: Cadence, anchor: string): PeriodRange {
   }
 
   if (cadence === "weekly") {
-    const start = startOfWeek(parseDate(anchor));
+    const start = startOfWeek(parseDate(anchor), appPreferences);
     const end = addDays(start, 6);
+    const startKey = dateKey(start);
+    const endKey = dateKey(end);
     return {
-      anchor: dateKey(start),
-      end: dateKey(end),
-      label: `${dateKey(start)} to ${dateKey(end)}`,
-      period: `${dateKey(start)} -> ${dateKey(end)}`,
-      start: dateKey(start),
+      anchor: startKey,
+      end: endKey,
+      label: formatDateRangeValue(startKey, endKey, appPreferences),
+      period: `${startKey} -> ${endKey}`,
+      start: startKey,
     };
   }
 
   return {
     anchor,
     end: anchor,
-    label: anchor,
+    label: formatDateValue(anchor, appPreferences),
     period: anchor,
     start: anchor,
   };
@@ -145,29 +158,17 @@ function inferAnchor(cadence: Cadence, period: string) {
   return period || defaultAnchor(cadence);
 }
 
-function fmtMoney(value: number | null, currency = "USD") {
-  if (value === null || !Number.isFinite(value)) return "-";
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-  } catch {
-    return `${currency} ${value.toFixed(2)}`;
-  }
-}
-
-function fmtPnl(value: number | null, currency = "USD") {
+function fmtPnl(
+  value: number | null,
+  currency: string,
+  appPreferences: AppPreferences,
+) {
   if (value === null) return "-";
-  if (value === 0) return fmtMoney(0, currency);
-  return `${value > 0 ? "+" : "-"} ${fmtMoney(Math.abs(value), currency)}`;
+  return formatCurrencyValue(value, currency, appPreferences, { signed: true });
 }
 
-function fmtPercent(value: number | null) {
-  if (value === null || !Number.isFinite(value)) return "-";
-  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+function fmtPercent(value: number | null, appPreferences: AppPreferences) {
+  return formatPercentValue(value, appPreferences);
 }
 
 function fmtR(value: number | null) {
@@ -184,6 +185,10 @@ function pnlTone(value: number | null) {
 
 function tradeTime(trade: Trade) {
   return trade.entry.time ?? trade.exit.time ?? "--:--";
+}
+
+function formatTradeTime(trade: Trade, appPreferences: AppPreferences) {
+  return formatTimeForDateValue(trade.date, tradeTime(trade), appPreferences);
 }
 
 function plannedRiskReward(trade: Trade) {
@@ -379,15 +384,24 @@ function buildBody(
   stats: RecapStats,
   notes: Record<string, string>,
   currency: string,
+  appPreferences: AppPreferences,
 ) {
   const manualLines = MANUAL_RECAP_FIELDS.map(
     (field) => `- ${field.label}: ${notes[field.key]?.trim() || "-"}`,
   );
   const bestTrade = stats.bestTrade
-    ? `${stats.bestTrade.pair} ${tradeTime(stats.bestTrade)} ${fmtPnl(stats.bestTrade.pnl, currency)}`
+    ? `${stats.bestTrade.pair} ${formatTradeTime(stats.bestTrade, appPreferences)} ${fmtPnl(
+        stats.bestTrade.pnl,
+        currency,
+        appPreferences,
+      )}`
     : "-";
   const worstTrade = stats.worstTrade
-    ? `${stats.worstTrade.pair} ${tradeTime(stats.worstTrade)} ${fmtPnl(stats.worstTrade.pnl, currency)}`
+    ? `${stats.worstTrade.pair} ${formatTradeTime(stats.worstTrade, appPreferences)} ${fmtPnl(
+        stats.worstTrade.pnl,
+        currency,
+        appPreferences,
+      )}`
     : "-";
 
   return [
@@ -396,9 +410,9 @@ function buildBody(
     "Auto summary",
     `- Trades: ${stats.totalTrades}`,
     `- Win / Loss / BE: ${stats.wins} / ${stats.losses} / ${stats.breakEven}`,
-    `- Win rate: ${fmtPercent(stats.winRate)}`,
-    `- Net P&L: ${fmtPnl(stats.netPnl, currency)}`,
-    `- Growth: ${fmtPercent(stats.growthPercent)}`,
+    `- Win rate: ${fmtPercent(stats.winRate, appPreferences)}`,
+    `- Net P&L: ${fmtPnl(stats.netPnl, currency, appPreferences)}`,
+    `- Growth: ${fmtPercent(stats.growthPercent, appPreferences)}`,
     `- Average actual RR: ${fmtR(stats.averageActualRr)}`,
     `- Best strategy: ${stats.bestStrategy}`,
     `- Best trade: ${bestTrade}`,
@@ -430,7 +444,23 @@ function bodyPreview(body: string) {
   return lines.slice(0, 7).join("\n");
 }
 
-export function JournalModule({
+function formatRecapPeriod(
+  cadence: Cadence,
+  period: string,
+  appPreferences: AppPreferences,
+) {
+  if (cadence === "weekly") {
+    const [start, end] = period.split(" -> ");
+    return start && end
+      ? formatDateRangeValue(start, end, appPreferences)
+      : period;
+  }
+  if (cadence === "daily") return formatDateValue(period, appPreferences);
+  return period;
+}
+
+export function RecapsModule({
+  appPreferences,
   selectedAccount,
   selectedAccountId,
 }: ModuleContext) {
@@ -462,8 +492,8 @@ export function JournalModule({
   }, [cadence, selectedAccountId]);
 
   const currentRange = useMemo(
-    () => periodRange(cadence, defaultAnchor(cadence)),
-    [cadence],
+    () => periodRange(cadence, defaultAnchor(cadence), appPreferences),
+    [cadence, appPreferences],
   );
   const currentRecap =
     recaps.find((recap) => recap.period === currentRange.period) ?? null;
@@ -479,16 +509,26 @@ export function JournalModule({
   }
 
   return (
-    <div className="journal">
-      <header className="page-header">
-        <div>
-          <h2>Journal</h2>
-          <p className="page-subtitle">
-            {selectedAccount
-              ? `Daily, weekly, and monthly recaps for ${selectedAccount.name}.`
-              : "No account selected. Recaps are not filtered."}
-          </p>
+    <div className="recaps">
+      <div className="module-toolbar">
+        <div className="tab-bar" role="tablist" aria-label="Recap cadence">
+          {CADENCES.map((item) => (
+            <button
+              key={item.id}
+              role="tab"
+              aria-selected={cadence === item.id}
+              className={`tab ${cadence === item.id ? "active" : ""}`}
+              onClick={() => setCadence(item.id)}
+              type="button"
+            >
+              <span className="tab-icon" aria-hidden="true">
+                {item.icon}
+              </span>
+              <span>{item.label}</span>
+            </button>
+          ))}
         </div>
+
         <button
           className="primary-button"
           type="button"
@@ -502,29 +542,11 @@ export function JournalModule({
           )}
           <span>{currentRecap ? "Edit current" : `New ${cadence} recap`}</span>
         </button>
-      </header>
-
-      <div className="tab-bar" role="tablist" aria-label="Recap cadence">
-        {CADENCES.map((item) => (
-          <button
-            key={item.id}
-            role="tab"
-            aria-selected={cadence === item.id}
-            className={`tab ${cadence === item.id ? "active" : ""}`}
-            onClick={() => setCadence(item.id)}
-            type="button"
-          >
-            <span className="tab-icon" aria-hidden="true">
-              {item.icon}
-            </span>
-            <span>{item.label}</span>
-          </button>
-        ))}
       </div>
 
-      <section className="journal-current-list" aria-label="Current recap">
+      <section className="recaps-current-list" aria-label="Current recap">
         <div className="list-table-shell">
-          <table className="list-table journal-current-table">
+          <table className="list-table recaps-current-table">
             <thead>
               <tr>
                 <th>Period</th>
@@ -544,7 +566,7 @@ export function JournalModule({
                 </td>
                 <td>
                   <span
-                    className={`journal-status ${
+                    className={`recaps-status ${
                       currentRecap ? "done" : "missing"
                     }`}
                   >
@@ -557,10 +579,10 @@ export function JournalModule({
                   {currentStats.breakEven}
                 </td>
                 <td className={pnlTone(currentStats.netPnl)}>
-                  {fmtPnl(currentStats.netPnl, currency)}
+                  {fmtPnl(currentStats.netPnl, currency, appPreferences)}
                 </td>
                 <td className={pnlTone(currentStats.growthPercent)}>
-                  {fmtPercent(currentStats.growthPercent)}
+                  {fmtPercent(currentStats.growthPercent, appPreferences)}
                 </td>
                 <td
                   className={
@@ -584,7 +606,7 @@ export function JournalModule({
           </p>
         ) : (
           <div className="list-table-shell">
-            <table className="list-table journal-recap-table">
+            <table className="list-table recaps-table">
               <thead>
                 <tr>
                   <th>Title</th>
@@ -599,7 +621,9 @@ export function JournalModule({
                     <td>
                       <strong>{recap.title}</strong>
                     </td>
-                    <td>{recap.period}</td>
+                    <td>
+                      {formatRecapPeriod(cadence, recap.period, appPreferences)}
+                    </td>
                     <td>{bodyPreview(recap.body)}</td>
                     <td className="list-table-action-cell">
                       <button
@@ -623,9 +647,10 @@ export function JournalModule({
       </div>
 
       {editorOpen ? (
-        <JournalRecapDialog
+        <RecapDialog
           account={selectedAccount}
           cadence={cadence}
+          appPreferences={appPreferences}
           initialRecap={editorRecap}
           trades={trades}
           onClose={() => setEditorOpen(false)}
@@ -640,28 +665,33 @@ export function JournalModule({
 }
 
 function RecapStatsGrid({
-  stats,
+  appPreferences,
   currency,
+  stats,
 }: {
-  stats: RecapStats;
+  appPreferences: AppPreferences;
   currency: string;
+  stats: RecapStats;
 }) {
   return (
-    <div className="journal-stats-grid">
+    <div className="recaps-stats-grid">
       <StatTile label="Trades" value={stats.totalTrades} />
       <StatTile
         label="Win / Loss / BE"
         value={`${stats.wins} / ${stats.losses} / ${stats.breakEven}`}
       />
-      <StatTile label="Win rate" value={fmtPercent(stats.winRate)} />
+      <StatTile
+        label="Win rate"
+        value={fmtPercent(stats.winRate, appPreferences)}
+      />
       <StatTile
         label="Net P&L"
-        value={fmtPnl(stats.netPnl, currency)}
+        value={fmtPnl(stats.netPnl, currency, appPreferences)}
         tone={pnlTone(stats.netPnl)}
       />
       <StatTile
         label="Growth"
-        value={fmtPercent(stats.growthPercent)}
+        value={fmtPercent(stats.growthPercent, appPreferences)}
         tone={pnlTone(stats.growthPercent)}
       />
       <StatTile label="Avg RR" value={fmtR(stats.averageActualRr)} />
@@ -687,16 +717,17 @@ function StatTile({
   tone?: string;
 }) {
   return (
-    <div className="journal-stat-tile">
+    <div className="recaps-stat-tile">
       <span>{label}</span>
       <strong className={tone}>{value}</strong>
     </div>
   );
 }
 
-function JournalRecapDialog({
+function RecapDialog({
   account,
   cadence,
+  appPreferences,
   initialRecap,
   trades,
   onClose,
@@ -704,6 +735,7 @@ function JournalRecapDialog({
 }: {
   account: TradingAccount | null;
   cadence: Cadence;
+  appPreferences: AppPreferences;
   initialRecap: JournalRecapRow | null;
   trades: Trade[];
   onClose: () => void;
@@ -714,7 +746,7 @@ function JournalRecapDialog({
       ? inferAnchor(cadence, initialRecap.period)
       : defaultAnchor(cadence),
   );
-  const range = periodRange(cadence, anchor);
+  const range = periodRange(cadence, anchor, appPreferences);
   const stats = useMemo(
     () => recapStats(account, trades, range),
     [account, range, trades],
@@ -741,7 +773,14 @@ function JournalRecapDialog({
     setSaving(true);
     setError(null);
     try {
-      const body = buildBody(cadence, range, stats, notes, currency);
+      const body = buildBody(
+        cadence,
+        range,
+        stats,
+        notes,
+        currency,
+        appPreferences,
+      );
       const input: JournalRecapInput = {
         id: initialRecap?.id,
         accountId: account?.id ?? null,
@@ -763,8 +802,8 @@ function JournalRecapDialog({
   return (
     <ModalShell
       ariaLabel={`${cadence} recap`}
-      bodyClassName="journal-recap-body"
-      modalClassName="journal-recap-modal"
+      bodyClassName="recaps-modal-body"
+      modalClassName="recaps-modal"
       onClose={onClose}
       onSubmit={handleSubmit}
       subtitle={range.label}
@@ -790,7 +829,7 @@ function JournalRecapDialog({
         </>
       }
     >
-      <div className="journal-recap-period-row">
+      <div className="recaps-period-row">
         <label className="field">
           <span>{cadence === "monthly" ? "Month" : "Period date"}</span>
           <input
@@ -801,17 +840,21 @@ function JournalRecapDialog({
             }}
           />
         </label>
-        <div className="journal-auto-title">
+        <div className="recaps-auto-title">
           <span>Auto title</span>
           <strong>{title}</strong>
         </div>
       </div>
 
-      <RecapStatsGrid stats={stats} currency={currency} />
+      <RecapStatsGrid
+        appPreferences={appPreferences}
+        stats={stats}
+        currency={currency}
+      />
 
-      <section className="journal-manual-fields">
+      <section className="recaps-manual-fields">
         {MANUAL_RECAP_FIELDS.map((field) => (
-          <label className="field journal-manual-field" key={field.key}>
+          <label className="field recaps-manual-field" key={field.key}>
             <span>{field.label}</span>
             <textarea
               rows={3}

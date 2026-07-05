@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { listAccountSetup, type TradingAccount } from "../shared/db/database";
+import {
+  loadAppPreferences,
+  saveAppPreferences,
+  subscribeAppPreferences,
+  type AppPreferences,
+} from "../shared/appPreferences";
 import { AppShell } from "./AppShell";
 import { appModules } from "./moduleRegistry";
 
@@ -14,6 +20,7 @@ export function App() {
         ? null
         : window.localStorage.getItem(SELECTED_ACCOUNT_STORAGE_KEY),
   );
+  const [appPreferences, setAppPreferences] = useState(loadAppPreferences);
 
   const activeModule = useMemo(
     () =>
@@ -52,6 +59,8 @@ export function App() {
     reloadAccounts();
   }, []);
 
+  useEffect(() => subscribeAppPreferences(setAppPreferences), []);
+
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === selectedAccountId) ?? null,
     [accounts, selectedAccountId],
@@ -64,16 +73,22 @@ export function App() {
     }
   }
 
+  function handleAppPreferencesChanged(preferences: AppPreferences) {
+    setAppPreferences(saveAppPreferences(preferences));
+  }
+
   return (
     <AppShell
       accounts={accounts}
       activeModule={activeModule}
+      appPreferences={appPreferences}
       modules={appModules}
       onSelectModule={setActiveModuleId}
       onSelectAccount={handleSelectAccount}
       selectedAccount={selectedAccount}
       selectedAccountId={selectedAccountId}
       onAccountsChanged={reloadAccounts}
+      onAppPreferencesChanged={handleAppPreferencesChanged}
     />
   );
 }

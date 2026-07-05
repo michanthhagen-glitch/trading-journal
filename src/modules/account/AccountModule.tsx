@@ -12,6 +12,10 @@ import {
   type AccountSetupCreateKind,
 } from "./features/createAccountSetup/CreateAccountSetupDialogs";
 import type { ModuleContext } from "../../app/types";
+import {
+  formatCurrencyValue,
+  type AppPreferences,
+} from "../../shared/appPreferences";
 
 type AccountTab = "accounts" | "strategies" | "risk";
 
@@ -31,22 +35,8 @@ const ACCOUNT_TYPES: { id: AccountType; label: string }[] = [
   { id: "backtesting", label: "Backtesting" },
 ];
 
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  USD: "$",
-  EUR: "€",
-  GBP: "£",
-  JPY: "¥",
-};
-
 function accountTypeLabel(type: AccountType) {
   return ACCOUNT_TYPES.find((item) => item.id === type)?.label ?? type;
-}
-
-function money(value: number, currency: string) {
-  const symbol = CURRENCY_SYMBOLS[currency.toUpperCase()];
-  return symbol
-    ? `${symbol}${value.toFixed(2)}`
-    : `${currency} ${value.toFixed(2)}`;
 }
 
 function percentRangeValue(min: number | null, max: number | null) {
@@ -102,7 +92,10 @@ function riskGoalLabel(plan: RiskManagementPlan) {
   )}`;
 }
 
-export function AccountModule({ onAccountsChanged }: ModuleContext) {
+export function AccountModule({
+  appPreferences,
+  onAccountsChanged,
+}: ModuleContext) {
   const [activeTab, setActiveTab] = useState<AccountTab>("accounts");
   const [accounts, setAccounts] = useState<TradingAccount[]>([]);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
@@ -173,6 +166,7 @@ export function AccountModule({ onAccountsChanged }: ModuleContext) {
     return (
       <AccountDetailView
         account={selectedAccount}
+        appPreferences={appPreferences}
         strategies={strategies}
         riskPlans={riskPlans}
         onBack={() => setSelectedAccountId(null)}
@@ -200,15 +194,6 @@ export function AccountModule({ onAccountsChanged }: ModuleContext) {
 
   return (
     <div className="account-module">
-      <header className="page-header">
-        <div>
-          <h2>Account</h2>
-          <p className="page-subtitle">
-            Accounts, strategies, and risk management plans.
-          </p>
-        </div>
-      </header>
-
       <div className="tab-bar" role="tablist" aria-label="Account setup">
         {ACCOUNT_TABS.map((tab) => (
           <button
@@ -230,6 +215,7 @@ export function AccountModule({ onAccountsChanged }: ModuleContext) {
       {activeTab === "accounts" ? (
         <AccountsList
           accounts={accounts}
+          appPreferences={appPreferences}
           strategies={strategies}
           riskPlans={riskPlans}
           loading={loading}
@@ -288,6 +274,7 @@ export function AccountModule({ onAccountsChanged }: ModuleContext) {
 
 function AccountsList({
   accounts,
+  appPreferences,
   strategies,
   riskPlans,
   loading,
@@ -295,6 +282,7 @@ function AccountsList({
   onCreate,
 }: {
   accounts: TradingAccount[];
+  appPreferences: AppPreferences;
   strategies: Strategy[];
   riskPlans: RiskManagementPlan[];
   loading: boolean;
@@ -359,7 +347,14 @@ function AccountsList({
                     <strong>{account.name}</strong>
                   </td>
                   <td>{accountTypeLabel(account.accountType)}</td>
-                  <td>{money(account.commission, account.currency)}/lot</td>
+                  <td>
+                    {formatCurrencyValue(
+                      account.commission,
+                      account.currency,
+                      appPreferences,
+                    )}
+                    /lot
+                  </td>
                   <td>
                     {account.strategyIds
                       .map((id) => strategyMap.get(id)?.name)
@@ -372,7 +367,11 @@ function AccountsList({
                       : "-"}
                   </td>
                   <td className="num account-balance-cell">
-                    {money(account.startingBalance, account.currency)}
+                    {formatCurrencyValue(
+                      account.startingBalance,
+                      account.currency,
+                      appPreferences,
+                    )}
                   </td>
                 </tr>
               ))}
@@ -635,11 +634,13 @@ function RiskPlanDetailView({
 
 function AccountDetailView({
   account,
+  appPreferences,
   strategies,
   riskPlans,
   onBack,
 }: {
   account: TradingAccount;
+  appPreferences: AppPreferences;
   strategies: Strategy[];
   riskPlans: RiskManagementPlan[];
   onBack: () => void;
@@ -683,11 +684,24 @@ function AccountDetailView({
             </div>
             <div>
               <dt>Starting balance</dt>
-              <dd>{money(account.startingBalance, account.currency)}</dd>
+              <dd>
+                {formatCurrencyValue(
+                  account.startingBalance,
+                  account.currency,
+                  appPreferences,
+                )}
+              </dd>
             </div>
             <div>
               <dt>Commission</dt>
-              <dd>{money(account.commission, account.currency)}/lot</dd>
+              <dd>
+                {formatCurrencyValue(
+                  account.commission,
+                  account.currency,
+                  appPreferences,
+                )}
+                /lot
+              </dd>
             </div>
             <div>
               <dt>Currency</dt>

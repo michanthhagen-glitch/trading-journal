@@ -9,6 +9,21 @@ import {
   type Strategy,
   type Trade,
 } from "../../shared/db/database";
+import {
+  dateTimeMinutesValue,
+  dateTimeWeekdayShortLabel,
+  formatCompactCurrencyValue,
+  formatCompactDateValue,
+  formatCurrencyValue,
+  formatDateRangeValue,
+  formatDateTimeValue,
+  formatDateValue,
+  formatPercentValue,
+  orderedWeekdayLabels,
+  startOfWeekByPreference,
+  type AppPreferences,
+  weekdayShortLabel,
+} from "../../shared/appPreferences";
 
 type Tone = "flat" | "negative" | "positive" | "warning";
 type Outcome = "break-even" | "empty" | "loss" | "win";
@@ -141,7 +156,6 @@ const DASHBOARD_TABS: { id: DashboardTab; label: string }[] = [
 
 const DIRECTION_LABELS = ["Long", "Short"];
 const RING_CIRCUMFERENCE = 263.89;
-const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const SESSION_LABELS = [
   "Tokyo",
   "Tokyo-London",
@@ -185,13 +199,12 @@ function addMonths(date: Date, amount: number) {
   return new Date(date.getFullYear(), date.getMonth() + amount, 1);
 }
 
-function startOfWeek(date: Date) {
-  const day = date.getDay();
-  return addDays(date, day === 0 ? -6 : 1 - day);
+function startOfWeek(date: Date, appPreferences: AppPreferences) {
+  return startOfWeekByPreference(date, appPreferences);
 }
 
-function endOfWeek(date: Date) {
-  return addDays(startOfWeek(date), 6);
+function endOfWeek(date: Date, appPreferences: AppPreferences) {
+  return addDays(startOfWeek(date, appPreferences), 6);
 }
 
 function weekNumber(date: Date) {
@@ -248,18 +261,25 @@ function timeIntervalLabel(index: number) {
   return `${clockLabel(start)}-${clockLabel(start + 15)}`;
 }
 
-function minutesFromTrade(trade: Trade) {
+function minutesFromTrade(trade: Trade, appPreferences: AppPreferences) {
+  const preferredMinutes = dateTimeMinutesValue(
+    trade.date,
+    tradeTime(trade),
+    appPreferences,
+  );
+  if (preferredMinutes !== null) return preferredMinutes;
+
   const [hour, minute] = tradeTime(trade).split(":").map(Number);
   if (!Number.isFinite(hour) || !Number.isFinite(minute)) return 0;
   return Math.max(0, Math.min(1439, hour * 60 + minute));
 }
 
-function hourFromTrade(trade: Trade) {
-  return Math.floor(minutesFromTrade(trade) / 60);
+function hourFromTrade(trade: Trade, appPreferences: AppPreferences) {
+  return Math.floor(minutesFromTrade(trade, appPreferences) / 60);
 }
 
-function sessionLabel(trade: Trade) {
-  const hour = hourFromTrade(trade);
+function sessionLabel(trade: Trade, appPreferences: AppPreferences) {
+  const hour = hourFromTrade(trade, appPreferences);
   if (hour < 7) return "Tokyo";
   if (hour < 8) return "Tokyo-London";
   if (hour < 13) return "London";
@@ -268,13 +288,17 @@ function sessionLabel(trade: Trade) {
   return "New York-Tokyo";
 }
 
-function timeOfDayLabel(trade: Trade) {
-  return TIME_INTERVAL_LABELS[Math.floor(minutesFromTrade(trade) / 15)];
+function timeOfDayLabel(trade: Trade, appPreferences: AppPreferences) {
+  return TIME_INTERVAL_LABELS[
+    Math.floor(minutesFromTrade(trade, appPreferences) / 15)
+  ];
 }
 
-function dayLabel(trade: Trade) {
-  const day = parseDate(trade.date).getDay();
-  return WEEKDAY_LABELS[day === 0 ? 6 : day - 1];
+function dayLabel(trade: Trade, appPreferences: AppPreferences) {
+  return (
+    dateTimeWeekdayShortLabel(trade.date, tradeTime(trade), appPreferences) ??
+    weekdayShortLabel(trade.date)
+  );
 }
 
 function directionLabel(trade: Trade) {
@@ -289,64 +313,39 @@ function strategyLabel(trade: Trade) {
   return trade.preTrade.strategy.trim() || "No strategy";
 }
 
-function fmtCurrency(value: number, currency = "USD", signed = false) {
-  const amount = new Intl.NumberFormat(undefined, {
-    currency,
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 2,
-    style: "currency",
-  }).format(Math.abs(value));
-
-  if (!signed) return amount;
-  if (value === 0) return amount;
-  return `${value > 0 ? "+" : "-"} ${amount}`;
+function fmtCurrency(
+  value: number,
+  currency: string,
+  appPreferences: AppPreferences,
+  signed = false,
+) {
+  return formatCurrencyValue(value, currency, appPreferences, { signed });
 }
 
-function fmtShortCurrency(value: number, currency = "USD") {
-  const amount = new Intl.NumberFormat(undefined, {
-    currency,
-    maximumFractionDigits: 0,
-    minimumFractionDigits: 0,
-    style: "currency",
-  }).format(Math.abs(value));
-
-  if (value === 0) return amount;
-  return `${value > 0 ? "+" : "-"}${amount}`;
+function fmtShortCurrency(
+  value: number,
+  currency: string,
+  appPreferences: AppPreferences,
+) {
+  return formatCompactCurrencyValue(value, currency, appPreferences, {
+    signed: true,
+  });
 }
 
-function currencySymbol(currency = "USD") {
-  return (
-    new Intl.NumberFormat(undefined, {
-      currency,
-      maximumFractionDigits: 0,
-      style: "currency",
-    })
-      .formatToParts(0)
-      .find((part) => part.type === "currency")?.value ?? currency
-  );
+function fmtAxisCurrency(
+  value: number,
+  currency: string,
+  appPreferences: AppPreferences,
+) {
+  return formatCompactCurrencyValue(value, currency, appPreferences);
 }
 
-function fmtAxisCurrency(value: number, currency = "USD") {
-  const sign = value < 0 ? "-" : "";
-  const amount = Math.abs(value);
-  const symbol = currencySymbol(currency);
-
-  if (amount >= 1000) {
-    const short = amount / 1000;
-    return `${sign}${symbol}${Number.isInteger(short) ? short.toFixed(0) : short.toFixed(1)}k`;
-  }
-
-  return new Intl.NumberFormat(undefined, {
-    currency,
-    maximumFractionDigits: 0,
-    minimumFractionDigits: 0,
-    style: "currency",
-  }).format(value);
-}
-
-function fmtPercent(value: number | null, signed = true) {
-  if (value === null || !Number.isFinite(value)) return "-";
-  return `${signed && value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+function fmtPercent(
+  value: number | null,
+  appPreferences: AppPreferences,
+  signed = true,
+) {
+  return formatPercentValue(value, appPreferences, { signed });
 }
 
 function fmtCompactPercent(value: number | null) {
@@ -363,9 +362,10 @@ function fmtRangeAmount(
   value: number | null,
   balance: number,
   currency: string,
+  appPreferences: AppPreferences,
 ) {
   if (value === null || !Number.isFinite(value)) return "-";
-  return fmtShortCurrency((balance * value) / 100, currency);
+  return fmtShortCurrency((balance * value) / 100, currency, appPreferences);
 }
 
 function toneFromNumber(value: number | null): Tone {
@@ -423,9 +423,11 @@ function tradeNetValue(trade: Trade, commissionPerLot: number) {
   return (trade.pnl ?? 0) - commissionFor(trade, commissionPerLot);
 }
 
-function weekLabelFromDate(value: string) {
+function weekLabelFromDate(value: string, appPreferences: AppPreferences) {
   const date = parseDate(value);
-  return `${dateKey(startOfWeek(date)).slice(5)} to ${dateKey(endOfWeek(date)).slice(5)}`;
+  const start = startOfWeek(date, appPreferences);
+  const end = endOfWeek(date, appPreferences);
+  return formatDateRangeValue(dateKey(start), dateKey(end), appPreferences);
 }
 
 function rankedRows(rows: RankingRow[], direction: "loss" | "win") {
@@ -441,11 +443,12 @@ function buildTradeRanking(
   trades: Trade[],
   commissionPerLot: number,
   direction: "loss" | "win",
+  appPreferences: AppPreferences,
 ) {
   const rows = trades.filter(isClosedTrade).map((trade) => ({
     id: trade.id,
     label: trade.pair,
-    meta: `${trade.date} ${tradeTime(trade)} ${trade.direction}`,
+    meta: `${formatDateTimeValue(trade.date, tradeTime(trade), appPreferences)} ${trade.direction}`,
     trades: 1,
     value: tradeNetValue(trade, commissionPerLot),
   }));
@@ -484,6 +487,7 @@ function buildGroupedRanking(
 function buildRankingStats(
   trades: Trade[],
   commissionPerLot: number,
+  appPreferences: AppPreferences,
 ): RankingStats {
   return {
     losingDays: buildGroupedRanking(
@@ -492,8 +496,8 @@ function buildRankingStats(
       "loss",
       (trade) => ({
         id: trade.date,
-        label: trade.date,
-        meta: dayLabel(trade),
+        label: formatDateValue(trade.date, appPreferences),
+        meta: dayLabel(trade, appPreferences),
       }),
     ),
     losingMonths: buildGroupedRanking(
@@ -509,14 +513,19 @@ function buildRankingStats(
         };
       },
     ),
-    losingTrades: buildTradeRanking(trades, commissionPerLot, "loss"),
+    losingTrades: buildTradeRanking(
+      trades,
+      commissionPerLot,
+      "loss",
+      appPreferences,
+    ),
     losingWeeks: buildGroupedRanking(
       trades,
       commissionPerLot,
       "loss",
       (trade) => ({
-        id: dateKey(startOfWeek(parseDate(trade.date))),
-        label: weekLabelFromDate(trade.date),
+        id: dateKey(startOfWeek(parseDate(trade.date), appPreferences)),
+        label: weekLabelFromDate(trade.date, appPreferences),
         meta: "Week",
       }),
     ),
@@ -526,8 +535,8 @@ function buildRankingStats(
       "win",
       (trade) => ({
         id: trade.date,
-        label: trade.date,
-        meta: dayLabel(trade),
+        label: formatDateValue(trade.date, appPreferences),
+        meta: dayLabel(trade, appPreferences),
       }),
     ),
     winningMonths: buildGroupedRanking(
@@ -543,14 +552,19 @@ function buildRankingStats(
         };
       },
     ),
-    winningTrades: buildTradeRanking(trades, commissionPerLot, "win"),
+    winningTrades: buildTradeRanking(
+      trades,
+      commissionPerLot,
+      "win",
+      appPreferences,
+    ),
     winningWeeks: buildGroupedRanking(
       trades,
       commissionPerLot,
       "win",
       (trade) => ({
-        id: dateKey(startOfWeek(parseDate(trade.date))),
-        label: weekLabelFromDate(trade.date),
+        id: dateKey(startOfWeek(parseDate(trade.date), appPreferences)),
+        label: weekLabelFromDate(trade.date, appPreferences),
         meta: "Week",
       }),
     ),
@@ -564,6 +578,7 @@ function buildDailyBalanceHistory(
   start: Date,
   end: Date,
   now: Date,
+  appPreferences: AppPreferences,
   includeTomorrow = false,
 ) {
   const closed = [...trades]
@@ -572,7 +587,7 @@ function buildDailyBalanceHistory(
 
   const startKey = dateKey(start);
   const startPoint: HistoryPoint = {
-    label: startKey.slice(5),
+    label: formatCompactDateValue(startKey, appPreferences),
     meta: "Starting balance",
     pnl: 0,
     value: startingBalance,
@@ -604,7 +619,7 @@ function buildDailyBalanceHistory(
     const pnl = dailyPnl.get(key) ?? 0;
     balance += pnl;
     dailyPoints.push({
-      label: key.slice(5),
+      label: formatCompactDateValue(key, appPreferences),
       meta: key,
       pnl,
       value: balance,
@@ -617,7 +632,7 @@ function buildDailyBalanceHistory(
     ...(includeTomorrow && dateKey(tomorrow) <= endKey
       ? [
           {
-            label: dateKey(tomorrow).slice(5),
+            label: formatCompactDateValue(dateKey(tomorrow), appPreferences),
             meta: dateKey(tomorrow),
             pnl: null,
             value: null,
@@ -632,6 +647,7 @@ function buildMonthlyBalanceCharts(
   startingBalance: number,
   commissionPerLot: number,
   now: Date,
+  appPreferences: AppPreferences,
 ): MonthlyBalanceChart[] {
   const datedTrades = [...trades].sort((a, b) =>
     tradeSortValue(a).localeCompare(tradeSortValue(b)),
@@ -679,6 +695,7 @@ function buildMonthlyBalanceCharts(
         monthStart,
         monthEnd,
         now,
+        appPreferences,
         isCurrentMonth,
       ),
     });
@@ -692,6 +709,7 @@ function buildTotalBalanceHistory(
   startingBalance: number,
   commissionPerLot: number,
   now: Date,
+  appPreferences: AppPreferences,
 ) {
   const datedTrades = [...trades].sort((a, b) =>
     tradeSortValue(a).localeCompare(tradeSortValue(b)),
@@ -705,6 +723,7 @@ function buildTotalBalanceHistory(
     start,
     addDays(now, 1),
     now,
+    appPreferences,
     true,
   );
 }
@@ -715,15 +734,16 @@ function buildWeeklyBalanceCards(
   commissionPerLot: number,
   currency: string,
   now: Date,
+  appPreferences: AppPreferences,
 ): WeeklyBalanceCard[] {
   const datedTrades = [...trades].sort((a, b) =>
     tradeSortValue(a).localeCompare(tradeSortValue(b)),
   );
   const firstWeek =
     datedTrades.length > 0
-      ? startOfWeek(parseDate(datedTrades[0].date))
-      : startOfWeek(now);
-  const currentWeek = startOfWeek(now);
+      ? startOfWeek(parseDate(datedTrades[0].date), appPreferences)
+      : startOfWeek(now, appPreferences);
+  const currentWeek = startOfWeek(now, appPreferences);
   const cards: WeeklyBalanceCard[] = [];
 
   for (
@@ -731,8 +751,8 @@ function buildWeeklyBalanceCards(
     dateKey(cursor) <= dateKey(currentWeek);
     cursor = addDays(cursor, 7)
   ) {
-    const weekStart = startOfWeek(cursor);
-    const weekEnd = endOfWeek(cursor);
+    const weekStart = startOfWeek(cursor, appPreferences);
+    const weekEnd = endOfWeek(cursor, appPreferences);
     const beforeWeek = periodTrades(
       trades,
       null,
@@ -745,9 +765,11 @@ function buildWeeklyBalanceCards(
     );
     const weekStartBalance =
       startingBalance + netPnl(beforeWeek, commissionPerLot);
-    const label = `${dateKey(weekStart).slice(5)} to ${dateKey(weekEnd).slice(
-      5,
-    )}`;
+    const label = formatDateRangeValue(
+      dateKey(weekStart),
+      dateKey(weekEnd),
+      appPreferences,
+    );
     const isCurrentWeek = dateKey(weekStart) === dateKey(currentWeek);
 
     cards.push({
@@ -760,11 +782,13 @@ function buildWeeklyBalanceCards(
         weekStart,
         weekEnd,
         now,
+        appPreferences,
         isCurrentWeek,
       ),
       summary: buildSummary({
         commissionPerLot,
         currency,
+        appPreferences,
         end: dateKey(weekEnd),
         id: "week",
         label: "Week",
@@ -846,12 +870,16 @@ function emptyRateRow(label: string): RateRow {
   };
 }
 
-function detailRateRows(rows: RateRow[], scope?: RateDetailScope) {
+function detailRateRows(
+  rows: RateRow[],
+  appPreferences: AppPreferences,
+  scope?: RateDetailScope,
+) {
   if (!scope) return rows;
   const rowMap = new Map(rows.map((row) => [row.label, row]));
   const labels =
     scope === "day"
-      ? WEEKDAY_LABELS
+      ? orderedWeekdayLabels(appPreferences)
       : scope === "direction"
         ? DIRECTION_LABELS
         : scope === "session"
@@ -876,6 +904,7 @@ function rateRowsWithLabels(rows: RateRow[], labels: string[]) {
 function buildTradeOutcomes(
   trades: Trade[],
   commissionPerLot: number,
+  appPreferences: AppPreferences,
 ): OutcomePoint[] {
   return [...trades]
     .filter(isClosedTrade)
@@ -887,7 +916,7 @@ function buildTradeOutcomes(
       const result = trade.exit.result;
       return {
         label: trade.pair,
-        meta: `${trade.date.slice(5)} ${trade.direction}`,
+        meta: `${formatCompactDateValue(trade.date, appPreferences)} ${trade.direction}`,
         outcome:
           result === "win" || result === "loss" || result === "break-even"
             ? result
@@ -924,19 +953,22 @@ function buildWeekOutcomes(
   trades: Trade[],
   now: Date,
   commissionPerLot: number,
+  appPreferences: AppPreferences,
 ): OutcomePoint[] {
-  const currentWeek = startOfWeek(now);
+  const currentWeek = startOfWeek(now, appPreferences);
   return Array.from({ length: 10 }, (_, index) =>
     addDays(currentWeek, (index - 9) * 7),
   ).map((week) => {
+    const weekStart = startOfWeek(week, appPreferences);
+    const weekEnd = endOfWeek(week, appPreferences);
     const weekTrades = periodTrades(
       trades,
-      dateKey(startOfWeek(week)),
-      dateKey(endOfWeek(week)),
+      dateKey(weekStart),
+      dateKey(weekEnd),
     );
     const value = netPnl(weekTrades, commissionPerLot);
     return {
-      label: dateKey(week).slice(5),
+      label: formatCompactDateValue(dateKey(weekStart), appPreferences),
       meta: `${weekTrades.length} trades`,
       outcome: outcomeFromValue(value, weekTrades.length),
       value,
@@ -947,6 +979,7 @@ function buildWeekOutcomes(
 function buildSummary({
   commissionPerLot,
   currency,
+  appPreferences,
   end,
   id,
   label,
@@ -957,6 +990,7 @@ function buildSummary({
 }: {
   commissionPerLot: number;
   currency: string;
+  appPreferences: AppPreferences;
   end: string | null;
   id: SummaryScope;
   label: string;
@@ -1001,12 +1035,16 @@ function buildSummary({
     open: selectedTrades.filter((trade) => !isClosedTrade(trade)).length,
     outcomes,
     rateGroups: {
-      day: rateGroups(closed, dayLabel),
+      day: rateGroups(closed, (trade) => dayLabel(trade, appPreferences)),
       direction: rateGroups(closed, directionLabel),
       pair: rateGroups(closed, pairLabel),
-      session: rateGroups(closed, sessionLabel),
+      session: rateGroups(closed, (trade) =>
+        sessionLabel(trade, appPreferences),
+      ),
       strategy: rateGroups(closed, strategyLabel),
-      time: rateGroups(closed, timeOfDayLabel),
+      time: rateGroups(closed, (trade) =>
+        timeOfDayLabel(trade, appPreferences),
+      ),
     },
     startingBalance,
     trades: selectedTrades,
@@ -1037,11 +1075,13 @@ function LeaderCell({
 }
 
 function RiskCell({
+  appPreferences,
   currency,
   label,
   summary,
   value,
 }: {
+  appPreferences: AppPreferences;
   currency: string;
   label: string;
   summary: SummaryData;
@@ -1060,7 +1100,14 @@ function RiskCell({
     <b>
       <small>{label}</small>
       <span>{fmtCompactPercent(value)}</span>
-      <em>{fmtRangeAmount(value, summary.startingBalance, currency)}</em>
+      <em>
+        {fmtRangeAmount(
+          value,
+          summary.startingBalance,
+          currency,
+          appPreferences,
+        )}
+      </em>
     </b>
   );
 }
@@ -1212,9 +1259,11 @@ function TradeRing({ summary }: { summary: SummaryData }) {
 }
 
 function BalanceStack({
+  appPreferences,
   currency,
   summary,
 }: {
+  appPreferences: AppPreferences;
   currency: string;
   summary: SummaryData;
 }) {
@@ -1222,18 +1271,20 @@ function BalanceStack({
     <div className="dash-balance-stack">
       <div>
         <span>Starting</span>
-        <strong>{fmtCurrency(summary.startingBalance, currency)}</strong>
+        <strong>
+          {fmtCurrency(summary.startingBalance, currency, appPreferences)}
+        </strong>
       </div>
       <div>
         <span>Current</span>
         <strong className={`primary ${toneFromNumber(summary.netPnl)}`}>
-          {fmtCurrency(summary.balance, currency)}
+          {fmtCurrency(summary.balance, currency, appPreferences)}
         </strong>
       </div>
       <div>
         <span>Growth</span>
         <strong className={toneFromNumber(summary.growth)}>
-          {fmtPercent(summary.growth)}
+          {fmtPercent(summary.growth, appPreferences)}
         </strong>
       </div>
     </div>
@@ -1241,27 +1292,37 @@ function BalanceStack({
 }
 
 function PnlRing({
+  appPreferences,
   currency,
   summary,
 }: {
+  appPreferences: AppPreferences;
   currency: string;
   summary: SummaryData;
 }) {
   return (
     <HoverRing
       centerLabel="net"
-      centerValue={fmtShortCurrency(summary.netPnl, currency)}
+      centerValue={fmtShortCurrency(summary.netPnl, currency, appPreferences)}
       segments={[
         {
           color: summary.grossPnl < 0 ? "#f08688" : "#6cd49a",
           label: "gross",
-          valueText: fmtShortCurrency(summary.grossPnl, currency),
+          valueText: fmtShortCurrency(
+            summary.grossPnl,
+            currency,
+            appPreferences,
+          ),
           weight: Math.abs(summary.grossPnl),
         },
         {
           color: "#f5b86c",
           label: "commission",
-          valueText: fmtShortCurrency(summary.commission, currency),
+          valueText: fmtShortCurrency(
+            summary.commission,
+            currency,
+            appPreferences,
+          ),
           weight: Math.abs(summary.commission),
         },
       ]}
@@ -1270,10 +1331,12 @@ function PnlRing({
 }
 
 function OutcomeBoxes({
+  appPreferences,
   currency,
   points,
   title,
 }: {
+  appPreferences: AppPreferences;
   currency: string;
   points: OutcomePoint[];
   title: string;
@@ -1300,7 +1363,12 @@ function OutcomeBoxes({
             aria-label={`${point.label} ${point.meta} ${point.outcome}`}
             className={`dash-outcome-box ${point.outcome}`}
             key={`${point.label}-${point.meta}-${index}`}
-            title={`${point.label} ${point.meta}: ${fmtCurrency(point.value, currency, true)}`}
+            title={`${point.label} ${point.meta}: ${fmtCurrency(
+              point.value,
+              currency,
+              appPreferences,
+              true,
+            )}`}
           />
         ))}
       </div>
@@ -1344,10 +1412,12 @@ function RateLeadersGrid({ summary }: { summary: SummaryData }) {
 }
 
 function RiskGoalGrid({
+  appPreferences,
   currency,
   riskPlan,
   summary,
 }: {
+  appPreferences: AppPreferences;
   currency: string;
   riskPlan: RiskManagementPlan | null;
   summary: SummaryData;
@@ -1361,18 +1431,21 @@ function RiskGoalGrid({
     <div className="dash-risk-goal-grid">
       <strong>Risk</strong>
       <RiskCell
+        appPreferences={appPreferences}
         currency={currency}
         label="Min"
         summary={summary}
         value={riskMin}
       />
       <RiskCell
+        appPreferences={appPreferences}
         currency={currency}
         label="Mid"
         summary={summary}
         value={riskMid}
       />
       <RiskCell
+        appPreferences={appPreferences}
         currency={currency}
         label="Max"
         summary={summary}
@@ -1380,18 +1453,21 @@ function RiskGoalGrid({
       />
       <strong>Goal</strong>
       <RiskCell
+        appPreferences={appPreferences}
         currency={currency}
         label="Min"
         summary={summary}
         value={riskPlan?.weeklyGoalMinPercent ?? null}
       />
       <RiskCell
+        appPreferences={appPreferences}
         currency={currency}
         label="Mid"
         summary={summary}
         value={riskPlan?.weeklyGoalMidPercent ?? null}
       />
       <RiskCell
+        appPreferences={appPreferences}
         currency={currency}
         label="Max"
         summary={summary}
@@ -1402,10 +1478,12 @@ function RiskGoalGrid({
 }
 
 function SummaryBand({
+  appPreferences,
   currency,
   riskPlan,
   summary,
 }: {
+  appPreferences: AppPreferences;
   currency: string;
   riskPlan: RiskManagementPlan | null;
   summary: SummaryData;
@@ -1420,9 +1498,14 @@ function SummaryBand({
         <small>{summary.open} open</small>
       </header>
       <div className="dash-summary-core">
-        <BalanceStack currency={currency} summary={summary} />
+        <BalanceStack
+          appPreferences={appPreferences}
+          currency={currency}
+          summary={summary}
+        />
         {summary.id === "week" ? (
           <RiskGoalGrid
+            appPreferences={appPreferences}
             currency={currency}
             riskPlan={riskPlan}
             summary={summary}
@@ -1433,13 +1516,18 @@ function SummaryBand({
       </div>
       <div className="dash-ring-row">
         <div className="dash-ring-tile">
-          <PnlRing currency={currency} summary={summary} />
+          <PnlRing
+            appPreferences={appPreferences}
+            currency={currency}
+            summary={summary}
+          />
         </div>
         <div className="dash-ring-tile">
           <TradeRing summary={summary} />
         </div>
       </div>
       <OutcomeBoxes
+        appPreferences={appPreferences}
         currency={currency}
         points={summary.outcomes}
         title={summary.labels.history}
@@ -1450,6 +1538,7 @@ function SummaryBand({
 
 function ChartPanel({
   currency,
+  appPreferences,
   growth,
   icon,
   onOpen,
@@ -1458,6 +1547,7 @@ function ChartPanel({
   title,
 }: {
   currency: string;
+  appPreferences: AppPreferences;
   growth: number | null;
   icon: React.ReactNode;
   onOpen?: () => void;
@@ -1565,6 +1655,8 @@ function ChartPanel({
   const dayTicks = coordinates.filter(
     (item) => item.point.meta !== "Starting balance",
   );
+  const pointMetaLabel = (meta: string) =>
+    meta === "Starting balance" ? meta : formatDateValue(meta, appPreferences);
 
   return (
     <section
@@ -1603,7 +1695,7 @@ function ChartPanel({
                   <g className="dash-grid-line" key={value}>
                     <line x1={padLeft} x2={rightX} y1={y} y2={y} />
                     <text x={padLeft - 2.5} y={y + 1.1}>
-                      {fmtAxisCurrency(value, currency)}
+                      {fmtAxisCurrency(value, currency, appPreferences)}
                     </text>
                   </g>
                 );
@@ -1643,7 +1735,8 @@ function ChartPanel({
                 y2={startLineY}
               >
                 <title>
-                  Starting balance: {fmtCurrency(startingBalance, currency)}
+                  Starting balance:{" "}
+                  {fmtCurrency(startingBalance, currency, appPreferences)}
                 </title>
               </line>
               <path className="dash-line-path" d={path} />
@@ -1656,9 +1749,15 @@ function ChartPanel({
                   r="1.35"
                 >
                   <title>
-                    {item.point.meta}: P&L{" "}
-                    {fmtCurrency(item.point.pnl ?? 0, currency, true)}. Balance{" "}
-                    {fmtCurrency(item.point.value, currency)}.
+                    {pointMetaLabel(item.point.meta)}: P&L{" "}
+                    {fmtCurrency(
+                      item.point.pnl ?? 0,
+                      currency,
+                      appPreferences,
+                      true,
+                    )}
+                    . Balance{" "}
+                    {fmtCurrency(item.point.value, currency, appPreferences)}.
                   </title>
                 </circle>
               ))}
@@ -1679,7 +1778,7 @@ function ChartPanel({
               ))}
             </svg>
             <div className="dash-line-labels">
-              <strong>Growth {fmtPercent(growth)}</strong>
+              <strong>Growth {fmtPercent(growth, appPreferences)}</strong>
             </div>
           </>
         )}
@@ -1760,11 +1859,13 @@ function RateStatMini({
 }
 
 function RankingStatsCard({
+  appPreferences,
   currency,
   onOpen,
   rows,
   title,
 }: {
+  appPreferences: AppPreferences;
   currency: string;
   onOpen: () => void;
   rows: RankingRow[];
@@ -1777,7 +1878,12 @@ function RankingStatsCard({
       <strong>{top?.label ?? "-"}</strong>
       <small>
         {top
-          ? `${fmtCurrency(top.value, currency, true)} · ${top.meta}`
+          ? `${fmtCurrency(
+              top.value,
+              currency,
+              appPreferences,
+              true,
+            )} · ${top.meta}`
           : "No data"}
       </small>
     </button>
@@ -1786,10 +1892,12 @@ function RankingStatsCard({
 
 function StatsDetailModal({
   currency,
+  appPreferences,
   detail,
   onClose,
 }: {
   currency: string;
+  appPreferences: AppPreferences;
   detail: DetailState;
   onClose: () => void;
 }) {
@@ -1801,7 +1909,9 @@ function StatsDetailModal({
   if (!detail) return null;
 
   const rateRows =
-    detail.type === "rate" ? detailRateRows(detail.rows, detail.scope) : [];
+    detail.type === "rate"
+      ? detailRateRows(detail.rows, appPreferences, detail.scope)
+      : [];
   const rateNameLabel =
     detail.type === "rate" && detail.scope === "day"
       ? "Day"
@@ -1887,7 +1997,7 @@ function StatsDetailModal({
                   </span>
                   <span>{fmtCompactPercent(row.beRate)}</span>
                   <span className={toneFromNumber(row.pnl)}>
-                    {fmtCurrency(row.pnl, currency, true)}
+                    {fmtCurrency(row.pnl, currency, appPreferences, true)}
                   </span>
                 </div>
               ))}
@@ -1910,7 +2020,7 @@ function StatsDetailModal({
               <span>{row.meta}</span>
               <span>{row.trades}</span>
               <span className={toneFromNumber(row.value)}>
-                {fmtCurrency(row.value, currency, true)}
+                {fmtCurrency(row.value, currency, appPreferences, true)}
               </span>
             </div>
           ))}
@@ -2000,11 +2110,13 @@ function ChartHistoryDetailModal({
   charts,
   currency,
   currentYear,
+  appPreferences,
   onClose,
 }: {
   charts: MonthlyBalanceChart[];
   currency: string;
   currentYear: string;
+  appPreferences: AppPreferences;
   onClose: () => void;
 }) {
   const years = useMemo(
@@ -2049,6 +2161,7 @@ function ChartHistoryDetailModal({
       {visibleCharts.map((chart) => (
         <ChartPanel
           currency={currency}
+          appPreferences={appPreferences}
           growth={chart.growth}
           icon={<LineChart size={14} aria-hidden="true" />}
           key={chart.id}
@@ -2062,12 +2175,14 @@ function ChartHistoryDetailModal({
 }
 
 function WeekHistoryDetailModal({
+  appPreferences,
   cards,
   currency,
   currentYear,
   onClose,
   onOpenGraph,
 }: {
+  appPreferences: AppPreferences;
   cards: WeeklyBalanceCard[];
   currency: string;
   currentYear: string;
@@ -2134,9 +2249,16 @@ function WeekHistoryDetailModal({
                   <span>
                     {summary.wins}W / {summary.losses}L / {summary.breakEvens}BE
                   </span>
-                  <span>Growth {fmtPercent(summary.growth)}</span>
+                  <span>
+                    Growth {fmtPercent(summary.growth, appPreferences)}
+                  </span>
                   <strong className={toneFromNumber(summary.netPnl)}>
-                    {fmtCurrency(summary.netPnl, currency, true)}
+                    {fmtCurrency(
+                      summary.netPnl,
+                      currency,
+                      appPreferences,
+                      true,
+                    )}
                   </strong>
                 </span>
               </button>
@@ -2151,10 +2273,12 @@ function WeekHistoryDetailModal({
 function WeekChartDetailModal({
   card,
   currency,
+  appPreferences,
   onClose,
 }: {
   card: WeeklyBalanceCard | null;
   currency: string;
+  appPreferences: AppPreferences;
   onClose: () => void;
 }) {
   if (!card) return null;
@@ -2169,6 +2293,7 @@ function WeekChartDetailModal({
     >
       <ChartPanel
         currency={currency}
+        appPreferences={appPreferences}
         growth={card.summary.growth}
         icon={<LineChart size={14} aria-hidden="true" />}
         points={card.points}
@@ -2180,6 +2305,7 @@ function WeekChartDetailModal({
 }
 
 export function DashboardModule({
+  appPreferences,
   selectedAccount,
   selectedAccountId,
 }: ModuleContext) {
@@ -2266,8 +2392,10 @@ export function DashboardModule({
   const dashboard = useMemo(() => {
     const monthStart = dateKey(startOfMonth(now));
     const monthEnd = dateKey(endOfMonth(now));
-    const weekStart = dateKey(startOfWeek(now));
-    const weekEnd = dateKey(endOfWeek(now));
+    const currentWeekStart = startOfWeek(now, appPreferences);
+    const currentWeekEnd = endOfWeek(now, appPreferences);
+    const weekStart = dateKey(currentWeekStart);
+    const weekEnd = dateKey(currentWeekEnd);
     const beforeMonth = periodTrades(
       trades,
       null,
@@ -2276,7 +2404,7 @@ export function DashboardModule({
     const beforeWeek = periodTrades(
       trades,
       null,
-      dateKey(addDays(startOfWeek(now), -1)),
+      dateKey(addDays(currentWeekStart, -1)),
     );
     const totalTrades = periodTrades(trades, null, null);
     const monthTrades = periodTrades(trades, monthStart, monthEnd);
@@ -2285,10 +2413,15 @@ export function DashboardModule({
     const total = buildSummary({
       commissionPerLot,
       currency,
+      appPreferences,
       end: null,
       id: "total",
       label: "Total",
-      outcomes: buildTradeOutcomes(totalTrades, commissionPerLot),
+      outcomes: buildTradeOutcomes(
+        totalTrades,
+        commissionPerLot,
+        appPreferences,
+      ),
       selectedTrades: totalTrades,
       startingBalance: accountStart,
       subtitle: "All data",
@@ -2296,6 +2429,7 @@ export function DashboardModule({
     const month = buildSummary({
       commissionPerLot,
       currency,
+      appPreferences,
       end: monthEnd,
       id: "month",
       label: "Current month",
@@ -2307,19 +2441,26 @@ export function DashboardModule({
     const week = buildSummary({
       commissionPerLot,
       currency,
+      appPreferences,
       end: weekEnd,
       id: "week",
       label: "Current week",
-      outcomes: buildWeekOutcomes(trades, now, commissionPerLot),
+      outcomes: buildWeekOutcomes(
+        trades,
+        now,
+        commissionPerLot,
+        appPreferences,
+      ),
       selectedTrades: weekTrades,
       startingBalance: accountStart + netPnl(beforeWeek, commissionPerLot),
-      subtitle: `${weekStart.slice(5)} to ${weekEnd.slice(5)}`,
+      subtitle: formatDateRangeValue(weekStart, weekEnd, appPreferences),
     });
     const monthlyCharts = buildMonthlyBalanceCharts(
       totalTrades,
       accountStart,
       commissionPerLot,
       now,
+      appPreferences,
     );
     const weeklyCards = buildWeeklyBalanceCards(
       totalTrades,
@@ -2327,6 +2468,7 @@ export function DashboardModule({
       commissionPerLot,
       currency,
       now,
+      appPreferences,
     );
 
     return {
@@ -2337,10 +2479,15 @@ export function DashboardModule({
         startOfMonth(now),
         endOfMonth(now),
         now,
+        appPreferences,
         true,
       ),
       month,
-      monthRankings: buildRankingStats(monthTrades, commissionPerLot),
+      monthRankings: buildRankingStats(
+        monthTrades,
+        commissionPerLot,
+        appPreferences,
+      ),
       monthlyCharts,
       total,
       totalDaily: buildTotalBalanceHistory(
@@ -2348,13 +2495,22 @@ export function DashboardModule({
         accountStart,
         commissionPerLot,
         now,
+        appPreferences,
       ),
-      totalRankings: buildRankingStats(totalTrades, commissionPerLot),
-      weekRankings: buildRankingStats(weekTrades, commissionPerLot),
+      totalRankings: buildRankingStats(
+        totalTrades,
+        commissionPerLot,
+        appPreferences,
+      ),
+      weekRankings: buildRankingStats(
+        weekTrades,
+        commissionPerLot,
+        appPreferences,
+      ),
       week,
       weeklyCards,
     };
-  }, [accountStart, commissionPerLot, currency, now, trades]);
+  }, [accountStart, commissionPerLot, currency, appPreferences, now, trades]);
 
   const tabSummary =
     activeTab === "month"
@@ -2387,21 +2543,24 @@ export function DashboardModule({
   const currentWeekCard = dashboard.weeklyCards[
     dashboard.weeklyCards.length - 1
   ] ?? {
-    id: dateKey(startOfWeek(now)),
-    label: `${dateKey(startOfWeek(now)).slice(5)} to ${dateKey(
-      endOfWeek(now),
-    ).slice(5)}`,
+    id: dateKey(startOfWeek(now, appPreferences)),
+    label: formatDateRangeValue(
+      dateKey(startOfWeek(now, appPreferences)),
+      dateKey(endOfWeek(now, appPreferences)),
+      appPreferences,
+    ),
     points: buildDailyBalanceHistory(
       dashboard.week.trades,
       dashboard.week.startingBalance,
       commissionPerLot,
-      startOfWeek(now),
-      endOfWeek(now),
+      startOfWeek(now, appPreferences),
+      endOfWeek(now, appPreferences),
       now,
+      appPreferences,
       true,
     ),
     summary: dashboard.week,
-    weekNumber: weekNumber(startOfWeek(now)),
+    weekNumber: weekNumber(startOfWeek(now, appPreferences)),
   };
   const activeChart =
     activeTab === "total"
@@ -2430,30 +2589,21 @@ export function DashboardModule({
 
   return (
     <div className="dashboard dashboard-redesign">
-      <header className="page-header dashboard-header-compact">
-        <div>
-          <h2>Dashboard</h2>
-          <p className="page-subtitle">
-            {selectedAccount
-              ? `${selectedAccount.name} - performance, risk, and review.`
-              : "No account selected. Showing uncategorized data."}
-          </p>
-        </div>
-        <span className="dashboard-period-pill">{monthLabel(now)}</span>
-      </header>
-
       <section className="dash-summary-stack" aria-label="Dashboard summaries">
         <SummaryBand
+          appPreferences={appPreferences}
           currency={currency}
           riskPlan={riskPlan}
           summary={dashboard.total}
         />
         <SummaryBand
+          appPreferences={appPreferences}
           currency={currency}
           riskPlan={riskPlan}
           summary={dashboard.month}
         />
         <SummaryBand
+          appPreferences={appPreferences}
           currency={currency}
           riskPlan={riskPlan}
           summary={dashboard.week}
@@ -2562,6 +2712,7 @@ export function DashboardModule({
           <div className="dash-workspace-grid">
             <ChartPanel
               currency={currency}
+              appPreferences={appPreferences}
               growth={activeChart.growth}
               icon={<LineChart size={14} aria-hidden="true" />}
               onOpen={activeChart.onOpen}
@@ -2581,6 +2732,7 @@ export function DashboardModule({
                 <div className="dash-stat-column">
                   <h4>Winning</h4>
                   <RankingStatsCard
+                    appPreferences={appPreferences}
                     currency={currency}
                     title="Highest winning trade"
                     rows={tabRankings.winningTrades}
@@ -2593,6 +2745,7 @@ export function DashboardModule({
                     }
                   />
                   <RankingStatsCard
+                    appPreferences={appPreferences}
                     currency={currency}
                     title="Highest winning day"
                     rows={tabRankings.winningDays}
@@ -2605,6 +2758,7 @@ export function DashboardModule({
                     }
                   />
                   <RankingStatsCard
+                    appPreferences={appPreferences}
                     currency={currency}
                     title="Highest winning week"
                     rows={tabRankings.winningWeeks}
@@ -2617,6 +2771,7 @@ export function DashboardModule({
                     }
                   />
                   <RankingStatsCard
+                    appPreferences={appPreferences}
                     currency={currency}
                     title="Highest winning month"
                     rows={tabRankings.winningMonths}
@@ -2632,6 +2787,7 @@ export function DashboardModule({
                 <div className="dash-stat-column">
                   <h4>Losing</h4>
                   <RankingStatsCard
+                    appPreferences={appPreferences}
                     currency={currency}
                     title="Highest losing trade"
                     rows={tabRankings.losingTrades}
@@ -2644,6 +2800,7 @@ export function DashboardModule({
                     }
                   />
                   <RankingStatsCard
+                    appPreferences={appPreferences}
                     currency={currency}
                     title="Highest losing day"
                     rows={tabRankings.losingDays}
@@ -2656,6 +2813,7 @@ export function DashboardModule({
                     }
                   />
                   <RankingStatsCard
+                    appPreferences={appPreferences}
                     currency={currency}
                     title="Highest losing week"
                     rows={tabRankings.losingWeeks}
@@ -2668,6 +2826,7 @@ export function DashboardModule({
                     }
                   />
                   <RankingStatsCard
+                    appPreferences={appPreferences}
                     currency={currency}
                     title="Highest losing month"
                     rows={tabRankings.losingMonths}
@@ -2688,6 +2847,7 @@ export function DashboardModule({
 
       <StatsDetailModal
         currency={currency}
+        appPreferences={appPreferences}
         detail={detail}
         onClose={() => setDetail(null)}
       />
@@ -2696,11 +2856,13 @@ export function DashboardModule({
           charts={dashboard.monthlyCharts}
           currency={currency}
           currentYear={now.getFullYear().toString()}
+          appPreferences={appPreferences}
           onClose={() => setChartDetailKind(null)}
         />
       ) : null}
       {chartDetailKind === "week" ? (
         <WeekHistoryDetailModal
+          appPreferences={appPreferences}
           cards={dashboard.weeklyCards}
           currency={currency}
           currentYear={now.getFullYear().toString()}
@@ -2711,6 +2873,7 @@ export function DashboardModule({
       <WeekChartDetailModal
         card={weekGraphDetail}
         currency={currency}
+        appPreferences={appPreferences}
         onClose={() => setWeekGraphDetail(null)}
       />
     </div>

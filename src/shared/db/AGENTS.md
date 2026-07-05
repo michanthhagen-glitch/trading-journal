@@ -19,10 +19,10 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 - Trade workflow fields include pre-trade strategy/risk, entry direction/time/price/lot size/SL/TP/notes/confidence, and exit time/price/result/P&L/note/feeling.
 - Strategy setup fields include strategy text, entry rules, SL/TP rules, and invalidation rules.
 - Risk management setup fields include per-trade/day/week risk ranges, trade-loss limits, and daily/weekly goal ranges.
-- Trades and journal recaps belong to the selected top-bar account through `account_id`.
+- Trades and time-bounded recaps belong to the selected top-bar account through `account_id`.
 - Saving a per-trade recap marks that trade as reviewed.
 - Per-trade recaps store structured fields for later daily, weekly, and monthly automation.
-- Journal recaps use shared save/list helpers and keep browser fallback aligned with SQLite.
+- The Recaps module uses shared save/list helpers and keeps browser fallback aligned with SQLite.
 
 ## Work Guidance
 

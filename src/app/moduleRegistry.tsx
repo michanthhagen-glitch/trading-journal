@@ -8,7 +8,7 @@ import {
 import { AccountModule } from "../modules/account/AccountModule";
 import { DashboardModule } from "../modules/dashboard/DashboardModule";
 import { TradesModule } from "../modules/trades/TradesModule";
-import { JournalModule } from "../modules/journal/JournalModule";
+import { RecapsModule } from "../modules/recaps/RecapsModule";
 import { SettingsModule } from "../modules/settings/SettingsModule";
 import type { AppModule } from "./types";
 
@@ -21,13 +21,6 @@ export const appModules: AppModule[] = [
     Component: DashboardModule,
   },
   {
-    id: "account",
-    label: "Account",
-    description: "Accounts, strategies, and risk management",
-    Icon: Wallet,
-    Component: AccountModule,
-  },
-  {
     id: "trades",
     label: "Trades",
     description: "Log, track, and recap every trade",
@@ -35,11 +28,18 @@ export const appModules: AppModule[] = [
     Component: TradesModule,
   },
   {
-    id: "journal",
-    label: "Journal",
+    id: "recaps",
+    label: "Recaps",
     description: "Daily, weekly, and monthly recaps",
     Icon: BookOpen,
-    Component: JournalModule,
+    Component: RecapsModule,
+  },
+  {
+    id: "account",
+    label: "Account",
+    description: "Accounts, strategies, and risk management",
+    Icon: Wallet,
+    Component: AccountModule,
   },
   {
     id: "settings",

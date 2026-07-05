@@ -279,11 +279,13 @@ function WindowSelectorModal({
 }
 
 type DraftScreenshotGalleryProps = {
+  confirmBeforeDelete: boolean;
   screenshots: DraftScreenshot[];
   onDelete: (id: string) => void | Promise<void>;
 };
 
 export function DraftScreenshotGallery({
+  confirmBeforeDelete,
   screenshots,
   onDelete,
 }: DraftScreenshotGalleryProps) {
@@ -315,6 +317,10 @@ export function DraftScreenshotGallery({
   }, [screenshots]);
 
   async function handleDelete(screenshot: DraftScreenshot) {
+    if (confirmBeforeDelete && !window.confirm("Delete this screenshot?")) {
+      return;
+    }
+
     await deleteScreenshotFile(screenshot.path);
     if (lightbox?.id === screenshot.id) setLightbox(null);
     await onDelete(screenshot.id);
@@ -366,11 +372,13 @@ export function DraftScreenshotGallery({
 }
 
 type TradeScreenshotGalleryProps = {
+  confirmBeforeDelete: boolean;
   screenshots: ScreenshotRow[];
   onChanged: () => void | Promise<void>;
 };
 
 export function TradeScreenshotGallery({
+  confirmBeforeDelete,
   screenshots,
   onChanged,
 }: TradeScreenshotGalleryProps) {
@@ -402,6 +410,10 @@ export function TradeScreenshotGallery({
   }, [screenshots]);
 
   async function handleDelete(screenshot: ScreenshotRow) {
+    if (confirmBeforeDelete && !window.confirm("Delete this screenshot?")) {
+      return;
+    }
+
     await deleteScreenshot(screenshot.id, screenshot.path);
     await deleteScreenshotFile(screenshot.path);
     if (lightbox?.id === screenshot.id) setLightbox(null);

@@ -1,16 +1,28 @@
 import { type Trade } from "../../../shared/db/database";
 import {
+  formatCurrencyValue,
+  type AppPreferences,
+} from "../../../shared/appPreferences";
+import {
   ScreenshotImportButton,
   TradeScreenshotGallery,
 } from "./ScreenshotTools";
 
 type PreTradeCardProps = {
+  appPreferences: AppPreferences;
+  currency: string;
   trade: Trade;
   onEdit: () => void;
   onChanged: () => void | Promise<void>;
 };
 
-export function PreTradeCard({ trade, onEdit, onChanged }: PreTradeCardProps) {
+export function PreTradeCard({
+  appPreferences,
+  currency,
+  trade,
+  onEdit,
+  onChanged,
+}: PreTradeCardProps) {
   const pre = trade.preTrade;
   const screenshots = trade.screenshots.filter((s) => s.stage === "pre-trade");
   const hasContent =
@@ -63,7 +75,11 @@ export function PreTradeCard({ trade, onEdit, onChanged }: PreTradeCardProps) {
                 <dt>Risk amount</dt>
                 <dd>
                   {pre.riskAmount != null
-                    ? `$${pre.riskAmount.toFixed(2)}`
+                    ? formatCurrencyValue(
+                        pre.riskAmount,
+                        currency,
+                        appPreferences,
+                      )
                     : "—"}
                 </dd>
               </div>
@@ -82,6 +98,7 @@ export function PreTradeCard({ trade, onEdit, onChanged }: PreTradeCardProps) {
             <div className="trade-card-screenshots">
               {screenshots.length > 0 ? (
                 <TradeScreenshotGallery
+                  confirmBeforeDelete={appPreferences.confirmBeforeDelete}
                   screenshots={screenshots}
                   onChanged={onChanged}
                 />

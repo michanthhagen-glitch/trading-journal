@@ -6,6 +6,7 @@ Owns Vitest tests for app behavior and project contracts.
 
 ## Ownership
 
+- `appPreferences.test.ts`: shared app preference formatting and week-start behavior.
 - `moduleRegistry.test.ts`: smoke test for sidebar module registration.
 
 ## Local Contracts

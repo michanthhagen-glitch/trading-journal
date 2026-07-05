@@ -13,6 +13,7 @@ Owns reusable shell layout components.
 
 - Layout components receive data through props; they must not query the database.
 - Navigation order comes from `src/app/moduleRegistry.tsx`.
+- Sidebar visually groups Dashboard, Trades/Recaps, Account, and keeps Settings pinned at the bottom.
 - Topbar account selection must stay controlled by shell state.
 - Use lucide-react icons for shell actions.
 

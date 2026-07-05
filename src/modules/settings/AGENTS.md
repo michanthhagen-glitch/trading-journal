@@ -6,12 +6,14 @@ Owns preferences and data-management UI.
 
 ## Ownership
 
-- `SettingsModule.tsx`: current placeholder for account, broker connections, backup, and theme.
+- `SettingsModule.tsx`: general preferences plus future account, broker, backup, and theme settings.
 
 ## Local Contracts
 
-- Settings is placeholder-only right now.
 - Any real setting must have a storage plan before adding UI controls.
+- Settings uses a module-local sidebar; put broad groups like General, Data, or Appearance there.
+- The settings sidebar and active settings content own the workspace directly; avoid extra active-section title headers.
+- General app preferences are saved in local browser storage through `src/shared/appPreferences.ts`.
 - Data import/export belongs here unless a more specific module owns the workflow.
 
 ## Work Guidance

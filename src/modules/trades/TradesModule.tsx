@@ -42,6 +42,19 @@ import {
   type DraftScreenshot,
 } from "./components/ScreenshotTools";
 import { deleteScreenshotFile } from "../../shared/db/storage";
+import {
+  formatCurrencyValue,
+  formatDateRangeValue,
+  formatDateTimeValue,
+  formatDateValue,
+  formatPercentValue,
+  formatTimeForDateValue,
+  formatWeekdayDateValue,
+  orderedWeekdayLabels,
+  shouldConfirmDelete,
+  startOfWeekByPreference,
+  type AppPreferences,
+} from "../../shared/appPreferences";
 import { ModalShell } from "../../components/ModalShell";
 import { TRADE_RECAP_QUICK_MISTAKES } from "./tradeRecapMistakes";
 import { TRADE_RECAP_QUICK_POSITIVES } from "./tradeRecapPositives";
@@ -161,30 +174,25 @@ function directionActionLabel(direction: Trade["direction"]) {
   return direction === "long" ? "Buy" : "Sell";
 }
 
-function fmtMoney(value: number | null, currency = "USD") {
-  if (value === null || !Number.isFinite(value)) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-  } catch {
-    return `${currency} ${value.toFixed(2)}`;
-  }
+function fmtMoney(
+  value: number | null,
+  currency: string,
+  appPreferences: AppPreferences,
+) {
+  return formatCurrencyValue(value, currency, appPreferences);
 }
 
-function fmtPnl(pnl: number | null, currency = "USD") {
+function fmtPnl(
+  pnl: number | null,
+  currency: string,
+  appPreferences: AppPreferences,
+) {
   if (pnl === null) return "—";
-  if (pnl === 0) return fmtMoney(0, currency);
-  const sign = pnl > 0 ? "+" : "-";
-  return `${sign} ${fmtMoney(Math.abs(pnl), currency)}`;
+  return formatCurrencyValue(pnl, currency, appPreferences, { signed: true });
 }
 
-function fmtPercent(value: number | null) {
-  if (value === null || !Number.isFinite(value)) return "—";
-  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+function fmtPercent(value: number | null, appPreferences: AppPreferences) {
+  return formatPercentValue(value, appPreferences);
 }
 
 function fmtPrice(value: number | null) {
@@ -227,8 +235,8 @@ function tradeListTime(trade: Trade) {
   return trade.entry.time ?? trade.exit.time ?? "—";
 }
 
-function tradeListDateTime(trade: Trade) {
-  return `${trade.date} ${tradeListTime(trade)}`;
+function tradeListDateTime(trade: Trade, appPreferences: AppPreferences) {
+  return formatDateTimeValue(trade.date, tradeListTime(trade), appPreferences);
 }
 
 function parseTradeDate(value: string) {
@@ -264,14 +272,12 @@ function addMonths(date: Date, amount: number) {
   return new Date(date.getFullYear(), date.getMonth() + amount, 1);
 }
 
-function startOfWeek(date: Date) {
-  const day = date.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  return addDays(date, diff);
+function startOfWeek(date: Date, appPreferences: AppPreferences) {
+  return startOfWeekByPreference(date, appPreferences);
 }
 
-function calendarDays(month: Date) {
-  const start = startOfWeek(firstOfMonth(month));
+function calendarDays(month: Date, appPreferences: AppPreferences) {
+  const start = startOfWeek(firstOfMonth(month), appPreferences);
   return Array.from({ length: 42 }, (_, index) => addDays(start, index));
 }
 
@@ -282,18 +288,9 @@ function formatMonthLabel(date: Date) {
   }).format(date);
 }
 
-function formatWeekLabel(start: Date) {
+function formatWeekLabel(start: Date, appPreferences: AppPreferences) {
   const end = addDays(start, 6);
-  const startLabel = new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-  }).format(start);
-  const endLabel = new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(end);
-  return `${startLabel} - ${endLabel}`;
+  return formatDateRangeValue(start, end, appPreferences);
 }
 
 function sameMonth(a: Date, b: Date) {
@@ -391,13 +388,8 @@ function dayBalanceSummary(
   return { before, after, growthPercent, pnl };
 }
 
-function formatDayDialogTitle(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(parseTradeDate(value));
+function formatDayDialogTitle(value: string, appPreferences: AppPreferences) {
+  return formatWeekdayDateValue(value, appPreferences);
 }
 
 function riskPlanMin(plan: RiskManagementPlan | null) {
@@ -448,6 +440,7 @@ function currentTimeInputValue() {
 }
 
 export function TradesModule({
+  appPreferences,
   selectedAccount,
   selectedAccountId,
 }: ModuleContext) {
@@ -515,6 +508,7 @@ export function TradesModule({
       <TradeDetail
         account={selectedAccount}
         accountTrades={trades}
+        appPreferences={appPreferences}
         trade={selected}
         onBack={() => setSelectedId(null)}
         onChanged={reload}
@@ -528,15 +522,25 @@ export function TradesModule({
 
   return (
     <div className="trades">
-      <header className="page-header">
-        <div>
-          <h2>Trades</h2>
-          <p className="page-subtitle">
-            {selectedAccount
-              ? `Showing trades for ${selectedAccount.name}.`
-              : "No account selected. New trades will stay uncategorized."}
-          </p>
+      <div className="module-toolbar">
+        <div className="tab-bar" role="tablist" aria-label="Trade views">
+          {TRADE_VIEWS.map((view) => (
+            <button
+              key={view.id}
+              role="tab"
+              aria-selected={activeView === view.id}
+              className={`tab ${activeView === view.id ? "active" : ""}`}
+              onClick={() => setActiveView(view.id)}
+              type="button"
+            >
+              <span className="tab-icon" aria-hidden="true">
+                {view.icon}
+              </span>
+              <span>{view.label}</span>
+            </button>
+          ))}
         </div>
+
         <button
           className="primary-button"
           type="button"
@@ -551,24 +555,6 @@ export function TradesModule({
           <Plus size={16} aria-hidden="true" />
           <span>New trade</span>
         </button>
-      </header>
-
-      <div className="tab-bar" role="tablist" aria-label="Trade views">
-        {TRADE_VIEWS.map((view) => (
-          <button
-            key={view.id}
-            role="tab"
-            aria-selected={activeView === view.id}
-            className={`tab ${activeView === view.id ? "active" : ""}`}
-            onClick={() => setActiveView(view.id)}
-            type="button"
-          >
-            <span className="tab-icon" aria-hidden="true">
-              {view.icon}
-            </span>
-            <span>{view.label}</span>
-          </button>
-        ))}
       </div>
 
       {loading ? (
@@ -582,6 +568,7 @@ export function TradesModule({
       ) : activeView === "calendar" ? (
         <TradesCalendarView
           month={calendarMonth}
+          appPreferences={appPreferences}
           selectedAccount={selectedAccount}
           trades={trades}
           onCreateRecap={setRecapTrade}
@@ -591,6 +578,7 @@ export function TradesModule({
       ) : (
         <WeeklyTradesList
           collapsedWeeks={collapsedWeeks}
+          appPreferences={appPreferences}
           selectedAccount={selectedAccount}
           trades={trades}
           onCreateRecap={setRecapTrade}
@@ -607,6 +595,7 @@ export function TradesModule({
       {recapTrade ? (
         <TradeRecapDialog
           account={selectedAccount}
+          appPreferences={appPreferences}
           trade={recapTrade}
           onClose={() => setRecapTrade(null)}
           onSaved={async () => {
@@ -620,6 +609,7 @@ export function TradesModule({
         <NewTradeWorkflow
           account={selectedAccount}
           accountBalance={selectedAccountBalance}
+          appPreferences={appPreferences}
           riskPlan={selectedRiskPlan}
           strategies={linkedStrategies}
           onClose={() => setShowNewForm(false)}
@@ -635,6 +625,7 @@ export function TradesModule({
 
 type TradesListTableProps = {
   accountTrades: Trade[];
+  appPreferences: AppPreferences;
   selectedAccount: TradingAccount | null;
   trades: Trade[];
   onCreateRecap: (trade: Trade) => void;
@@ -643,6 +634,7 @@ type TradesListTableProps = {
 
 function TradesListTable({
   accountTrades,
+  appPreferences,
   selectedAccount,
   trades,
   onCreateRecap,
@@ -677,7 +669,7 @@ function TradesListTable({
               className="trades-row"
               onClick={() => onSelectTrade(trade.id)}
             >
-              <td>{tradeListDateTime(trade)}</td>
+              <td>{tradeListDateTime(trade, appPreferences)}</td>
               <td>
                 <span className={`dir-pill dir-${trade.direction}`}>
                   {directionActionLabel(trade.direction)}
@@ -694,10 +686,14 @@ function TradesListTable({
                 </span>
               </td>
               <td className={`num pnl ${pnlTone}`}>
-                {fmtPnl(trade.pnl, selectedAccount?.currency)}
+                {fmtPnl(
+                  trade.pnl,
+                  selectedAccount?.currency ?? "USD",
+                  appPreferences,
+                )}
               </td>
               <td className={`num pnl ${growthTone}`}>
-                {fmtPercent(balance.growthPercent)}
+                {fmtPercent(balance.growthPercent, appPreferences)}
               </td>
               <td className="recap-cell">
                 {trade.hasRecap ? (
@@ -729,6 +725,7 @@ function TradesListTable({
 }
 
 type TradesCalendarViewProps = {
+  appPreferences: AppPreferences;
   month: Date;
   selectedAccount: TradingAccount | null;
   trades: Trade[];
@@ -738,6 +735,7 @@ type TradesCalendarViewProps = {
 };
 
 function TradesCalendarView({
+  appPreferences,
   month,
   selectedAccount,
   trades,
@@ -746,7 +744,8 @@ function TradesCalendarView({
   onSelectTrade,
 }: TradesCalendarViewProps) {
   const [openDayKey, setOpenDayKey] = useState<string | null>(null);
-  const days = calendarDays(month);
+  const days = calendarDays(month, appPreferences);
+  const weekdayLabels = orderedWeekdayLabels(appPreferences);
   const today = todayInputValue();
   const tradesByDate = useMemo(() => {
     const grouped = new Map<string, Trade[]>();
@@ -796,7 +795,7 @@ function TradesCalendarView({
       </div>
 
       <div className="calendar-grid">
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+        {weekdayLabels.map((day) => (
           <div className="calendar-weekday" key={day}>
             {day}
           </div>
@@ -825,7 +824,7 @@ function TradesCalendarView({
               } ${dayTone}`}
               aria-label={
                 dayTrades.length > 0
-                  ? `${formatDayDialogTitle(key)}, ${dayTrades.length} trades, ${missingRecaps} missing recaps`
+                  ? `${formatDayDialogTitle(key, appPreferences)}, ${dayTrades.length} trades, ${missingRecaps} missing recaps`
                   : undefined
               }
               key={key}
@@ -862,10 +861,14 @@ function TradesCalendarView({
                     {dayTrades.length === 1 ? "trade" : "trades"}
                   </span>
                   <strong className={pnlToneClass(daySummary.pnl)}>
-                    {fmtPnl(daySummary.pnl, selectedAccount?.currency)}
+                    {fmtPnl(
+                      daySummary.pnl,
+                      selectedAccount?.currency ?? "USD",
+                      appPreferences,
+                    )}
                   </strong>
                   <span className={pnlToneClass(daySummary.growthPercent)}>
-                    {fmtPercent(daySummary.growthPercent)}
+                    {fmtPercent(daySummary.growthPercent, appPreferences)}
                   </span>
                 </div>
               ) : null}
@@ -877,6 +880,7 @@ function TradesCalendarView({
       {openDayKey && openDaySummary ? (
         <DayTradesDialog
           accountTrades={trades}
+          appPreferences={appPreferences}
           dayKey={openDayKey}
           daySummary={openDaySummary}
           onClose={() => setOpenDayKey(null)}
@@ -892,6 +896,7 @@ function TradesCalendarView({
 
 type DayTradesDialogProps = {
   accountTrades: Trade[];
+  appPreferences: AppPreferences;
   dayKey: string;
   daySummary: ReturnType<typeof dayBalanceSummary>;
   selectedAccount: TradingAccount | null;
@@ -903,6 +908,7 @@ type DayTradesDialogProps = {
 
 function DayTradesDialog({
   accountTrades,
+  appPreferences,
   dayKey,
   daySummary,
   selectedAccount,
@@ -913,11 +919,11 @@ function DayTradesDialog({
 }: DayTradesDialogProps) {
   return (
     <ModalShell
-      ariaLabel={formatDayDialogTitle(dayKey)}
+      ariaLabel={formatDayDialogTitle(dayKey, appPreferences)}
       modalClassName="day-trades-modal"
       onClose={onClose}
       subtitle={`${trades.length} ${trades.length === 1 ? "trade" : "trades"}`}
-      title={formatDayDialogTitle(dayKey)}
+      title={formatDayDialogTitle(dayKey, appPreferences)}
       footer={
         <button className="secondary-button" type="button" onClick={onClose}>
           Close
@@ -928,13 +934,17 @@ function DayTradesDialog({
         <div>
           <span>P&L</span>
           <strong className={pnlToneClass(daySummary.pnl)}>
-            {fmtPnl(daySummary.pnl, selectedAccount?.currency)}
+            {fmtPnl(
+              daySummary.pnl,
+              selectedAccount?.currency ?? "USD",
+              appPreferences,
+            )}
           </strong>
         </div>
         <div>
           <span>Growth</span>
           <strong className={pnlToneClass(daySummary.growthPercent)}>
-            {fmtPercent(daySummary.growthPercent)}
+            {fmtPercent(daySummary.growthPercent, appPreferences)}
           </strong>
         </div>
         <div>
@@ -946,6 +956,7 @@ function DayTradesDialog({
       <div className="day-trades-table">
         <TradesListTable
           accountTrades={accountTrades}
+          appPreferences={appPreferences}
           selectedAccount={selectedAccount}
           trades={trades}
           onCreateRecap={onCreateRecap}
@@ -958,6 +969,7 @@ function DayTradesDialog({
 
 type TradeRecapDialogProps = {
   account: TradingAccount | null;
+  appPreferences: AppPreferences;
   trade: Trade;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
@@ -985,6 +997,7 @@ function createDefaultTradeRecap(trade: Trade): TradeRecapInput {
 
 function TradeRecapDialog({
   account,
+  appPreferences,
   trade,
   onClose,
   onSaved,
@@ -1061,7 +1074,7 @@ function TradeRecapDialog({
       title={`Create recap - ${trade.pair}`}
       subtitle={
         <>
-          {trade.date} {tradeListTime(trade)} -{" "}
+          {tradeListDateTime(trade, appPreferences)} -{" "}
           {directionActionLabel(trade.direction)}
         </>
       }
@@ -1094,7 +1107,7 @@ function TradeRecapDialog({
           />
           <SummaryMetric
             label="P&L"
-            value={fmtPnl(trade.pnl, currency)}
+            value={fmtPnl(trade.pnl, currency, appPreferences)}
             tone={pnlToneClass(trade.pnl)}
           />
           <SummaryMetric
@@ -1418,6 +1431,7 @@ function RecapTagGroup({
 
 type WeeklyTradesListProps = {
   collapsedWeeks: Record<string, boolean>;
+  appPreferences: AppPreferences;
   selectedAccount: TradingAccount | null;
   trades: Trade[];
   onCreateRecap: (trade: Trade) => void;
@@ -1427,6 +1441,7 @@ type WeeklyTradesListProps = {
 
 function WeeklyTradesList({
   collapsedWeeks,
+  appPreferences,
   selectedAccount,
   trades,
   onCreateRecap,
@@ -1436,7 +1451,7 @@ function WeeklyTradesList({
   const weekGroups = useMemo(() => {
     const grouped = new Map<string, { start: Date; trades: Trade[] }>();
     for (const trade of trades) {
-      const start = startOfWeek(parseTradeDate(trade.date));
+      const start = startOfWeek(parseTradeDate(trade.date), appPreferences);
       const key = dateKey(start);
       const group = grouped.get(key) ?? { start, trades: [] };
       group.trades.push(trade);
@@ -1445,7 +1460,7 @@ function WeeklyTradesList({
     return Array.from(grouped.entries())
       .sort(([a], [b]) => (a < b ? 1 : -1))
       .map(([key, group]) => ({ key, ...group }));
-  }, [trades]);
+  }, [appPreferences, trades]);
 
   return (
     <div className="trade-week-list">
@@ -1468,7 +1483,7 @@ function WeeklyTradesList({
                 ) : (
                   <ChevronDown size={16} aria-hidden="true" />
                 )}
-                <span>{formatWeekLabel(group.start)}</span>
+                <span>{formatWeekLabel(group.start, appPreferences)}</span>
               </span>
               <span className="trade-week-meta">
                 {missingRecaps > 0 ? (
@@ -1479,13 +1494,18 @@ function WeeklyTradesList({
                 ) : null}
                 <span>{group.trades.length} trades</span>
                 <strong className={pnlToneClass(weekPnl)}>
-                  {fmtPnl(weekPnl, selectedAccount?.currency)}
+                  {fmtPnl(
+                    weekPnl,
+                    selectedAccount?.currency ?? "USD",
+                    appPreferences,
+                  )}
                 </strong>
               </span>
             </button>
             {isCollapsed ? null : (
               <TradesListTable
                 accountTrades={trades}
+                appPreferences={appPreferences}
                 selectedAccount={selectedAccount}
                 trades={group.trades}
                 onCreateRecap={onCreateRecap}
@@ -1502,6 +1522,7 @@ function WeeklyTradesList({
 type NewTradeWorkflowProps = {
   account: TradingAccount;
   accountBalance: number | null;
+  appPreferences: AppPreferences;
   riskPlan: RiskManagementPlan | null;
   strategies: Strategy[];
   onClose: () => void;
@@ -1591,6 +1612,7 @@ function draftScreenshotId() {
 function NewTradeWorkflow({
   account,
   accountBalance,
+  appPreferences,
   riskPlan,
   strategies,
   onClose,
@@ -1855,7 +1877,11 @@ function NewTradeWorkflow({
                 Balance:{" "}
                 {accountBalance === null
                   ? "not available"
-                  : `${account.currency} ${accountBalance.toFixed(2)}`}
+                  : formatCurrencyValue(
+                      accountBalance,
+                      account.currency,
+                      appPreferences,
+                    )}
               </small>
             </label>
             <label className="field field-wide">
@@ -1879,6 +1905,7 @@ function NewTradeWorkflow({
           </div>
           <div className="workflow-card-footer">
             <WorkflowScreenshotSlot
+              confirmBeforeDelete={appPreferences.confirmBeforeDelete}
               stage="pre-trade"
               screenshots={screenshots["pre-trade"]}
               onImported={(path) => addDraftScreenshot("pre-trade", path)}
@@ -1963,6 +1990,7 @@ function NewTradeWorkflow({
           </div>
           <div className="workflow-card-footer">
             <WorkflowScreenshotSlot
+              confirmBeforeDelete={appPreferences.confirmBeforeDelete}
               stage="entry"
               screenshots={screenshots.entry}
               onImported={(path) => addDraftScreenshot("entry", path)}
@@ -2031,6 +2059,7 @@ function NewTradeWorkflow({
           </div>
           <div className="workflow-card-footer">
             <WorkflowScreenshotSlot
+              confirmBeforeDelete={appPreferences.confirmBeforeDelete}
               stage="exit"
               screenshots={screenshots.exit}
               onImported={(path) => addDraftScreenshot("exit", path)}
@@ -2049,6 +2078,7 @@ function NewTradeWorkflow({
 }
 
 type WorkflowScreenshotSlotProps = {
+  confirmBeforeDelete: boolean;
   stage: NewTradeScreenshotStage;
   screenshots: DraftScreenshot[];
   onImported: (path: string) => void | Promise<void>;
@@ -2056,6 +2086,7 @@ type WorkflowScreenshotSlotProps = {
 };
 
 function WorkflowScreenshotSlot({
+  confirmBeforeDelete,
   stage,
   screenshots,
   onImported,
@@ -2067,6 +2098,7 @@ function WorkflowScreenshotSlot({
       {screenshots.length > 0 ? (
         <div className="workflow-screenshot-preview">
           <DraftScreenshotGallery
+            confirmBeforeDelete={confirmBeforeDelete}
             screenshots={screenshots}
             onDelete={onDelete}
           />
@@ -2133,6 +2165,7 @@ function ScaleBars({ value }: { value: number }) {
 type TradeDetailProps = {
   account: TradingAccount | null;
   accountTrades: Trade[];
+  appPreferences: AppPreferences;
   trade: Trade;
   onBack: () => void;
   onChanged: () => Promise<void>;
@@ -2142,6 +2175,7 @@ type TradeDetailProps = {
 function TradeDetail({
   account,
   accountTrades,
+  appPreferences,
   trade,
   onBack,
   onChanged,
@@ -2158,10 +2192,14 @@ function TradeDetail({
   const balance = tradeBalanceSummary(account, accountTrades, trade);
 
   async function handleDeleteTrade() {
-    const confirmed = window.confirm(
-      "Delete this trade? Notes, screenshots, and recap links will be removed.",
-    );
-    if (!confirmed) return;
+    if (
+      shouldConfirmDelete(appPreferences) &&
+      !window.confirm(
+        "Delete this trade? Notes, screenshots, and recap links will be removed.",
+      )
+    ) {
+      return;
+    }
 
     setDeleteError(null);
     setDeleting(true);
@@ -2193,15 +2231,18 @@ function TradeDetail({
           <ArrowLeft size={18} aria-hidden="true" />
         </button>
         <div className="trade-summary-strip" aria-label="Trade summary">
-          <SummaryMetric label="Date" value={trade.date} />
+          <SummaryMetric
+            label="Date"
+            value={formatDateValue(trade.date, appPreferences)}
+          />
           <SummaryMetric label="Duration" value={tradeDuration(trade)} />
           <SummaryMetric
             label="Balance before"
-            value={fmtMoney(balance.before, currency)}
+            value={fmtMoney(balance.before, currency, appPreferences)}
           />
           <SummaryMetric
             label="Balance after"
-            value={fmtMoney(balance.after, currency)}
+            value={fmtMoney(balance.after, currency, appPreferences)}
             tone={pnlToneClass(trade.pnl)}
           />
           <SummaryMetric label="Planned RR" value={fmtRMultiple(plannedRr)} />
@@ -2212,7 +2253,7 @@ function TradeDetail({
           />
           <SummaryMetric
             label="Account growth %"
-            value={fmtPercent(balance.growthPercent)}
+            value={fmtPercent(balance.growthPercent, appPreferences)}
             tone={pnlToneClass(balance.growthPercent)}
           />
         </div>
@@ -2234,17 +2275,21 @@ function TradeDetail({
 
       <section className="trade-cards">
         <PreTradeCard
+          appPreferences={appPreferences}
+          currency={currency}
           trade={trade}
           onEdit={() => setPreTradeOpen(true)}
           onChanged={onChanged}
         />
         <EntryCard
+          appPreferences={appPreferences}
           trade={trade}
           onEdit={() => setEntryOpen(true)}
           onChanged={onChanged}
         />
         <ExitCard
           currency={currency}
+          appPreferences={appPreferences}
           trade={trade}
           onEdit={() => setExitOpen(true)}
           onChanged={onChanged}
@@ -2309,10 +2354,12 @@ function SummaryMetric({
 }
 
 function EntryCard({
+  appPreferences,
   trade,
   onEdit,
   onChanged,
 }: {
+  appPreferences: AppPreferences;
   trade: Trade;
   onEdit: () => void;
   onChanged: () => void | Promise<void>;
@@ -2352,7 +2399,9 @@ function EntryCard({
         <div className="trade-card-fields">
           <div>
             <dt>Entry time</dt>
-            <dd>{entry.time ?? "—"}</dd>
+            <dd>
+              {formatTimeForDateValue(trade.date, entry.time, appPreferences)}
+            </dd>
           </div>
           <div>
             <dt>Direction</dt>
@@ -2388,6 +2437,7 @@ function EntryCard({
         <div className="trade-card-screenshots">
           {screenshots.length > 0 ? (
             <TradeScreenshotGallery
+              confirmBeforeDelete={appPreferences.confirmBeforeDelete}
               screenshots={screenshots}
               onChanged={onChanged}
             />
@@ -2403,11 +2453,13 @@ function EntryCard({
 
 function ExitCard({
   currency,
+  appPreferences,
   trade,
   onEdit,
   onChanged,
 }: {
   currency: string;
+  appPreferences: AppPreferences;
   trade: Trade;
   onEdit: () => void;
   onChanged: () => void | Promise<void>;
@@ -2446,7 +2498,9 @@ function ExitCard({
         <div className="trade-card-fields">
           <div>
             <dt>Exit time</dt>
-            <dd>{exit.time ?? "—"}</dd>
+            <dd>
+              {formatTimeForDateValue(trade.date, exit.time, appPreferences)}
+            </dd>
           </div>
           <div>
             <dt>Exit price</dt>
@@ -2469,7 +2523,7 @@ function ExitCard({
                       : "flat"
               }
             >
-              {fmtPnl(trade.pnl, currency)}
+              {fmtPnl(trade.pnl, currency, appPreferences)}
             </dd>
           </div>
         </div>
@@ -2482,6 +2536,7 @@ function ExitCard({
         <div className="trade-card-screenshots">
           {screenshots.length > 0 ? (
             <TradeScreenshotGallery
+              confirmBeforeDelete={appPreferences.confirmBeforeDelete}
               screenshots={screenshots}
               onChanged={onChanged}
             />

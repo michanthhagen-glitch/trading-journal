@@ -7,6 +7,7 @@ Owns cross-module helpers and data access used by more than one module.
 ## Ownership
 
 - `db/`: SQLite access, browser fallback data, screenshot file/blob storage.
+- `appPreferences.ts`: persisted app preferences for date, time, timezone, week start, number format, currency display, and delete confirmation.
 
 ## Local Contracts
 
