@@ -155,11 +155,3 @@ export const TRADE_RECAP_POSITIVE_GROUPS: TradeRecapPositiveGroup[] = [
     ],
   },
 ];
-
-export const TRADE_RECAP_POSITIVES = TRADE_RECAP_POSITIVE_GROUPS.flatMap(
-  (group) => group.positives,
-);
-
-export const TRADE_RECAP_QUICK_POSITIVES = TRADE_RECAP_POSITIVE_GROUPS.flatMap(
-  (group) => group.positives.slice(0, 2),
-);

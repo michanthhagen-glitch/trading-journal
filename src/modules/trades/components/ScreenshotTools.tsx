@@ -465,6 +465,77 @@ export function TradeScreenshotGallery({
   );
 }
 
+type ReadOnlyTradeScreenshotGalleryProps = {
+  screenshots: ScreenshotRow[];
+};
+
+export function ReadOnlyTradeScreenshotGallery({
+  screenshots,
+}: ReadOnlyTradeScreenshotGalleryProps) {
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [lightbox, setLightbox] = useState<ScreenshotRow | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (screenshots.length === 0) {
+      setUrls({});
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    Promise.all(
+      screenshots.map(async (screenshot) => [
+        screenshot.id,
+        await resolveScreenshotUrl(screenshot.path),
+      ]),
+    ).then((pairs) => {
+      if (cancelled) return;
+      setUrls(Object.fromEntries(pairs as [string, string][]));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [screenshots]);
+
+  return (
+    <>
+      <div className="screenshot-gallery screenshot-gallery-readonly">
+        {screenshots.map((screenshot) => (
+          <div className="screenshot-thumb" key={screenshot.id}>
+            <button
+              type="button"
+              className="screenshot-thumb-button"
+              onClick={() => setLightbox(screenshot)}
+              aria-label="Open screenshot"
+            >
+              {urls[screenshot.id] ? (
+                <img
+                  src={urls[screenshot.id]}
+                  alt={
+                    screenshot.caption ||
+                    `${stageLabel(screenshot.stage)} screenshot`
+                  }
+                />
+              ) : (
+                <span className="screenshot-loading">Loading...</span>
+              )}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {lightbox ? (
+        <ScreenshotLightbox
+          screenshot={lightbox}
+          onClose={() => setLightbox(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function ScreenshotLightbox({
   screenshot,
   onClose,

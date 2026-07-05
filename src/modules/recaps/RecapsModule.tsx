@@ -57,6 +57,11 @@ type RecapStats = {
   worstTrade: Trade | null;
 };
 
+type CurrentRecapStatus = {
+  label: string;
+  tone: "done" | "missing" | "missing-danger" | "neutral" | "ongoing";
+};
+
 const CADENCES: { id: Cadence; label: string; icon: ReactNode }[] = [
   { id: "daily", label: "Daily", icon: <CalendarDays size={16} /> },
   { id: "weekly", label: "Weekly", icon: <CalendarRange size={16} /> },
@@ -459,6 +464,38 @@ function formatRecapPeriod(
   return period;
 }
 
+function currentRecapStatus(
+  cadence: Cadence,
+  currentRecap: JournalRecapRow | null,
+  currentStats: RecapStats,
+  today = new Date(),
+): CurrentRecapStatus {
+  if (currentRecap) return { label: "Done", tone: "done" };
+
+  if (cadence === "daily") {
+    return currentStats.totalTrades === 0
+      ? { label: "No trades", tone: "neutral" }
+      : { label: "Missing", tone: "missing" };
+  }
+
+  if (cadence === "weekly") {
+    const weekday = today.getDay();
+    if (weekday >= 1 && weekday <= 5) {
+      return { label: "Ongoing", tone: "ongoing" };
+    }
+    return weekday === 6
+      ? { label: "Missing", tone: "missing" }
+      : { label: "Missing", tone: "missing-danger" };
+  }
+
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const daysRemaining = endOfMonth.getDate() - today.getDate();
+  if (daysRemaining >= 2) return { label: "Ongoing", tone: "ongoing" };
+  return daysRemaining === 1
+    ? { label: "Missing", tone: "missing" }
+    : { label: "Missing", tone: "missing-danger" };
+}
+
 export function RecapsModule({
   appPreferences,
   selectedAccount,
@@ -502,9 +539,15 @@ export function RecapsModule({
     [currentRange, selectedAccount, trades],
   );
   const currency = selectedAccount?.currency ?? "USD";
+  const currentStatus = currentRecapStatus(cadence, currentRecap, currentStats);
 
   function openNewRecap() {
     setEditorRecap(currentRecap);
+    setEditorOpen(true);
+  }
+
+  function openRecap(recap: JournalRecapRow) {
+    setEditorRecap(recap);
     setEditorOpen(true);
   }
 
@@ -565,12 +608,8 @@ export function RecapsModule({
                   <span>{currentRange.label}</span>
                 </td>
                 <td>
-                  <span
-                    className={`recaps-status ${
-                      currentRecap ? "done" : "missing"
-                    }`}
-                  >
-                    {currentRecap ? "Done" : "Missing"}
+                  <span className={`recaps-status ${currentStatus.tone}`}>
+                    {currentStatus.label}
                   </span>
                 </td>
                 <td>{currentStats.totalTrades}</td>
@@ -612,12 +651,20 @@ export function RecapsModule({
                   <th>Title</th>
                   <th>Period</th>
                   <th>Summary</th>
-                  <th className="list-table-action-column">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {recaps.map((recap) => (
-                  <tr className="list-table-row" key={recap.id}>
+                  <tr
+                    className="list-table-row list-table-row-clickable"
+                    key={recap.id}
+                    onDoubleClick={() => openRecap(recap)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") openRecap(recap);
+                    }}
+                    tabIndex={0}
+                    title="Double-click to open recap"
+                  >
                     <td>
                       <strong>{recap.title}</strong>
                     </td>
@@ -625,19 +672,6 @@ export function RecapsModule({
                       {formatRecapPeriod(cadence, recap.period, appPreferences)}
                     </td>
                     <td>{bodyPreview(recap.body)}</td>
-                    <td className="list-table-action-cell">
-                      <button
-                        className="ghost-button ghost-button-sm"
-                        type="button"
-                        onClick={() => {
-                          setEditorRecap(recap);
-                          setEditorOpen(true);
-                        }}
-                      >
-                        <Edit3 size={13} aria-hidden="true" />
-                        <span>Edit</span>
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>

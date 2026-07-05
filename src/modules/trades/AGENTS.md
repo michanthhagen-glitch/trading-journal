@@ -36,7 +36,9 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - Recap positive tags start from `tradeRecapPositives.ts`; keep the catalog grouped even if the UI later flattens it.
 - Recap quick tag buttons use quick exports from the catalog files, not duplicate local arrays.
 - Recap lesson and next action fields use quick options plus free text so journaling stays fast.
-- Recap modal keeps the summary row and tabs sticky; tabs navigate Pattern, Lesson, and Score.
+- Recap modal uses a wide split workspace: read-only trade details on the left, recap tabs and fields on the right.
+- Recap modal trade details show saved pre-trade, entry, and exit screenshot thumbnails when available.
+- Recap tabs navigate Mistakes, Done Well, Lesson, and Score.
 - Trade popups use the shared `ModalShell` for popup chrome, including recap, day details, trade workflow, entry/exit forms, pre-trade, and screenshot previews.
 - The trade list stays compact and shows date/time, buy/sell, strategy, result, P&L, and growth %.
 - Recaps are separate from the pre-trade, entry, and exit workflow.

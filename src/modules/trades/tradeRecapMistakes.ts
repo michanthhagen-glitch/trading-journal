@@ -223,11 +223,3 @@ export const TRADE_RECAP_MISTAKE_GROUPS: TradeRecapMistakeGroup[] = [
     ],
   },
 ];
-
-export const TRADE_RECAP_MISTAKES = TRADE_RECAP_MISTAKE_GROUPS.flatMap(
-  (group) => group.mistakes,
-);
-
-export const TRADE_RECAP_QUICK_MISTAKES = TRADE_RECAP_MISTAKE_GROUPS.flatMap(
-  (group) => group.mistakes.slice(0, 2),
-);

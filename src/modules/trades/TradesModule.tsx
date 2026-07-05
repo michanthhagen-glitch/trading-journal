@@ -11,7 +11,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import {
   addScreenshot,
   closeTrade,
@@ -37,6 +37,7 @@ import { PreTradeForm } from "./components/PreTradeForm";
 import {
   DraftScreenshotGallery,
   DraftScreenshotImportButton,
+  ReadOnlyTradeScreenshotGallery,
   ScreenshotImportButton,
   TradeScreenshotGallery,
   type DraftScreenshot,
@@ -56,11 +57,11 @@ import {
   type AppPreferences,
 } from "../../shared/appPreferences";
 import { ModalShell } from "../../components/ModalShell";
-import { TRADE_RECAP_QUICK_MISTAKES } from "./tradeRecapMistakes";
-import { TRADE_RECAP_QUICK_POSITIVES } from "./tradeRecapPositives";
+import { TRADE_RECAP_MISTAKE_GROUPS } from "./tradeRecapMistakes";
+import { TRADE_RECAP_POSITIVE_GROUPS } from "./tradeRecapPositives";
 
 type TradesView = "calendar" | "list";
-type TradeRecapTab = "pattern" | "lesson" | "score";
+type TradeRecapTab = "mistakes" | "done-well" | "lesson" | "score";
 
 const TRADE_VIEWS: { id: TradesView; label: string; icon: ReactNode }[] = [
   { id: "calendar", label: "Calendar", icon: <CalendarDays size={16} /> },
@@ -68,7 +69,8 @@ const TRADE_VIEWS: { id: TradesView; label: string; icon: ReactNode }[] = [
 ];
 
 const TRADE_RECAP_TABS: { id: TradeRecapTab; label: string }[] = [
-  { id: "pattern", label: "Pattern" },
+  { id: "mistakes", label: "Mistakes" },
+  { id: "done-well", label: "Done Well" },
   { id: "lesson", label: "Lesson" },
   { id: "score", label: "Score" },
 ];
@@ -84,16 +86,6 @@ const PLAN_FOLLOWED_OPTIONS: {
   { value: "no", label: "No" },
 ];
 
-const EMOTION_TAGS = [
-  "none",
-  "fomo",
-  "fear",
-  "revenge",
-  "hesitation",
-  "greed",
-  "overconfidence",
-];
-
 const LESSON_OPTIONS = [
   "Wait for confirmation",
   "Do not chase price",
@@ -107,6 +99,14 @@ const LESSON_OPTIONS = [
   "Accept the loss",
   "Stay patient",
   "Follow the checklist",
+  "Size position before entry",
+  "No trade is also a decision",
+  "Avoid revenge trading",
+  "Wait for candle close",
+  "Trust higher timeframe bias",
+  "Do not enter from boredom",
+  "Respect session conditions",
+  "Review screenshots before entry",
 ];
 
 const NEXT_TIME_OPTIONS = [
@@ -122,7 +122,27 @@ const NEXT_TIME_OPTIONS = [
   "Trade only session window",
   "Let trade reach plan",
   "Take only A+ setups",
+  "Check news calendar",
+  "Mark key levels first",
+  "Wait for retest",
+  "Set alert instead of chasing",
+  "Close platform after max loss",
+  "Screenshot entry and exit",
+  "Move stop only by plan",
+  "Pause after emotional trade",
 ];
+
+const TRADE_RECAP_MISTAKE_CATALOG = TRADE_RECAP_MISTAKE_GROUPS.map((group) => ({
+  group: group.group,
+  options: group.mistakes,
+}));
+
+const TRADE_RECAP_POSITIVE_CATALOG = TRADE_RECAP_POSITIVE_GROUPS.map(
+  (group) => ({
+    group: group.group,
+    options: group.positives,
+  }),
+);
 
 function quickTextParts(value: string) {
   return value
@@ -171,7 +191,7 @@ function resultShortLabel(result: TradeResult) {
 }
 
 function directionActionLabel(direction: Trade["direction"]) {
-  return direction === "long" ? "Buy" : "Sell";
+  return direction === "long" ? "Long" : "Short";
 }
 
 function fmtMoney(
@@ -645,7 +665,7 @@ function TradesListTable({
       <thead>
         <tr>
           <th>Date / Time</th>
-          <th>Buy/Sell</th>
+          <th>Direction</th>
           <th>Strategy</th>
           <th>Win/Loss/BE</th>
           <th className="num">P&amp;L</th>
@@ -1002,7 +1022,7 @@ function TradeRecapDialog({
   onClose,
   onSaved,
 }: TradeRecapDialogProps) {
-  const [activeTab, setActiveTab] = useState<TradeRecapTab>("pattern");
+  const [activeTab, setActiveTab] = useState<TradeRecapTab>("mistakes");
   const [form, setForm] = useState<TradeRecapInput>(() =>
     createDefaultTradeRecap(trade),
   );
@@ -1099,239 +1119,489 @@ function TradeRecapDialog({
         </>
       }
     >
-      <div className="recap-sticky-head">
-        <div className="recap-auto-summary">
-          <SummaryMetric
-            label="Result"
-            value={resultShortLabel(trade.exit.result)}
-          />
-          <SummaryMetric
-            label="P&L"
-            value={fmtPnl(trade.pnl, currency, appPreferences)}
-            tone={pnlToneClass(trade.pnl)}
-          />
-          <SummaryMetric
-            label="Planned RR"
-            value={fmtRMultiple(plannedRiskReward(trade))}
-          />
-          <SummaryMetric
-            label="Actual RR"
-            value={fmtRMultiple(actualRiskReward(trade))}
-            tone={pnlToneClass(trade.pnl)}
-          />
-          <SummaryMetric
-            label="Before"
-            value={
-              trade.preTrade.feeling ? `${trade.preTrade.feeling}/10` : "—"
-            }
-          />
-          <SummaryMetric
-            label="After"
-            value={trade.exit.feeling ? `${trade.exit.feeling}/10` : "—"}
-          />
-        </div>
+      <div className="trade-recap-workspace">
+        <TradeRecapContextPanel
+          appPreferences={appPreferences}
+          currency={currency}
+          trade={trade}
+        />
 
-        <div
-          className="recap-tab-bar"
-          role="tablist"
-          aria-label="Trade recap sections"
-        >
-          {TRADE_RECAP_TABS.map((tab) => (
-            <button
-              className={`recap-tab-button${activeTab === tab.id ? " is-active" : ""}`}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              aria-controls={`recap-panel-${tab.id}`}
-              id={`recap-tab-${tab.id}`}
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+        <div className="trade-recap-editor">
+          <div className="recap-sticky-head">
+            <div
+              className="recap-tab-bar"
+              role="tablist"
+              aria-label="Trade recap sections"
             >
-              {tab.label}
-            </button>
-          ))}
+              {TRADE_RECAP_TABS.map((tab) => (
+                <button
+                  className={`recap-tab-button${activeTab === tab.id ? " is-active" : ""}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  aria-controls={`recap-panel-${tab.id}`}
+                  id={`recap-tab-${tab.id}`}
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {activeTab === "mistakes" ? (
+            <section
+              className="recap-section"
+              role="tabpanel"
+              id="recap-panel-mistakes"
+              aria-labelledby="recap-tab-mistakes"
+            >
+              <div className="recap-section-title-row">
+                <h4>Mistakes</h4>
+                <span>{form.mistakeTags.length} selected</span>
+              </div>
+              <RecapGroupedTagSection
+                groups={TRADE_RECAP_MISTAKE_CATALOG}
+                emptyLabel="No mistakes selected"
+                addLabel="Add mistake"
+                selected={form.mistakeTags}
+                onToggle={(tag) => toggleTag("mistakeTags", tag)}
+              />
+            </section>
+          ) : null}
+
+          {activeTab === "done-well" ? (
+            <section
+              className="recap-section"
+              role="tabpanel"
+              id="recap-panel-done-well"
+              aria-labelledby="recap-tab-done-well"
+            >
+              <div className="recap-section-title-row">
+                <h4>Done well</h4>
+                <span>{form.positiveTags.length} selected</span>
+              </div>
+              <RecapGroupedTagSection
+                groups={TRADE_RECAP_POSITIVE_CATALOG}
+                emptyLabel="Nothing selected yet"
+                addLabel="Add"
+                selected={form.positiveTags}
+                onToggle={(tag) => toggleTag("positiveTags", tag)}
+              />
+            </section>
+          ) : null}
+
+          {activeTab === "lesson" ? (
+            <section
+              className="recap-section"
+              role="tabpanel"
+              id="recap-panel-lesson"
+              aria-labelledby="recap-tab-lesson"
+            >
+              <h4>Lesson</h4>
+              <div className="form-grid">
+                <div className="recap-text-block field-wide">
+                  <RecapQuickTextArea
+                    label="Lesson learned"
+                    quickLabel="Quick lessons"
+                    options={LESSON_OPTIONS}
+                    placeholder="What did this trade teach you?"
+                    value={form.lesson}
+                    onChange={(value) => update("lesson", value)}
+                    onToggle={(option) => toggleQuickText("lesson", option)}
+                  />
+                </div>
+                <div className="recap-text-block field-wide">
+                  <RecapQuickTextArea
+                    label="Next time"
+                    quickLabel="Quick next time"
+                    options={NEXT_TIME_OPTIONS}
+                    placeholder="What will you do differently next time?"
+                    value={form.nextAction}
+                    onChange={(value) => update("nextAction", value)}
+                    onToggle={(option) => toggleQuickText("nextAction", option)}
+                  />
+                </div>
+                <label className="field field-wide">
+                  <span>Extra notes</span>
+                  <textarea
+                    rows={3}
+                    value={form.body}
+                    onChange={(event) => update("body", event.target.value)}
+                    placeholder="Anything else worth remembering"
+                  />
+                </label>
+              </div>
+            </section>
+          ) : null}
+
+          {activeTab === "score" ? (
+            <section
+              className="recap-section"
+              role="tabpanel"
+              id="recap-panel-score"
+              aria-labelledby="recap-tab-score"
+            >
+              <h4>Review score</h4>
+              <div className="form-grid">
+                <label className="field">
+                  <span>Trade grade</span>
+                  <select
+                    value={form.grade}
+                    onChange={(event) =>
+                      update(
+                        "grade",
+                        event.target.value as TradeRecapInput["grade"],
+                      )
+                    }
+                  >
+                    <option value="">Pick grade</option>
+                    {TRADE_RECAP_GRADES.map((grade) => (
+                      <option value={grade} key={grade}>
+                        {grade}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Followed plan?</span>
+                  <select
+                    value={form.followedPlan}
+                    onChange={(event) =>
+                      update(
+                        "followedPlan",
+                        event.target.value as TradeRecapInput["followedPlan"],
+                      )
+                    }
+                  >
+                    <option value="">Pick one</option>
+                    {PLAN_FOLLOWED_OPTIONS.map((option) => (
+                      <option value={option.value} key={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field recap-rule-toggle">
+                  <span>Rule broken?</span>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={form.ruleBroken}
+                      onChange={(event) =>
+                        update("ruleBroken", event.target.checked)
+                      }
+                    />
+                    <span>{form.ruleBroken ? "Yes" : "No"}</span>
+                  </label>
+                </label>
+              </div>
+
+              <div className="recap-score-grid">
+                <RecapScoreField
+                  label="Setup quality"
+                  value={form.setupQuality ?? 5}
+                  onChange={(value) => update("setupQuality", value)}
+                />
+                <RecapScoreField
+                  label="Entry quality"
+                  value={form.entryQuality ?? 5}
+                  onChange={(value) => update("entryQuality", value)}
+                />
+                <RecapScoreField
+                  label="Management quality"
+                  value={form.managementQuality ?? 5}
+                  onChange={(value) => update("managementQuality", value)}
+                />
+                <RecapScoreField
+                  label="Exit quality"
+                  value={form.exitQuality ?? 5}
+                  onChange={(value) => update("exitQuality", value)}
+                />
+              </div>
+            </section>
+          ) : null}
         </div>
       </div>
-
-      {activeTab === "pattern" ? (
-        <section
-          className="recap-section"
-          role="tabpanel"
-          id="recap-panel-pattern"
-          aria-labelledby="recap-tab-pattern"
-        >
-          <h4>Patterns</h4>
-          <label className="field">
-            <span>Emotional mistake</span>
-            <select
-              value={form.emotionTag}
-              onChange={(event) => update("emotionTag", event.target.value)}
-            >
-              {EMOTION_TAGS.map((tag) => (
-                <option value={tag} key={tag}>
-                  {tag === "none" ? "None" : tag}
-                </option>
-              ))}
-            </select>
-          </label>
-          <RecapTagGroup
-            label="Main mistake"
-            options={TRADE_RECAP_QUICK_MISTAKES}
-            selected={form.mistakeTags}
-            onToggle={(tag) => toggleTag("mistakeTags", tag)}
-          />
-          <RecapTagGroup
-            label="What went well"
-            options={TRADE_RECAP_QUICK_POSITIVES}
-            selected={form.positiveTags}
-            onToggle={(tag) => toggleTag("positiveTags", tag)}
-          />
-        </section>
-      ) : null}
-
-      {activeTab === "lesson" ? (
-        <section
-          className="recap-section"
-          role="tabpanel"
-          id="recap-panel-lesson"
-          aria-labelledby="recap-tab-lesson"
-        >
-          <h4>Lesson</h4>
-          <div className="form-grid">
-            <div className="recap-text-block field-wide">
-              <label className="field">
-                <span>Lesson learned</span>
-                <textarea
-                  rows={3}
-                  value={form.lesson}
-                  onChange={(event) => update("lesson", event.target.value)}
-                  placeholder="What did this trade teach you?"
-                />
-              </label>
-              <RecapQuickTextGroup
-                label="Quick lessons"
-                options={LESSON_OPTIONS}
-                value={form.lesson}
-                onToggle={(option) => toggleQuickText("lesson", option)}
-              />
-            </div>
-            <div className="recap-text-block field-wide">
-              <label className="field">
-                <span>Next time</span>
-                <textarea
-                  rows={3}
-                  value={form.nextAction}
-                  onChange={(event) => update("nextAction", event.target.value)}
-                  placeholder="What will you do differently next time?"
-                />
-              </label>
-              <RecapQuickTextGroup
-                label="Quick next time"
-                options={NEXT_TIME_OPTIONS}
-                value={form.nextAction}
-                onToggle={(option) => toggleQuickText("nextAction", option)}
-              />
-            </div>
-            <label className="field field-wide">
-              <span>Extra notes</span>
-              <textarea
-                rows={3}
-                value={form.body}
-                onChange={(event) => update("body", event.target.value)}
-                placeholder="Anything else worth remembering"
-              />
-            </label>
-          </div>
-        </section>
-      ) : null}
-
-      {activeTab === "score" ? (
-        <section
-          className="recap-section"
-          role="tabpanel"
-          id="recap-panel-score"
-          aria-labelledby="recap-tab-score"
-        >
-          <h4>Review score</h4>
-          <div className="form-grid">
-            <label className="field">
-              <span>Trade grade</span>
-              <select
-                value={form.grade}
-                onChange={(event) =>
-                  update(
-                    "grade",
-                    event.target.value as TradeRecapInput["grade"],
-                  )
-                }
-              >
-                <option value="">Pick grade</option>
-                {TRADE_RECAP_GRADES.map((grade) => (
-                  <option value={grade} key={grade}>
-                    {grade}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Followed plan?</span>
-              <select
-                value={form.followedPlan}
-                onChange={(event) =>
-                  update(
-                    "followedPlan",
-                    event.target.value as TradeRecapInput["followedPlan"],
-                  )
-                }
-              >
-                <option value="">Pick one</option>
-                {PLAN_FOLLOWED_OPTIONS.map((option) => (
-                  <option value={option.value} key={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field recap-rule-toggle">
-              <span>Rule broken?</span>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={form.ruleBroken}
-                  onChange={(event) =>
-                    update("ruleBroken", event.target.checked)
-                  }
-                />
-                <span>{form.ruleBroken ? "Yes" : "No"}</span>
-              </label>
-            </label>
-          </div>
-
-          <div className="recap-score-grid">
-            <RecapScoreField
-              label="Setup quality"
-              value={form.setupQuality ?? 5}
-              onChange={(value) => update("setupQuality", value)}
-            />
-            <RecapScoreField
-              label="Entry quality"
-              value={form.entryQuality ?? 5}
-              onChange={(value) => update("entryQuality", value)}
-            />
-            <RecapScoreField
-              label="Management quality"
-              value={form.managementQuality ?? 5}
-              onChange={(value) => update("managementQuality", value)}
-            />
-            <RecapScoreField
-              label="Exit quality"
-              value={form.exitQuality ?? 5}
-              onChange={(value) => update("exitQuality", value)}
-            />
-          </div>
-        </section>
-      ) : null}
     </ModalShell>
+  );
+}
+
+type TradeContextRow = {
+  label: string;
+  tone?: string;
+  value: ReactNode;
+};
+
+function TradeRecapContextPanel({
+  appPreferences,
+  currency,
+  trade,
+}: {
+  appPreferences: AppPreferences;
+  currency: string;
+  trade: Trade;
+}) {
+  const plannedRr = plannedRiskReward(trade);
+  const actualRr = actualRiskReward(trade);
+  const preTradeScreenshots = trade.screenshots.filter(
+    (screenshot) => screenshot.stage === "pre-trade",
+  );
+  const entryScreenshots = trade.screenshots.filter(
+    (screenshot) => screenshot.stage === "entry",
+  );
+  const exitScreenshots = trade.screenshots.filter(
+    (screenshot) => screenshot.stage === "exit",
+  );
+  const resultClass = trade.exit.result
+    ? `result-pill result-${trade.exit.result}`
+    : "result-pill";
+
+  return (
+    <aside className="trade-recap-context" aria-label="Trade details">
+      <header className="trade-recap-context-header">
+        <div>
+          <span>Trade details</span>
+          <h4>{trade.pair}</h4>
+        </div>
+        <div className="trade-recap-context-pills">
+          <span className={`dir-pill dir-${trade.direction}`}>
+            {directionActionLabel(trade.direction)}
+          </span>
+          <span className={resultClass}>
+            {resultShortLabel(trade.exit.result)}
+          </span>
+        </div>
+      </header>
+
+      <div className="trade-recap-context-metrics">
+        <SummaryMetric
+          label="Date"
+          value={formatDateValue(trade.date, appPreferences)}
+        />
+        <SummaryMetric
+          label="Time"
+          value={formatTimeForDateValue(
+            trade.date,
+            tradeListTime(trade),
+            appPreferences,
+          )}
+        />
+        <SummaryMetric label="Duration" value={tradeDuration(trade)} />
+        <SummaryMetric
+          label="P&L"
+          value={fmtPnl(trade.pnl, currency, appPreferences)}
+          tone={pnlToneClass(trade.pnl)}
+        />
+        <SummaryMetric label="Planned RR" value={fmtRMultiple(plannedRr)} />
+        <SummaryMetric
+          label="Actual RR"
+          value={fmtRMultiple(actualRr)}
+          tone={pnlToneClass(trade.pnl)}
+        />
+      </div>
+
+      <TradeContextSection
+        dotClassName="stage-pre"
+        title="Pre-trade"
+        rows={[
+          { label: "Strategy", value: trade.preTrade.strategy || "—" },
+          { label: "Bias", value: trade.preTrade.bias || "—" },
+          {
+            label: "Risk %",
+            value:
+              trade.preTrade.riskPercent != null
+                ? `${trade.preTrade.riskPercent}%`
+                : "—",
+          },
+          {
+            label: "Risk amount",
+            value:
+              trade.preTrade.riskAmount != null
+                ? fmtMoney(trade.preTrade.riskAmount, currency, appPreferences)
+                : "—",
+          },
+          {
+            label: "Feeling",
+            value:
+              trade.preTrade.feeling != null
+                ? `${trade.preTrade.feeling}/10`
+                : "—",
+          },
+          { label: "Screenshots", value: preTradeScreenshots.length },
+        ]}
+        noteLabel="Setup notes"
+        note={trade.preTrade.notes || "No notes yet."}
+        screenshots={preTradeScreenshots}
+      />
+
+      <TradeContextSection
+        dotClassName="stage-entry"
+        title="Entry"
+        rows={[
+          {
+            label: "Time",
+            value: formatTimeForDateValue(
+              trade.date,
+              trade.entry.time,
+              appPreferences,
+            ),
+          },
+          { label: "Entry price", value: fmtPrice(trade.entry.price) },
+          { label: "Lot size", value: trade.entry.lotSize ?? "—" },
+          { label: "Stop loss", value: fmtPrice(trade.entry.stopLoss) },
+          { label: "Take profit", value: fmtPrice(trade.entry.takeProfit) },
+          {
+            label: "Confidence",
+            value:
+              trade.entry.confidence != null
+                ? `${trade.entry.confidence}/10`
+                : "—",
+          },
+          { label: "Screenshots", value: entryScreenshots.length },
+        ]}
+        noteLabel="Entry notes"
+        note={trade.entry.notes || "No notes yet."}
+        screenshots={entryScreenshots}
+      />
+
+      <TradeContextSection
+        dotClassName="stage-exit"
+        title="Exit"
+        rows={[
+          {
+            label: "Time",
+            value: formatTimeForDateValue(
+              trade.date,
+              trade.exit.time,
+              appPreferences,
+            ),
+          },
+          { label: "Exit price", value: fmtPrice(trade.exit.price) },
+          { label: "Result", value: resultLabel(trade.exit.result) },
+          {
+            label: "P&L",
+            value: fmtPnl(trade.pnl, currency, appPreferences),
+            tone: pnlToneClass(trade.pnl),
+          },
+          {
+            label: "Feeling",
+            value:
+              trade.exit.feeling != null ? `${trade.exit.feeling}/10` : "—",
+          },
+          { label: "Screenshots", value: exitScreenshots.length },
+        ]}
+        noteLabel="Exit note"
+        note={trade.exit.note || "No notes yet."}
+        screenshots={exitScreenshots}
+      />
+    </aside>
+  );
+}
+
+function TradeContextSection({
+  dotClassName,
+  note,
+  noteLabel,
+  rows,
+  screenshots = [],
+  title,
+}: {
+  dotClassName: string;
+  note: string;
+  noteLabel: string;
+  rows: TradeContextRow[];
+  screenshots?: Trade["screenshots"];
+  title: string;
+}) {
+  return (
+    <section className="trade-recap-context-section">
+      <header>
+        <span className={`stage-dot ${dotClassName}`} aria-hidden="true" />
+        <h5>{title}</h5>
+      </header>
+      <dl className="trade-recap-context-rows">
+        {rows.map((row) => (
+          <div key={row.label}>
+            <dt>{row.label}</dt>
+            <dd className={row.tone ?? ""}>{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="trade-recap-context-note">
+        <span>{noteLabel}</span>
+        <p>{note}</p>
+      </div>
+      {screenshots.length > 0 ? (
+        <div className="trade-recap-context-screenshots">
+          <span>Screenshots</span>
+          <ReadOnlyTradeScreenshotGallery screenshots={screenshots} />
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function RecapQuickTextArea({
+  label,
+  options,
+  placeholder,
+  quickLabel,
+  value,
+  onChange,
+  onToggle,
+}: {
+  label: string;
+  options: string[];
+  placeholder: string;
+  quickLabel: string;
+  value: string;
+  onChange: (value: string) => void;
+  onToggle: (option: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const labelId = useId();
+  const selectedCount = options.filter((option) =>
+    hasQuickTextValue(value, option),
+  ).length;
+
+  return (
+    <div className={`recap-quick-text-area${open ? " is-open" : ""}`}>
+      <div className="field">
+        <span id={labelId}>{label}</span>
+        <div className="recap-textarea-shell">
+          <textarea
+            aria-labelledby={labelId}
+            rows={3}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder={placeholder}
+          />
+          <button
+            className="recap-textarea-plus"
+            type="button"
+            aria-expanded={open}
+            aria-label={`${open ? "Hide" : "Show"} ${quickLabel}`}
+            onClick={() => setOpen((current) => !current)}
+          >
+            <Plus size={15} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+      {open ? (
+        <RecapQuickTextGroup
+          label={
+            selectedCount > 0
+              ? `${quickLabel} - ${selectedCount} selected`
+              : quickLabel
+          }
+          options={options}
+          value={value}
+          onToggle={onToggle}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -1399,33 +1669,104 @@ function RecapScoreField({
   );
 }
 
-function RecapTagGroup({
-  label,
-  options,
+type RecapGroupedTag = {
+  group: string;
+  options: string[];
+};
+
+function RecapGroupedTagSection({
+  addLabel,
+  emptyLabel,
+  groups,
   selected,
   onToggle,
 }: {
-  label: string;
-  options: string[];
+  addLabel: string;
+  emptyLabel: string;
+  groups: RecapGroupedTag[];
   selected: string[];
   onToggle: (tag: string) => void;
 }) {
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+
   return (
-    <fieldset className="recap-tag-group">
-      <legend>{label}</legend>
-      <div className="recap-tag-grid">
-        {options.map((option) => (
-          <label className="recap-tag-option" key={option}>
-            <input
-              type="checkbox"
-              checked={selected.includes(option)}
-              onChange={() => onToggle(option)}
-            />
-            <span>{option}</span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
+    <div className="recap-picker-groups">
+      {groups.map((group) => {
+        const selectedInGroup = group.options.filter((option) =>
+          selected.includes(option),
+        );
+        const isOpen = openGroup === group.group;
+
+        return (
+          <section
+            className={`recap-picker-group${isOpen ? " is-open" : ""}`}
+            key={group.group}
+          >
+            <header className="recap-picker-group-header">
+              <div>
+                <h5>{group.group}</h5>
+                <span>
+                  {selectedInGroup.length > 0
+                    ? `${selectedInGroup.length} selected`
+                    : emptyLabel}
+                </span>
+              </div>
+              <button
+                className="recap-picker-add-button"
+                type="button"
+                onClick={() => setOpenGroup(isOpen ? null : group.group)}
+              >
+                <Plus size={14} aria-hidden="true" />
+                <span>{isOpen ? "Close" : addLabel}</span>
+              </button>
+            </header>
+
+            {selectedInGroup.length > 0 ? (
+              <div className="recap-selected-chip-list">
+                {selectedInGroup.map((tag) => (
+                  <button
+                    className="recap-selected-chip"
+                    type="button"
+                    key={tag}
+                    onClick={() => onToggle(tag)}
+                    aria-label={`Remove ${tag}`}
+                  >
+                    <span>{tag}</span>
+                    <strong aria-hidden="true">x</strong>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {isOpen ? (
+              <div className="recap-picker-panel">
+                <div className="recap-picker-options">
+                  {group.options.map((option) => (
+                    <label className="recap-picker-option" key={option}>
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(option)}
+                        onChange={() => onToggle(option)}
+                      />
+                      <span>{option}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="recap-picker-panel-footer">
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => setOpenGroup(null)}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        );
+      })}
+    </div>
   );
 }
 
