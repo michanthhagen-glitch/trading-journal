@@ -465,6 +465,7 @@ function currentTimeInputValue() {
 
 export function TradesModule({
   appPreferences,
+  onTradesChanged,
   selectedAccount,
   selectedAccountId,
 }: ModuleContext) {
@@ -498,6 +499,11 @@ export function TradesModule({
     } finally {
       setLoading(false);
     }
+  }
+
+  async function reloadAfterTradeChange() {
+    await reload();
+    await onTradesChanged();
   }
 
   useEffect(() => {
@@ -614,11 +620,11 @@ export function TradesModule({
           appPreferences={appPreferences}
           mode={workspace.mode}
           trade={workspaceTrade}
-          onChanged={reload}
+          onChanged={reloadAfterTradeChange}
           onClose={() => setWorkspace(null)}
           onDeleted={async () => {
             setWorkspace(null);
-            await reload();
+            await reloadAfterTradeChange();
           }}
           onModeChange={(mode) =>
             setWorkspace((current) =>
@@ -638,7 +644,7 @@ export function TradesModule({
           onClose={() => setShowNewForm(false)}
           onSaved={async () => {
             setShowNewForm(false);
-            await reload();
+            await reloadAfterTradeChange();
           }}
         />
       ) : null}

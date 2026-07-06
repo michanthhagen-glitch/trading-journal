@@ -1,8 +1,12 @@
-import { RefreshCw, Wallet } from "lucide-react";
+import { RefreshCw, ShieldCheck, Wallet } from "lucide-react";
 import { useState } from "react";
 import type { AppModule } from "../../app/types";
 import { runAppUpdate, type AppUpdateState } from "../../shared/appUpdater";
 import type { TradingAccount } from "../../shared/db/database";
+import type {
+  TradingPlanSidebarInfo,
+  TradingPlanToken,
+} from "../../shared/tradingPlan";
 
 type SidebarProps = {
   accounts: TradingAccount[];
@@ -10,6 +14,7 @@ type SidebarProps = {
   isCollapsed: boolean;
   modules: AppModule[];
   selectedAccountId: string | null;
+  tradingPlanInfo: TradingPlanSidebarInfo;
   onSelectAccount: (accountId: string) => void;
   onSelectModule: (moduleId: string) => void;
   onToggleCollapsed: () => void;
@@ -26,6 +31,7 @@ export function Sidebar({
   isCollapsed,
   modules,
   selectedAccountId,
+  tradingPlanInfo,
   onSelectAccount,
   onSelectModule,
   onToggleCollapsed,
@@ -127,28 +133,134 @@ export function Sidebar({
         ))}
       </nav>
 
-      <nav className="nav-list nav-list-bottom" aria-label="Settings">
-        {bottomModules.map(renderNavItem)}
-        <button
-          className="nav-item sidebar-update-button"
-          disabled={updateState.isBusy}
-          onClick={handleUpdateClick}
-          title={updateState.message || "Check for app updates"}
-          type="button"
-        >
-          <RefreshCw
-            aria-hidden="true"
-            className={updateState.isBusy ? "spin-icon" : undefined}
-            size={16}
-          />
-          <span>{updateState.isBusy ? "Updating..." : "Update"}</span>
-        </button>
-        {updateState.message ? (
-          <p className={`sidebar-update-status ${updateState.tone}`}>
-            {updateState.message}
-          </p>
-        ) : null}
-      </nav>
+      <div className="sidebar-bottom">
+        <TradingPlanPanel info={tradingPlanInfo} />
+
+        <nav className="nav-list nav-list-bottom" aria-label="Settings">
+          {bottomModules.map(renderNavItem)}
+          <button
+            className="nav-item sidebar-update-button"
+            disabled={updateState.isBusy}
+            onClick={handleUpdateClick}
+            title={updateState.message || "Check for app updates"}
+            type="button"
+          >
+            <RefreshCw
+              aria-hidden="true"
+              className={updateState.isBusy ? "spin-icon" : undefined}
+              size={16}
+            />
+            <span>{updateState.isBusy ? "Updating..." : "Update"}</span>
+          </button>
+          {updateState.message ? (
+            <p className={`sidebar-update-status ${updateState.tone}`}>
+              {updateState.message}
+            </p>
+          ) : null}
+        </nav>
+      </div>
     </aside>
+  );
+}
+
+function PlanTokenList({ tokens }: { tokens: TradingPlanToken[] }) {
+  const orderedTokens = ["Min", "Mid", "Max"].map(
+    (label) =>
+      tokens.find((token) => token.label === label) ?? {
+        amountLabel: "-",
+        label,
+        percentLabel: "-",
+        targetLabel: null,
+        title: "Not set.",
+        tone: "neutral",
+      },
+  );
+
+  return (
+    <>
+      {orderedTokens.map((token) => (
+        <span
+          className={`sidebar-plan-token ${token.tone}`}
+          key={token.label}
+          title={token.title}
+        >
+          <strong>{token.targetLabel ?? token.amountLabel}</strong>
+          <span>{token.percentLabel}</span>
+        </span>
+      ))}
+    </>
+  );
+}
+
+function PlanMetric({
+  label,
+  tokens,
+}: {
+  label: string;
+  tokens: TradingPlanToken[];
+}) {
+  return (
+    <>
+      <span className="sidebar-plan-row-label">{label}</span>
+      <PlanTokenList tokens={tokens} />
+    </>
+  );
+}
+
+function TradingPlanPanel({ info }: { info: TradingPlanSidebarInfo }) {
+  return (
+    <section className="sidebar-plan-panel" aria-label="Trading plan">
+      <header className="sidebar-plan-header">
+        <ShieldCheck size={15} aria-hidden="true" />
+        <div>
+          <strong>Trading plan</strong>
+          <span>{info.planLabel}</span>
+        </div>
+      </header>
+
+      <div className="sidebar-plan-balance">
+        <span>Current balance</span>
+        <strong>{info.balanceLabel}</strong>
+      </div>
+
+      <div className="sidebar-plan-section">
+        <h2>Risk</h2>
+        <div className="sidebar-plan-grid">
+          <span />
+          <span>Min</span>
+          <span>Mid</span>
+          <span>Max</span>
+          <PlanMetric label="Trade" tokens={info.risk.trade} />
+          <PlanMetric label="Day" tokens={info.risk.day} />
+          <PlanMetric label="Week" tokens={info.risk.week} />
+        </div>
+      </div>
+
+      <div className="sidebar-plan-section">
+        <h2>Goal</h2>
+        <div className="sidebar-plan-grid">
+          <span />
+          <span>Min</span>
+          <span>Mid</span>
+          <span>Max</span>
+          <PlanMetric label="Day" tokens={info.goal.day} />
+          <PlanMetric label="Week" tokens={info.goal.week} />
+        </div>
+      </div>
+
+      <div className="sidebar-plan-rules">
+        <h2>Rules</h2>
+        {info.rules.map((rule) => (
+          <div
+            className={`sidebar-plan-rule ${rule.tone}`}
+            key={rule.label}
+            title={rule.title}
+          >
+            <span>{rule.label}</span>
+            <strong>{rule.value}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

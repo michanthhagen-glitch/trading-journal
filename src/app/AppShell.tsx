@@ -3,6 +3,7 @@ import { Sidebar } from "../components/layout/Sidebar";
 import { Topbar } from "../components/layout/Topbar";
 import type { TradingAccount } from "../shared/db/database";
 import type { AppPreferences } from "../shared/appPreferences";
+import type { TradingPlanSidebarInfo } from "../shared/tradingPlan";
 import type { AppModule } from "./types";
 
 type AppShellProps = {
@@ -12,12 +13,14 @@ type AppShellProps = {
   modules: AppModule[];
   selectedAccount: TradingAccount | null;
   selectedAccountId: string | null;
+  tradingPlanInfo: TradingPlanSidebarInfo;
   onAccountsChanged: () => void | Promise<void>;
   onAppPreferencesChanged: (
     preferences: AppPreferences,
   ) => void | Promise<void>;
   onSelectAccount: (accountId: string) => void;
   onSelectModule: (moduleId: string) => void;
+  onTradesChanged: () => void | Promise<void>;
 };
 
 export function AppShell({
@@ -27,10 +30,12 @@ export function AppShell({
   modules,
   selectedAccount,
   selectedAccountId,
+  tradingPlanInfo,
   onAccountsChanged,
   onAppPreferencesChanged,
   onSelectAccount,
   onSelectModule,
+  onTradesChanged,
 }: AppShellProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const ActiveModule = activeModule.Component;
@@ -47,6 +52,7 @@ export function AppShell({
         isCollapsed={isSidebarCollapsed}
         modules={modules}
         selectedAccountId={selectedAccountId}
+        tradingPlanInfo={tradingPlanInfo}
         onSelectAccount={onSelectAccount}
         onSelectModule={onSelectModule}
         onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
@@ -69,6 +75,7 @@ export function AppShell({
             selectedAccountId={selectedAccountId}
             onAccountsChanged={onAccountsChanged}
             onAppPreferencesChanged={onAppPreferencesChanged}
+            onTradesChanged={onTradesChanged}
           />
         </main>
       </div>

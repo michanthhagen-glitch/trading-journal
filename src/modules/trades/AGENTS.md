@@ -23,6 +23,7 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - Screenshot stages are `pre-trade`, `entry`, `exit`, and `recap`.
 - New trade workflow can collect draft screenshots and attaches them after the trade is saved.
 - New trades save under the selected sidebar account.
+- Trade save/delete/exit changes notify the shell so sidebar account plan numbers refresh.
 - Trade display names are automatic per selected account and day: `Trade 1`, `Trade 2`, etc.; the instrument/pair is not the trade name.
 - New trade strategy choices come only from the selected account's linked strategies.
 - New trade risk % is checked against the selected account's risk plan without editing the plan.

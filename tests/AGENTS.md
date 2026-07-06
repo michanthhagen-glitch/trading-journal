@@ -9,6 +9,7 @@ Owns Vitest tests for app behavior and project contracts.
 - `appPreferences.test.ts`: shared app preference formatting and week-start behavior.
 - `moduleRegistry.test.ts`: smoke test for sidebar module registration.
 - `tradeNames.test.ts`: automatic per-day trade display naming.
+- `tradingPlan.test.ts`: sidebar trading plan milestones and rule counters.
 
 ## Local Contracts
 

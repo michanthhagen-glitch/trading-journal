@@ -8,6 +8,7 @@ export type ModuleContext = {
   selectedAccount: TradingAccount | null;
   selectedAccountId: string | null;
   onAccountsChanged: () => void | Promise<void>;
+  onTradesChanged: () => void | Promise<void>;
   onAppPreferencesChanged: (
     preferences: AppPreferences,
   ) => void | Promise<void>;

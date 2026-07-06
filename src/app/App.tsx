@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { listAccountSetup, type TradingAccount } from "../shared/db/database";
+import {
+  listAccountSetup,
+  listTrades,
+  type RiskManagementPlan,
+  type Trade,
+  type TradingAccount,
+} from "../shared/db/database";
 import {
   loadAppPreferences,
   saveAppPreferences,
   subscribeAppPreferences,
   type AppPreferences,
 } from "../shared/appPreferences";
+import { buildTradingPlanSidebarInfo } from "../shared/tradingPlan";
 import { AppShell } from "./AppShell";
 import { appModules } from "./moduleRegistry";
 
@@ -14,6 +21,10 @@ const SELECTED_ACCOUNT_STORAGE_KEY = "trading-journal:selected-account-id";
 export function App() {
   const [activeModuleId, setActiveModuleId] = useState(appModules[0].id);
   const [accounts, setAccounts] = useState<TradingAccount[]>([]);
+  const [riskPlans, setRiskPlans] = useState<RiskManagementPlan[]>([]);
+  const [selectedAccountTrades, setSelectedAccountTrades] = useState<Trade[]>(
+    [],
+  );
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
     () =>
       typeof window === "undefined"
@@ -21,6 +32,8 @@ export function App() {
         : window.localStorage.getItem(SELECTED_ACCOUNT_STORAGE_KEY),
   );
   const [appPreferences, setAppPreferences] = useState(loadAppPreferences);
+  const [tradeRefreshKey, setTradeRefreshKey] = useState(0);
+  const [planNow, setPlanNow] = useState(() => new Date());
 
   const activeModule = useMemo(
     () =>
@@ -32,6 +45,7 @@ export function App() {
   async function reloadAccounts() {
     const data = await listAccountSetup();
     setAccounts(data.accounts);
+    setRiskPlans(data.riskPlans);
     setSelectedAccountId((current) => {
       const stored =
         current ??
@@ -59,11 +73,86 @@ export function App() {
     reloadAccounts();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function reloadSelectedAccountTrades() {
+      const rows = selectedAccountId ? await listTrades(selectedAccountId) : [];
+      if (!cancelled) setSelectedAccountTrades(rows);
+    }
+
+    void reloadSelectedAccountTrades();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAccountId, tradeRefreshKey]);
+
+  useEffect(() => {
+    let midnightTimer: number | null = null;
+
+    function refreshPlanClock() {
+      setPlanNow(new Date());
+      setTradeRefreshKey((current) => current + 1);
+    }
+
+    function scheduleMidnightRefresh() {
+      const current = new Date();
+      const nextMidnight = new Date(
+        current.getFullYear(),
+        current.getMonth(),
+        current.getDate() + 1,
+      );
+      midnightTimer = window.setTimeout(
+        () => {
+          refreshPlanClock();
+          scheduleMidnightRefresh();
+        },
+        Math.max(nextMidnight.getTime() - current.getTime() + 1000, 1000),
+      );
+    }
+
+    scheduleMidnightRefresh();
+    window.addEventListener("focus", refreshPlanClock);
+    document.addEventListener("visibilitychange", refreshPlanClock);
+
+    return () => {
+      if (midnightTimer) window.clearTimeout(midnightTimer);
+      window.removeEventListener("focus", refreshPlanClock);
+      document.removeEventListener("visibilitychange", refreshPlanClock);
+    };
+  }, []);
+
   useEffect(() => subscribeAppPreferences(setAppPreferences), []);
 
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === selectedAccountId) ?? null,
     [accounts, selectedAccountId],
+  );
+  const selectedRiskPlan = useMemo(
+    () =>
+      selectedAccount?.riskPlanId
+        ? (riskPlans.find((plan) => plan.id === selectedAccount.riskPlanId) ??
+          null)
+        : null,
+    [riskPlans, selectedAccount],
+  );
+  const tradingPlanInfo = useMemo(
+    () =>
+      buildTradingPlanSidebarInfo({
+        account: selectedAccount,
+        appPreferences,
+        now: planNow,
+        riskPlan: selectedRiskPlan,
+        trades: selectedAccountTrades,
+      }),
+    [
+      appPreferences,
+      planNow,
+      selectedAccount,
+      selectedAccountTrades,
+      selectedRiskPlan,
+    ],
   );
 
   function handleSelectAccount(accountId: string) {
@@ -77,18 +166,24 @@ export function App() {
     setAppPreferences(saveAppPreferences(preferences));
   }
 
+  function handleTradesChanged() {
+    setTradeRefreshKey((current) => current + 1);
+  }
+
   return (
     <AppShell
       accounts={accounts}
       activeModule={activeModule}
       appPreferences={appPreferences}
       modules={appModules}
+      tradingPlanInfo={tradingPlanInfo}
       onSelectModule={setActiveModuleId}
       onSelectAccount={handleSelectAccount}
       selectedAccount={selectedAccount}
       selectedAccountId={selectedAccountId}
       onAccountsChanged={reloadAccounts}
       onAppPreferencesChanged={handleAppPreferencesChanged}
+      onTradesChanged={handleTradesChanged}
     />
   );
 }

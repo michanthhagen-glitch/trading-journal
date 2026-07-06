@@ -17,6 +17,7 @@ Owns the fixed app shell and maps sidebar items to module components.
 - `moduleRegistry.tsx` is the single source for sidebar module order and icons.
 - Sidebar order is Dashboard, Trades, Recaps, Account, then Settings.
 - Sidebar shell controls are account picker above Dashboard and Update below Settings.
+- Sidebar also receives a selected-account trading plan snapshot from shell state.
 - `AppShell` renders exactly one active module inside `<main className="app-content">`.
 - The main app window stays fixed; module content owns any needed scrolling.
 - The selected sidebar account is shell state and is passed to modules as context.

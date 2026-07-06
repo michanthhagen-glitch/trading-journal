@@ -15,6 +15,7 @@ Owns reusable shell layout components.
 - Navigation order comes from `src/app/moduleRegistry.tsx`.
 - Sidebar visually groups the account picker, Dashboard, Trades/Recaps, Account, and keeps Settings plus Update pinned at the bottom.
 - Sidebar account selection must stay controlled by shell state.
+- Sidebar trading plan display is prop-driven, shows milestone tones, and stays above the pinned Settings/Update controls.
 - Sidebar Update checks the Tauri updater only from the installed desktop app; browser preview should show a friendly desktop-only message.
 - Use lucide-react icons for shell actions.
 
