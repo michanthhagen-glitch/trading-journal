@@ -15,9 +15,14 @@ Owns daily, weekly, and monthly recap browsing.
 - Cadence values are `daily`, `weekly`, and `monthly`.
 - Recaps filter by the selected top-bar account.
 - Recap creation auto-fills period stats from trades and per-trade recap fields.
-- Daily, weekly, and monthly recaps use the same compact create/edit modal through the shared `ModalShell`.
+- Daily, weekly, and monthly recaps use a split `ModalShell`.
+- Daily recap left pane lists trades; weekly lists days; monthly lists weeks.
+- Recap period/title and auto stats live in the modal header above the split workspace.
+- Recap split panes scroll independently; left pane rows may grow downward and stack details so expanded rows stay readable.
+- Daily recap titles are derived names like `Wednesday recap`, and daily trade rows use shared automatic trade names.
 - Current recap and saved recap lists use compact table-style rows aligned with Trades/List.
-- Recap writing should stay limited to mistakes made, what went well, and what could be done better; the rest is generated from trades and trade recaps.
+- Mistake and done-well summaries are auto-imported from per-trade recap tags and repeated tags show counts.
+- Weekly/monthly recap writing uses period review fields and score sliders; the rest is generated from trades and trade recaps.
 
 ## Work Guidance
 

@@ -8,6 +8,7 @@ Owns cross-module helpers and data access used by more than one module.
 
 - `db/`: SQLite access, browser fallback data, screenshot file/blob storage.
 - `appPreferences.ts`: persisted app preferences for date, time, timezone, week start, number format, currency display, and delete confirmation.
+- `tradeNames.ts`: automatic per-day trade display names, such as `Trade 1`.
 
 ## Local Contracts
 
@@ -20,6 +21,7 @@ Owns cross-module helpers and data access used by more than one module.
 - Keep shared APIs typed.
 - Prefer small, explicit helper functions over broad service objects.
 - Keep browser fallback behavior aligned with desktop behavior.
+- Trade names are derived display labels, not stored or editable fields.
 
 ## Verification
 

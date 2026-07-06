@@ -14,6 +14,7 @@ Owns reusable renderer components that are not specific to one module.
 
 - Components here must be reusable across modules or part of the shared shell.
 - Single-panel popups should use `ModalShell` before adding module-local modal chrome.
+- `ModalShell` supports optional full-width header content under the title/actions row.
 - Module-specific components belong inside `src/modules/<module>/`.
 - Use lucide-react for icons.
 - `Topbar` receives account data through props; it must not query the database directly.

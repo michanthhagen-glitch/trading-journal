@@ -24,6 +24,7 @@ import {
   type AppPreferences,
   weekdayShortLabel,
 } from "../../shared/appPreferences";
+import { formatTradeName } from "../../shared/tradeNames";
 
 type Tone = "flat" | "negative" | "positive" | "warning";
 type Outcome = "break-even" | "empty" | "loss" | "win";
@@ -447,8 +448,8 @@ function buildTradeRanking(
 ) {
   const rows = trades.filter(isClosedTrade).map((trade) => ({
     id: trade.id,
-    label: trade.pair,
-    meta: `${formatDateTimeValue(trade.date, tradeTime(trade), appPreferences)} ${trade.direction}`,
+    label: formatTradeName(trade, trades),
+    meta: `${trade.pair} - ${formatDateTimeValue(trade.date, tradeTime(trade), appPreferences)} ${trade.direction}`,
     trades: 1,
     value: tradeNetValue(trade, commissionPerLot),
   }));
@@ -915,8 +916,8 @@ function buildTradeOutcomes(
       const value = (trade.pnl ?? 0) - commissionFor(trade, commissionPerLot);
       const result = trade.exit.result;
       return {
-        label: trade.pair,
-        meta: `${formatCompactDateValue(trade.date, appPreferences)} ${trade.direction}`,
+        label: formatTradeName(trade, trades),
+        meta: `${trade.pair} - ${formatCompactDateValue(trade.date, appPreferences)} ${trade.direction}`,
         outcome:
           result === "win" || result === "loss" || result === "break-even"
             ? result

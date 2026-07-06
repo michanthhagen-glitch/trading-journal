@@ -23,18 +23,21 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 - Saving a per-trade recap marks that trade as reviewed.
 - Per-trade recaps store structured fields for later daily, weekly, and monthly automation.
 - The Recaps module uses shared save/list helpers and keeps browser fallback aligned with SQLite.
+- Screenshot backup/restore must treat `trading-journal.db` and the `screenshots/` folder as one data set; database-only export is incomplete once screenshots exist.
 
 ## Work Guidance
 
 - Keep public API functions async, even when browser fallback is synchronous.
 - Update TypeScript row types when migrations add columns.
 - Keep fallback seed data realistic but small.
+- Keep weekly/monthly browser recap seeds empty unless the product deliberately needs demo history.
 - Avoid circular imports between `database.ts` and `storage.ts`.
 
 ## Verification
 
 - Run `npm run check` after data API changes.
 - Run `npm run desktop:dev` for real SQLite, filesystem, dialog, or clipboard changes.
+- Before MVP release, verify screenshot backup/restore in the Tauri desktop app with real screenshot files.
 
 ## Child DOX Index
 

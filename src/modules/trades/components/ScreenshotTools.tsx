@@ -1,5 +1,14 @@
 import { Plus } from "lucide-react";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ClipboardEvent,
+  type DragEvent,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { ModalShell } from "../../../components/ModalShell";
 import {
   addScreenshot,
@@ -8,11 +17,9 @@ import {
 } from "../../../shared/db/database";
 import {
   captureTradingViewScreenshot,
-  captureWindowScreenshot,
-  type CaptureWindowInfo,
   deleteScreenshotFile,
+  importScreenshotFromClipboard,
   importScreenshotFromPath,
-  listCaptureWindows,
   resolveScreenshotUrl,
   saveScreenshotBytes,
 } from "../../../shared/db/storage";
@@ -26,19 +33,41 @@ export type DraftScreenshot = {
   caption: string;
 };
 
-type ScreenshotImportButtonProps = {
-  tradeId: string;
+type ScreenshotDropZoneFrameProps = {
+  busyMessage: string | null;
+  children: ReactNode;
+  emptyMessage: string;
+  isDragging: boolean;
+  label: string;
   stage: ScreenshotStage;
-  onChanged: () => void | Promise<void>;
+  statusMessage: string | null;
+  onBlur: () => void;
+  onClick: (event: MouseEvent<HTMLDivElement>) => void;
+  onDragLeave: (event: DragEvent<HTMLDivElement>) => void;
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
+  onFocus: () => void;
+  onPaste: (event: ClipboardEvent<HTMLDivElement>) => void;
+};
+
+type ScreenshotDropZoneController = {
+  busyMessage: string | null;
+  isDragging: boolean;
+  statusMessage: string | null;
+  dropZoneHandlers: Pick<
+    ScreenshotDropZoneFrameProps,
+    | "onBlur"
+    | "onClick"
+    | "onDragLeave"
+    | "onDragOver"
+    | "onDrop"
+    | "onFocus"
+    | "onPaste"
+  >;
 };
 
 type DraftScreenshotImportButtonProps = {
   stage: ScreenshotStage;
-  onImported: (path: string) => void | Promise<void>;
-};
-
-type ScreenshotFileImportControlProps = {
-  label: string;
   onImported: (path: string) => void | Promise<void>;
 };
 
@@ -64,21 +93,54 @@ function stageLabel(stage: ScreenshotStage): string {
   }
 }
 
-export function ScreenshotImportButton({
-  tradeId,
+export function TradeScreenshotDropZone({
+  confirmBeforeDelete,
+  screenshots,
   stage,
+  tradeId,
   onChanged,
-}: ScreenshotImportButtonProps) {
-  async function savePath(relPath: string) {
-    await addScreenshot(tradeId, stage, relPath);
+}: {
+  confirmBeforeDelete: boolean;
+  screenshots: ScreenshotRow[];
+  stage: ScreenshotStage;
+  tradeId: string;
+  onChanged: () => void | Promise<void>;
+}) {
+  const [localScreenshots, setLocalScreenshots] =
+    useState<ScreenshotRow[]>(screenshots);
+  const controller = useScreenshotDropZone(stage, async (relPath) => {
+    const row = await addScreenshot(tradeId, stage, relPath);
+    setLocalScreenshots((current) => [...current, row]);
     await onChanged();
-  }
+  });
+
+  useEffect(() => {
+    setLocalScreenshots(screenshots);
+  }, [screenshots]);
 
   return (
-    <ScreenshotFileImportControl
-      label={`Import ${stageLabel(stage)} screenshot`}
-      onImported={savePath}
-    />
+    <ScreenshotDropZoneFrame
+      {...controller.dropZoneHandlers}
+      busyMessage={controller.busyMessage}
+      emptyMessage="Drop image here, or select this box and paste."
+      isDragging={controller.isDragging}
+      label={`Add ${stageLabel(stage)} screenshot`}
+      stage={stage}
+      statusMessage={controller.statusMessage}
+    >
+      {localScreenshots.length > 0 ? (
+        <TradeScreenshotGallery
+          confirmBeforeDelete={confirmBeforeDelete}
+          screenshots={localScreenshots}
+          onChanged={onChanged}
+          onDeleted={(id) =>
+            setLocalScreenshots((current) =>
+              current.filter((screenshot) => screenshot.id !== id),
+            )
+          }
+        />
+      ) : null}
+    </ScreenshotDropZoneFrame>
   );
 }
 
@@ -86,23 +148,8 @@ export function DraftScreenshotImportButton({
   stage,
   onImported,
 }: DraftScreenshotImportButtonProps) {
-  return (
-    <ScreenshotFileImportControl
-      label={`Import ${stageLabel(stage)} screenshot`}
-      onImported={onImported}
-    />
-  );
-}
-
-function ScreenshotFileImportControl({
-  label,
-  onImported,
-}: ScreenshotFileImportControlProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [importing, setImporting] = useState(false);
-  const [selectorWindows, setSelectorWindows] = useState<
-    CaptureWindowInfo[] | null
-  >(null);
 
   async function importFromDisk() {
     const { open } = await import("@tauri-apps/plugin-dialog");
@@ -128,12 +175,6 @@ function ScreenshotFileImportControl({
       const capturedPath = await captureTradingViewScreenshot();
       if (capturedPath) {
         await onImported(capturedPath);
-        return;
-      }
-
-      const windows = await listCaptureWindows();
-      if (windows.length > 0) {
-        setSelectorWindows(windows);
         return;
       }
 
@@ -167,6 +208,8 @@ function ScreenshotFileImportControl({
     }
   }
 
+  const label = `Import ${stageLabel(stage)} screenshot`;
+
   return (
     <>
       <button
@@ -186,95 +229,163 @@ function ScreenshotFileImportControl({
         accept="image/png,image/jpeg"
         onChange={handleFileChange}
       />
-      {selectorWindows ? (
-        <WindowSelectorModal
-          windows={selectorWindows}
-          onCancel={() => setSelectorWindows(null)}
-          onImportFallback={async () => {
-            try {
-              await importFromDisk();
-              setSelectorWindows(null);
-            } catch (error) {
-              console.error(error);
-            }
-          }}
-          onSelect={async (windowId) => {
-            setImporting(true);
-            try {
-              const relPath = await captureWindowScreenshot(windowId);
-              await onImported(relPath);
-              setSelectorWindows(null);
-            } catch (error) {
-              console.error(error);
-              try {
-                await importFromDisk();
-                setSelectorWindows(null);
-              } catch (fallbackError) {
-                console.error(fallbackError);
-              }
-            } finally {
-              setImporting(false);
-            }
-          }}
-        />
-      ) : null}
     </>
   );
 }
 
-type WindowSelectorModalProps = {
-  windows: CaptureWindowInfo[];
-  onCancel: () => void;
-  onImportFallback: () => void | Promise<void>;
-  onSelect: (windowId: number) => void | Promise<void>;
-};
+function useScreenshotDropZone(
+  stage: ScreenshotStage,
+  onImported: (path: string) => void | Promise<void>,
+): ScreenshotDropZoneController {
+  const [isDragging, setIsDragging] = useState(false);
+  const [busyMessage, setBusyMessage] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-function WindowSelectorModal({
-  windows,
-  onCancel,
-  onImportFallback,
-  onSelect,
-}: WindowSelectorModalProps) {
-  return (
-    <ModalShell
-      ariaLabel="Select screenshot window"
-      bodyClassName="window-selector-body"
-      modalClassName="window-selector-modal"
-      onClose={onCancel}
-      subtitle="TradingView was not found."
-      title="Select window"
-      footer={
-        <>
-          <button type="button" className="ghost-button" onClick={onCancel}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="primary-button"
-            onClick={onImportFallback}
-          >
-            Import file
-          </button>
-        </>
+  function clearStatusSoon() {
+    window.setTimeout(() => setStatusMessage(null), 2400);
+  }
+
+  async function importFiles(files: File[]) {
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length === 0) {
+      setStatusMessage("No image found.");
+      clearStatusSoon();
+      return;
+    }
+
+    setBusyMessage("Adding screenshot...");
+    setStatusMessage(null);
+    try {
+      for (const file of imageFiles) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const relPath = await saveScreenshotBytes(bytes, imageExt(file.name));
+        await onImported(relPath);
       }
+      setStatusMessage(
+        imageFiles.length === 1
+          ? `${stageLabel(stage)} screenshot added.`
+          : `${imageFiles.length} screenshots added.`,
+      );
+      clearStatusSoon();
+    } catch (error) {
+      console.error(error);
+      setStatusMessage("Could not add screenshot.");
+      clearStatusSoon();
+    } finally {
+      setBusyMessage(null);
+      setIsDragging(false);
+    }
+  }
+
+  async function importFromClipboard(event: ClipboardEvent<HTMLDivElement>) {
+    const files = Array.from(event.clipboardData.files);
+    const itemFiles = Array.from(event.clipboardData.items)
+      .filter((item) => item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
+    const clipboardFiles = files.length > 0 ? files : itemFiles;
+
+    if (clipboardFiles.length > 0) {
+      event.preventDefault();
+      await importFiles(clipboardFiles);
+      return;
+    }
+
+    if (!isTauri()) {
+      setStatusMessage("No image found on clipboard.");
+      clearStatusSoon();
+      return;
+    }
+
+    event.preventDefault();
+    setBusyMessage("Reading clipboard...");
+    try {
+      const relPath = await importScreenshotFromClipboard();
+      if (!relPath) {
+        setStatusMessage("No image found on clipboard.");
+        clearStatusSoon();
+        return;
+      }
+      await onImported(relPath);
+      setStatusMessage(`${stageLabel(stage)} screenshot added.`);
+      clearStatusSoon();
+    } catch (error) {
+      console.error(error);
+      setStatusMessage("Could not read clipboard image.");
+      clearStatusSoon();
+    } finally {
+      setBusyMessage(null);
+    }
+  }
+
+  return {
+    busyMessage,
+    isDragging,
+    statusMessage,
+    dropZoneHandlers: {
+      onBlur: () => setIsDragging(false),
+      onClick: (event) => event.currentTarget.focus(),
+      onDragLeave: (event) => {
+        event.preventDefault();
+        setIsDragging(false);
+      },
+      onDragOver: (event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        setIsDragging(true);
+      },
+      onDrop: async (event) => {
+        event.preventDefault();
+        await importFiles(Array.from(event.dataTransfer.files));
+      },
+      onFocus: () => setStatusMessage(null),
+      onPaste: importFromClipboard,
+    },
+  };
+}
+
+function ScreenshotDropZoneFrame({
+  busyMessage,
+  children,
+  emptyMessage,
+  isDragging,
+  label,
+  stage,
+  statusMessage,
+  onBlur,
+  onClick,
+  onDragLeave,
+  onDragOver,
+  onDrop,
+  onFocus,
+  onPaste,
+}: ScreenshotDropZoneFrameProps) {
+  return (
+    <div
+      className={`screenshot-drop-zone${isDragging ? " is-dragging" : ""}`}
+      tabIndex={0}
+      role="group"
+      aria-label={label}
+      onBlur={onBlur}
+      onClick={onClick}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onFocus={onFocus}
+      onPaste={onPaste}
     >
-      {windows.map((window) => (
-        <button
-          key={window.id}
-          type="button"
-          className="window-selector-row"
-          onClick={() => onSelect(window.id)}
-        >
-          <span className="window-selector-title">
-            {window.title || window.appName}
-          </span>
-          <span className="window-selector-meta">
-            {window.appName || "Window"} · {window.width}x{window.height}
-            {window.isFocused ? " · Active" : ""}
-          </span>
-        </button>
-      ))}
-    </ModalShell>
+      <header className="screenshot-drop-zone-header">
+        <span>{stageLabel(stage)} screenshot</span>
+        <strong>Drop / paste</strong>
+      </header>
+      {children ?? <p>{emptyMessage}</p>}
+      {busyMessage ? (
+        <p className="screenshot-drop-status">{busyMessage}</p>
+      ) : null}
+      {statusMessage ? (
+        <p className="screenshot-drop-status">{statusMessage}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -375,12 +486,14 @@ type TradeScreenshotGalleryProps = {
   confirmBeforeDelete: boolean;
   screenshots: ScreenshotRow[];
   onChanged: () => void | Promise<void>;
+  onDeleted?: (id: string) => void;
 };
 
 export function TradeScreenshotGallery({
   confirmBeforeDelete,
   screenshots,
   onChanged,
+  onDeleted,
 }: TradeScreenshotGalleryProps) {
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [lightbox, setLightbox] = useState<ScreenshotRow | null>(null);
@@ -417,6 +530,7 @@ export function TradeScreenshotGallery({
     await deleteScreenshot(screenshot.id, screenshot.path);
     await deleteScreenshotFile(screenshot.path);
     if (lightbox?.id === screenshot.id) setLightbox(null);
+    onDeleted?.(screenshot.id);
     await onChanged();
   }
 

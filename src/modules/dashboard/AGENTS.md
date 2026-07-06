@@ -11,6 +11,7 @@ Owns the compact account control room: total/month/week summaries, risk/goal rea
 ## Local Contracts
 
 - Dashboard metrics read selected-account trades through shared data helpers.
+- Trade ranking labels use shared automatic trade names; pair remains an instrument grouping, not the trade name.
 - Balance and growth are derived from the selected account starting balance plus closed/open trade P&L.
 - The top dashboard area should show Total, Current Month, and Current Week as compact side-by-side summary cards when width allows.
 - Top summary cards may use roughly 35% of the visible workspace height when the extra room improves readability.

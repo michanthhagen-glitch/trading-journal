@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  ArrowLeft,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
@@ -38,7 +37,7 @@ import {
   DraftScreenshotGallery,
   DraftScreenshotImportButton,
   ReadOnlyTradeScreenshotGallery,
-  ScreenshotImportButton,
+  TradeScreenshotDropZone,
   TradeScreenshotGallery,
   type DraftScreenshot,
 } from "./components/ScreenshotTools";
@@ -57,10 +56,15 @@ import {
   type AppPreferences,
 } from "../../shared/appPreferences";
 import { ModalShell } from "../../components/ModalShell";
+import {
+  formatTradeName,
+  formatTradeNameWithPair,
+} from "../../shared/tradeNames";
 import { TRADE_RECAP_MISTAKE_GROUPS } from "./tradeRecapMistakes";
 import { TRADE_RECAP_POSITIVE_GROUPS } from "./tradeRecapPositives";
 
 type TradesView = "calendar" | "list";
+type TradeWorkspaceMode = "trade" | "recap";
 type TradeRecapTab = "mistakes" | "done-well" | "lesson" | "score";
 
 const TRADE_VIEWS: { id: TradesView; label: string; icon: ReactNode }[] = [
@@ -475,8 +479,10 @@ export function TradesModule({
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [riskPlans, setRiskPlans] = useState<RiskManagementPlan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [recapTrade, setRecapTrade] = useState<Trade | null>(null);
+  const [workspace, setWorkspace] = useState<{
+    mode: TradeWorkspaceMode;
+    tradeId: string;
+  } | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
 
   async function reload() {
@@ -495,15 +501,17 @@ export function TradesModule({
   }
 
   useEffect(() => {
-    setSelectedId(null);
-    setRecapTrade(null);
+    setWorkspace(null);
     setCollapsedWeeks({});
     reload();
   }, [selectedAccountId]);
 
-  const selected = useMemo(
-    () => trades.find((trade) => trade.id === selectedId) ?? null,
-    [trades, selectedId],
+  const workspaceTrade = useMemo(
+    () =>
+      workspace
+        ? (trades.find((trade) => trade.id === workspace.tradeId) ?? null)
+        : null,
+    [trades, workspace],
   );
   const linkedStrategies = useMemo(() => {
     if (!selectedAccount) return [];
@@ -523,21 +531,8 @@ export function TradesModule({
     [selectedAccount, trades],
   );
 
-  if (selected) {
-    return (
-      <TradeDetail
-        account={selectedAccount}
-        accountTrades={trades}
-        appPreferences={appPreferences}
-        trade={selected}
-        onBack={() => setSelectedId(null)}
-        onChanged={reload}
-        onDeleted={async () => {
-          setSelectedId(null);
-          await reload();
-        }}
-      />
-    );
+  function openTradeWorkspace(tradeId: string, mode: TradeWorkspaceMode) {
+    setWorkspace({ tradeId, mode });
   }
 
   return (
@@ -591,9 +586,9 @@ export function TradesModule({
           appPreferences={appPreferences}
           selectedAccount={selectedAccount}
           trades={trades}
-          onCreateRecap={setRecapTrade}
+          onCreateRecap={(trade) => openTradeWorkspace(trade.id, "recap")}
           onMonthChange={setCalendarMonth}
-          onSelectTrade={setSelectedId}
+          onSelectTrade={(tradeId) => openTradeWorkspace(tradeId, "trade")}
         />
       ) : (
         <WeeklyTradesList
@@ -601,8 +596,8 @@ export function TradesModule({
           appPreferences={appPreferences}
           selectedAccount={selectedAccount}
           trades={trades}
-          onCreateRecap={setRecapTrade}
-          onSelectTrade={setSelectedId}
+          onCreateRecap={(trade) => openTradeWorkspace(trade.id, "recap")}
+          onSelectTrade={(tradeId) => openTradeWorkspace(tradeId, "trade")}
           onToggleWeek={(weekKey) =>
             setCollapsedWeeks((current) => ({
               ...current,
@@ -612,16 +607,24 @@ export function TradesModule({
         />
       )}
 
-      {recapTrade ? (
-        <TradeRecapDialog
+      {workspace && workspaceTrade ? (
+        <TradeWorkspaceDialog
           account={selectedAccount}
+          accountTrades={trades}
           appPreferences={appPreferences}
-          trade={recapTrade}
-          onClose={() => setRecapTrade(null)}
-          onSaved={async () => {
-            setRecapTrade(null);
+          mode={workspace.mode}
+          trade={workspaceTrade}
+          onChanged={reload}
+          onClose={() => setWorkspace(null)}
+          onDeleted={async () => {
+            setWorkspace(null);
             await reload();
           }}
+          onModeChange={(mode) =>
+            setWorkspace((current) =>
+              current ? { ...current, mode } : current,
+            )
+          }
         />
       ) : null}
 
@@ -665,6 +668,7 @@ function TradesListTable({
       <thead>
         <tr>
           <th>Date / Time</th>
+          <th>Trade</th>
           <th>Direction</th>
           <th>Strategy</th>
           <th>Win/Loss/BE</th>
@@ -690,6 +694,9 @@ function TradesListTable({
               onClick={() => onSelectTrade(trade.id)}
             >
               <td>{tradeListDateTime(trade, appPreferences)}</td>
+              <td className="trade-name-cell">
+                {formatTradeName(trade, accountTrades)}
+              </td>
               <td>
                 <span className={`dir-pill dir-${trade.direction}`}>
                   {directionActionLabel(trade.direction)}
@@ -717,10 +724,18 @@ function TradesListTable({
               </td>
               <td className="recap-cell">
                 {trade.hasRecap ? (
-                  <span className="recap-status recap-status-done">
+                  <button
+                    className="recap-action-button recap-action-done"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onCreateRecap(trade);
+                    }}
+                    title="Open trade recap"
+                  >
                     <CheckCircle2 size={13} aria-hidden="true" />
                     <span>Done</span>
-                  </span>
+                  </button>
                 ) : (
                   <button
                     className="recap-action-button"
@@ -979,20 +994,30 @@ function DayTradesDialog({
           appPreferences={appPreferences}
           selectedAccount={selectedAccount}
           trades={trades}
-          onCreateRecap={onCreateRecap}
-          onSelectTrade={onSelectTrade}
+          onCreateRecap={(trade) => {
+            onClose();
+            onCreateRecap(trade);
+          }}
+          onSelectTrade={(tradeId) => {
+            onClose();
+            onSelectTrade(tradeId);
+          }}
         />
       </div>
     </ModalShell>
   );
 }
 
-type TradeRecapDialogProps = {
+type TradeWorkspaceDialogProps = {
   account: TradingAccount | null;
+  accountTrades: Trade[];
   appPreferences: AppPreferences;
+  mode: TradeWorkspaceMode;
   trade: Trade;
+  onChanged: () => Promise<void>;
   onClose: () => void;
-  onSaved: () => void | Promise<void>;
+  onDeleted: () => void | Promise<void>;
+  onModeChange: (mode: TradeWorkspaceMode) => void;
 };
 
 function createDefaultTradeRecap(trade: Trade): TradeRecapInput {
@@ -1015,30 +1040,47 @@ function createDefaultTradeRecap(trade: Trade): TradeRecapInput {
   );
 }
 
-function TradeRecapDialog({
+function TradeWorkspaceDialog({
   account,
+  accountTrades,
   appPreferences,
+  mode,
   trade,
+  onChanged,
   onClose,
-  onSaved,
-}: TradeRecapDialogProps) {
-  const [activeTab, setActiveTab] = useState<TradeRecapTab>("mistakes");
-  const [form, setForm] = useState<TradeRecapInput>(() =>
+  onDeleted,
+  onModeChange,
+}: TradeWorkspaceDialogProps) {
+  const currency = account?.currency ?? "USD";
+  const isRecapMode = mode === "recap";
+  const tradeName = formatTradeName(trade, accountTrades);
+  const tradeNameWithPair = formatTradeNameWithPair(trade, accountTrades);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [recapActiveTab, setRecapActiveTab] =
+    useState<TradeRecapTab>("mistakes");
+  const [recapForm, setRecapForm] = useState<TradeRecapInput>(() =>
     createDefaultTradeRecap(trade),
   );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const currency = account?.currency ?? "USD";
+  const [recapSaving, setRecapSaving] = useState(false);
+  const [recapError, setRecapError] = useState<string | null>(null);
 
-  function update<K extends keyof TradeRecapInput>(
+  useEffect(() => {
+    setRecapActiveTab("mistakes");
+    setRecapForm(createDefaultTradeRecap(trade));
+    setRecapError(null);
+    setRecapSaving(false);
+  }, [trade.id]);
+
+  function updateRecap<K extends keyof TradeRecapInput>(
     key: K,
     value: TradeRecapInput[K],
   ) {
-    setForm((current) => ({ ...current, [key]: value }));
+    setRecapForm((current) => ({ ...current, [key]: value }));
   }
 
-  function toggleTag(key: "mistakeTags" | "positiveTags", tag: string) {
-    setForm((current) => {
+  function toggleRecapTag(key: "mistakeTags" | "positiveTags", tag: string) {
+    setRecapForm((current) => {
       const currentTags = current[key];
       return {
         ...current,
@@ -1049,282 +1091,541 @@ function TradeRecapDialog({
     });
   }
 
-  function toggleQuickText(key: "lesson" | "nextAction", option: string) {
-    setForm((current) => ({
+  function toggleRecapQuickText(key: "lesson" | "nextAction", option: string) {
+    setRecapForm((current) => ({
       ...current,
       [key]: toggleQuickTextValue(current[key], option),
     }));
   }
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    if (!form.lesson.trim()) {
-      setActiveTab("lesson");
-      setError("Lesson is required.");
+  async function handleDeleteTrade() {
+    if (
+      shouldConfirmDelete(appPreferences) &&
+      !window.confirm(
+        "Delete this trade? Notes, screenshots, and recap links will be removed.",
+      )
+    ) {
       return;
     }
 
-    if (!form.grade || !form.followedPlan) {
-      setActiveTab("score");
-      setError("Grade and plan follow are required.");
-      return;
-    }
-
-    setError(null);
-    setSaving(true);
+    setDeleteError(null);
+    setDeleting(true);
     try {
-      await saveRecap(trade.id, form);
-      await onSaved();
+      await Promise.allSettled(
+        trade.screenshots.map((screenshot) =>
+          deleteScreenshotFile(screenshot.path),
+        ),
+      );
+      await deleteTrade(trade.id);
+      await onDeleted();
+    } catch (error) {
+      console.error(error);
+      setDeleteError("Delete failed. Restart the app and try again.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleRecapSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!recapForm.lesson.trim()) {
+      setRecapActiveTab("lesson");
+      setRecapError("Lesson is required.");
+      return;
+    }
+
+    if (!recapForm.grade || !recapForm.followedPlan) {
+      setRecapActiveTab("score");
+      setRecapError("Grade and plan follow are required.");
+      return;
+    }
+
+    setRecapError(null);
+    setRecapSaving(true);
+    try {
+      await saveRecap(trade.id, recapForm);
+      await onChanged();
     } catch (saveError) {
       console.error(saveError);
-      setError("Could not save recap. Try again.");
+      setRecapError("Could not save recap. Try again.");
     } finally {
-      setSaving(false);
+      setRecapSaving(false);
     }
   }
 
   return (
     <ModalShell
-      ariaLabel="Create trade recap"
-      bodyClassName="recap-form"
-      closeLabel="Close recap"
-      modalClassName="trade-recap-modal"
+      ariaLabel="Trade workspace"
+      bodyClassName="trade-workspace-body"
+      closeLabel="Close trade workspace"
+      modalClassName={`trade-workspace-modal trade-workspace-modal-${mode}`}
       onClose={onClose}
-      onSubmit={handleSubmit}
-      title={`Create recap - ${trade.pair}`}
+      title={
+        isRecapMode
+          ? `${trade.hasRecap ? "Edit recap" : "Create recap"} - ${tradeName}`
+          : tradeNameWithPair
+      }
       subtitle={
         <>
-          {tradeListDateTime(trade, appPreferences)} -{" "}
+          {tradeListDateTime(trade, appPreferences)} - {trade.pair} -{" "}
           {directionActionLabel(trade.direction)}
         </>
       }
-      footer={
-        <>
-          {error ? (
-            <p className="modal-save-error" role="alert">
-              {error}
-            </p>
-          ) : null}
+      headerActions={
+        isRecapMode ? null : (
           <button
-            className="secondary-button"
+            className="ghost-button danger-button trade-delete-button"
             type="button"
-            onClick={onClose}
-            disabled={saving}
+            onClick={handleDeleteTrade}
+            disabled={deleting}
           >
-            Cancel
+            <Trash2 size={15} aria-hidden="true" />
+            <span>{deleting ? "Deleting..." : "Delete"}</span>
           </button>
-          <button className="primary-button" type="submit" disabled={saving}>
-            {saving ? "Saving..." : "Save recap"}
+        )
+      }
+      headerContent={
+        isRecapMode ? null : (
+          <TradeSummaryStrip
+            account={account}
+            accountTrades={accountTrades}
+            appPreferences={appPreferences}
+            trade={trade}
+          />
+        )
+      }
+      footer={
+        isRecapMode ? (
+          <>
+            {recapError ? (
+              <p className="modal-save-error" role="alert">
+                {recapError}
+              </p>
+            ) : null}
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => onModeChange("trade")}
+              disabled={recapSaving}
+            >
+              Back to trade
+            </button>
+            <button
+              className="primary-button"
+              type="submit"
+              form="trade-recap-editor-form"
+              disabled={recapSaving}
+            >
+              {recapSaving
+                ? "Saving..."
+                : trade.hasRecap
+                  ? "Save changes"
+                  : "Save recap"}
+            </button>
+          </>
+        ) : (
+          <button className="secondary-button" type="button" onClick={onClose}>
+            Close
           </button>
-        </>
+        )
       }
     >
-      <div className="trade-recap-workspace">
-        <TradeRecapContextPanel
-          appPreferences={appPreferences}
-          currency={currency}
-          trade={trade}
-        />
+      <div className={`trade-workspace trade-workspace-${mode}`}>
+        <div className="trade-workspace-primary">
+          {isRecapMode ? (
+            <TradeRecapContextPanel
+              appPreferences={appPreferences}
+              currency={currency}
+              trade={trade}
+              tradeName={tradeName}
+            />
+          ) : (
+            <TradeDetail
+              account={account}
+              appPreferences={appPreferences}
+              trade={trade}
+              tradeName={tradeName}
+              onChanged={onChanged}
+              deleteError={deleteError}
+            />
+          )}
+        </div>
 
-        <div className="trade-recap-editor">
-          <div className="recap-sticky-head">
-            <div
-              className="recap-tab-bar"
-              role="tablist"
-              aria-label="Trade recap sections"
-            >
-              {TRADE_RECAP_TABS.map((tab) => (
-                <button
-                  className={`recap-tab-button${activeTab === tab.id ? " is-active" : ""}`}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === tab.id}
-                  aria-controls={`recap-panel-${tab.id}`}
-                  id={`recap-tab-${tab.id}`}
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {activeTab === "mistakes" ? (
-            <section
-              className="recap-section"
-              role="tabpanel"
-              id="recap-panel-mistakes"
-              aria-labelledby="recap-tab-mistakes"
-            >
-              <div className="recap-section-title-row">
-                <h4>Mistakes</h4>
-                <span>{form.mistakeTags.length} selected</span>
-              </div>
-              <RecapGroupedTagSection
-                groups={TRADE_RECAP_MISTAKE_CATALOG}
-                emptyLabel="No mistakes selected"
-                addLabel="Add mistake"
-                selected={form.mistakeTags}
-                onToggle={(tag) => toggleTag("mistakeTags", tag)}
-              />
-            </section>
-          ) : null}
-
-          {activeTab === "done-well" ? (
-            <section
-              className="recap-section"
-              role="tabpanel"
-              id="recap-panel-done-well"
-              aria-labelledby="recap-tab-done-well"
-            >
-              <div className="recap-section-title-row">
-                <h4>Done well</h4>
-                <span>{form.positiveTags.length} selected</span>
-              </div>
-              <RecapGroupedTagSection
-                groups={TRADE_RECAP_POSITIVE_CATALOG}
-                emptyLabel="Nothing selected yet"
-                addLabel="Add"
-                selected={form.positiveTags}
-                onToggle={(tag) => toggleTag("positiveTags", tag)}
-              />
-            </section>
-          ) : null}
-
-          {activeTab === "lesson" ? (
-            <section
-              className="recap-section"
-              role="tabpanel"
-              id="recap-panel-lesson"
-              aria-labelledby="recap-tab-lesson"
-            >
-              <h4>Lesson</h4>
-              <div className="form-grid">
-                <div className="recap-text-block field-wide">
-                  <RecapQuickTextArea
-                    label="Lesson learned"
-                    quickLabel="Quick lessons"
-                    options={LESSON_OPTIONS}
-                    placeholder="What did this trade teach you?"
-                    value={form.lesson}
-                    onChange={(value) => update("lesson", value)}
-                    onToggle={(option) => toggleQuickText("lesson", option)}
-                  />
-                </div>
-                <div className="recap-text-block field-wide">
-                  <RecapQuickTextArea
-                    label="Next time"
-                    quickLabel="Quick next time"
-                    options={NEXT_TIME_OPTIONS}
-                    placeholder="What will you do differently next time?"
-                    value={form.nextAction}
-                    onChange={(value) => update("nextAction", value)}
-                    onToggle={(option) => toggleQuickText("nextAction", option)}
-                  />
-                </div>
-                <label className="field field-wide">
-                  <span>Extra notes</span>
-                  <textarea
-                    rows={3}
-                    value={form.body}
-                    onChange={(event) => update("body", event.target.value)}
-                    placeholder="Anything else worth remembering"
-                  />
-                </label>
-              </div>
-            </section>
-          ) : null}
-
-          {activeTab === "score" ? (
-            <section
-              className="recap-section"
-              role="tabpanel"
-              id="recap-panel-score"
-              aria-labelledby="recap-tab-score"
-            >
-              <h4>Review score</h4>
-              <div className="form-grid">
-                <label className="field">
-                  <span>Trade grade</span>
-                  <select
-                    value={form.grade}
-                    onChange={(event) =>
-                      update(
-                        "grade",
-                        event.target.value as TradeRecapInput["grade"],
-                      )
-                    }
-                  >
-                    <option value="">Pick grade</option>
-                    {TRADE_RECAP_GRADES.map((grade) => (
-                      <option value={grade} key={grade}>
-                        {grade}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Followed plan?</span>
-                  <select
-                    value={form.followedPlan}
-                    onChange={(event) =>
-                      update(
-                        "followedPlan",
-                        event.target.value as TradeRecapInput["followedPlan"],
-                      )
-                    }
-                  >
-                    <option value="">Pick one</option>
-                    {PLAN_FOLLOWED_OPTIONS.map((option) => (
-                      <option value={option.value} key={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field recap-rule-toggle">
-                  <span>Rule broken?</span>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={form.ruleBroken}
-                      onChange={(event) =>
-                        update("ruleBroken", event.target.checked)
-                      }
-                    />
-                    <span>{form.ruleBroken ? "Yes" : "No"}</span>
-                  </label>
-                </label>
-              </div>
-
-              <div className="recap-score-grid">
-                <RecapScoreField
-                  label="Setup quality"
-                  value={form.setupQuality ?? 5}
-                  onChange={(value) => update("setupQuality", value)}
-                />
-                <RecapScoreField
-                  label="Entry quality"
-                  value={form.entryQuality ?? 5}
-                  onChange={(value) => update("entryQuality", value)}
-                />
-                <RecapScoreField
-                  label="Management quality"
-                  value={form.managementQuality ?? 5}
-                  onChange={(value) => update("managementQuality", value)}
-                />
-                <RecapScoreField
-                  label="Exit quality"
-                  value={form.exitQuality ?? 5}
-                  onChange={(value) => update("exitQuality", value)}
-                />
-              </div>
-            </section>
-          ) : null}
+        <div className="trade-workspace-secondary">
+          {isRecapMode ? (
+            <TradeRecapEditor
+              activeTab={recapActiveTab}
+              form={recapForm}
+              onActiveTabChange={setRecapActiveTab}
+              onSubmit={handleRecapSubmit}
+              onToggleQuickText={toggleRecapQuickText}
+              onToggleTag={toggleRecapTag}
+              onUpdate={updateRecap}
+            />
+          ) : (
+            <TradeRecapSummaryPanel
+              trade={trade}
+              onOpenRecap={() => onModeChange("recap")}
+            />
+          )}
         </div>
       </div>
     </ModalShell>
+  );
+}
+
+type TradeRecapEditorProps = {
+  activeTab: TradeRecapTab;
+  form: TradeRecapInput;
+  onActiveTabChange: (tab: TradeRecapTab) => void;
+  onSubmit: (event: React.FormEvent) => void | Promise<void>;
+  onToggleQuickText: (key: "lesson" | "nextAction", option: string) => void;
+  onToggleTag: (key: "mistakeTags" | "positiveTags", tag: string) => void;
+  onUpdate: <K extends keyof TradeRecapInput>(
+    key: K,
+    value: TradeRecapInput[K],
+  ) => void;
+};
+
+function TradeRecapEditor({
+  activeTab,
+  form,
+  onActiveTabChange,
+  onSubmit,
+  onToggleQuickText,
+  onToggleTag,
+  onUpdate,
+}: TradeRecapEditorProps) {
+  return (
+    <form
+      className="trade-recap-editor"
+      id="trade-recap-editor-form"
+      onSubmit={onSubmit}
+    >
+      <div className="recap-sticky-head">
+        <div
+          className="recap-tab-bar"
+          role="tablist"
+          aria-label="Trade recap sections"
+        >
+          {TRADE_RECAP_TABS.map((tab) => (
+            <button
+              className={`recap-tab-button${activeTab === tab.id ? " is-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`recap-panel-${tab.id}`}
+              id={`recap-tab-${tab.id}`}
+              key={tab.id}
+              onClick={() => onActiveTabChange(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === "mistakes" ? (
+        <section
+          className="recap-section"
+          role="tabpanel"
+          id="recap-panel-mistakes"
+          aria-labelledby="recap-tab-mistakes"
+        >
+          <div className="recap-section-title-row">
+            <h4>Mistakes</h4>
+            <span>{form.mistakeTags.length} selected</span>
+          </div>
+          <RecapGroupedTagSection
+            groups={TRADE_RECAP_MISTAKE_CATALOG}
+            emptyLabel="No mistakes selected"
+            addLabel="Add mistake"
+            selected={form.mistakeTags}
+            onToggle={(tag) => onToggleTag("mistakeTags", tag)}
+          />
+        </section>
+      ) : null}
+
+      {activeTab === "done-well" ? (
+        <section
+          className="recap-section"
+          role="tabpanel"
+          id="recap-panel-done-well"
+          aria-labelledby="recap-tab-done-well"
+        >
+          <div className="recap-section-title-row">
+            <h4>Done well</h4>
+            <span>{form.positiveTags.length} selected</span>
+          </div>
+          <RecapGroupedTagSection
+            groups={TRADE_RECAP_POSITIVE_CATALOG}
+            emptyLabel="Nothing selected yet"
+            addLabel="Add"
+            selected={form.positiveTags}
+            onToggle={(tag) => onToggleTag("positiveTags", tag)}
+          />
+        </section>
+      ) : null}
+
+      {activeTab === "lesson" ? (
+        <section
+          className="recap-section"
+          role="tabpanel"
+          id="recap-panel-lesson"
+          aria-labelledby="recap-tab-lesson"
+        >
+          <h4>Lesson</h4>
+          <div className="form-grid">
+            <div className="recap-text-block field-wide">
+              <RecapQuickTextArea
+                label="Lesson learned"
+                quickLabel="Quick lessons"
+                options={LESSON_OPTIONS}
+                placeholder="What did this trade teach you?"
+                value={form.lesson}
+                onChange={(value) => onUpdate("lesson", value)}
+                onToggle={(option) => onToggleQuickText("lesson", option)}
+              />
+            </div>
+            <div className="recap-text-block field-wide">
+              <RecapQuickTextArea
+                label="Next time"
+                quickLabel="Quick next time"
+                options={NEXT_TIME_OPTIONS}
+                placeholder="What will you do differently next time?"
+                value={form.nextAction}
+                onChange={(value) => onUpdate("nextAction", value)}
+                onToggle={(option) => onToggleQuickText("nextAction", option)}
+              />
+            </div>
+            <label className="field field-wide">
+              <span>Extra notes</span>
+              <textarea
+                rows={3}
+                value={form.body}
+                onChange={(event) => onUpdate("body", event.target.value)}
+                placeholder="Anything else worth remembering"
+              />
+            </label>
+          </div>
+        </section>
+      ) : null}
+
+      {activeTab === "score" ? (
+        <section
+          className="recap-section"
+          role="tabpanel"
+          id="recap-panel-score"
+          aria-labelledby="recap-tab-score"
+        >
+          <h4>Review score</h4>
+          <div className="form-grid">
+            <label className="field">
+              <span>Trade grade</span>
+              <select
+                value={form.grade}
+                onChange={(event) =>
+                  onUpdate(
+                    "grade",
+                    event.target.value as TradeRecapInput["grade"],
+                  )
+                }
+              >
+                <option value="">Pick grade</option>
+                {TRADE_RECAP_GRADES.map((grade) => (
+                  <option value={grade} key={grade}>
+                    {grade}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Followed plan?</span>
+              <select
+                value={form.followedPlan}
+                onChange={(event) =>
+                  onUpdate(
+                    "followedPlan",
+                    event.target.value as TradeRecapInput["followedPlan"],
+                  )
+                }
+              >
+                <option value="">Pick one</option>
+                {PLAN_FOLLOWED_OPTIONS.map((option) => (
+                  <option value={option.value} key={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field recap-rule-toggle">
+              <span>Rule broken?</span>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={form.ruleBroken}
+                  onChange={(event) =>
+                    onUpdate("ruleBroken", event.target.checked)
+                  }
+                />
+                <span>{form.ruleBroken ? "Yes" : "No"}</span>
+              </label>
+            </label>
+          </div>
+
+          <div className="recap-score-grid">
+            <RecapScoreField
+              label="Setup quality"
+              value={form.setupQuality ?? 5}
+              onChange={(value) => onUpdate("setupQuality", value)}
+            />
+            <RecapScoreField
+              label="Entry quality"
+              value={form.entryQuality ?? 5}
+              onChange={(value) => onUpdate("entryQuality", value)}
+            />
+            <RecapScoreField
+              label="Management quality"
+              value={form.managementQuality ?? 5}
+              onChange={(value) => onUpdate("managementQuality", value)}
+            />
+            <RecapScoreField
+              label="Exit quality"
+              value={form.exitQuality ?? 5}
+              onChange={(value) => onUpdate("exitQuality", value)}
+            />
+          </div>
+        </section>
+      ) : null}
+    </form>
+  );
+}
+
+function TradeRecapSummaryPanel({
+  trade,
+  onOpenRecap,
+}: {
+  trade: Trade;
+  onOpenRecap: () => void;
+}) {
+  const recap = trade.recap;
+
+  return (
+    <aside
+      className={`trade-recap-summary${recap ? " has-recap" : " is-empty"}`}
+      aria-label="Trade recap summary"
+    >
+      <header className="trade-recap-summary-header">
+        <span>Trade recap</span>
+        <h4>{recap ? "Recap done" : "Recap missing"}</h4>
+      </header>
+
+      {recap ? (
+        <>
+          <div className="trade-recap-summary-grid">
+            <SummaryMetric label="Grade" value={recap.grade || "—"} strong />
+            <SummaryMetric
+              label="Plan"
+              value={planFollowedLabel(recap.followedPlan)}
+            />
+          </div>
+          <TradeRecapSummaryTagList
+            label="Mistakes"
+            emptyLabel="No mistakes selected"
+            tags={recap.mistakeTags}
+          />
+          <TradeRecapSummaryTagList
+            label="Done well"
+            emptyLabel="Nothing selected yet"
+            tags={recap.positiveTags}
+          />
+          <div className="trade-recap-summary-note">
+            <span>Lesson</span>
+            <p>{recap.lesson || "No lesson written yet."}</p>
+          </div>
+          <div className="trade-recap-summary-note">
+            <span>Next time</span>
+            <p>{recap.nextAction || "No next action written yet."}</p>
+          </div>
+          <section className="trade-recap-summary-scores">
+            <header>
+              <span>Scores</span>
+              <strong>{recap.ruleBroken ? "Rule broken" : "Rules kept"}</strong>
+            </header>
+            <div className="trade-recap-score-grid">
+              <TradeRecapScoreValue label="Setup" value={recap.setupQuality} />
+              <TradeRecapScoreValue label="Entry" value={recap.entryQuality} />
+              <TradeRecapScoreValue
+                label="Management"
+                value={recap.managementQuality}
+              />
+              <TradeRecapScoreValue label="Exit" value={recap.exitQuality} />
+            </div>
+          </section>
+        </>
+      ) : (
+        <p className="trade-recap-summary-empty">
+          Create a recap to lock in mistakes, what went well, lessons, and
+          score.
+        </p>
+      )}
+
+      <button className="primary-button" type="button" onClick={onOpenRecap}>
+        <FileText size={15} aria-hidden="true" />
+        <span>{recap ? "Edit recap" : "Create recap"}</span>
+      </button>
+    </aside>
+  );
+}
+
+function TradeRecapSummaryTagList({
+  emptyLabel,
+  label,
+  tags,
+}: {
+  emptyLabel: string;
+  label: string;
+  tags: string[];
+}) {
+  return (
+    <section className="trade-recap-summary-list">
+      <header>
+        <span>{label}</span>
+        <strong>{tags.length}</strong>
+      </header>
+      {tags.length > 0 ? (
+        <div className="trade-recap-summary-tags">
+          {tags.map((tag) => (
+            <span className="trade-recap-summary-tag" key={tag}>
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p>{emptyLabel}</p>
+      )}
+    </section>
+  );
+}
+
+function TradeRecapScoreValue({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | null;
+}) {
+  return (
+    <div className="trade-recap-score-value">
+      <span>{label}</span>
+      <strong>{value === null ? "—" : `${value}/10`}</strong>
+    </div>
+  );
+}
+
+function planFollowedLabel(value: TradeRecapInput["followedPlan"]) {
+  return (
+    PLAN_FOLLOWED_OPTIONS.find((option) => option.value === value)?.label ?? "—"
   );
 }
 
@@ -1338,10 +1639,12 @@ function TradeRecapContextPanel({
   appPreferences,
   currency,
   trade,
+  tradeName,
 }: {
   appPreferences: AppPreferences;
   currency: string;
   trade: Trade;
+  tradeName: string;
 }) {
   const plannedRr = plannedRiskReward(trade);
   const actualRr = actualRiskReward(trade);
@@ -1362,8 +1665,8 @@ function TradeRecapContextPanel({
     <aside className="trade-recap-context" aria-label="Trade details">
       <header className="trade-recap-context-header">
         <div>
-          <span>Trade details</span>
-          <h4>{trade.pair}</h4>
+          <span>{trade.pair || "No instrument"}</span>
+          <h4>{tradeName}</h4>
         </div>
         <div className="trade-recap-context-pills">
           <span className={`dir-pill dir-${trade.direction}`}>
@@ -2505,109 +2808,28 @@ function ScaleBars({ value }: { value: number }) {
 
 type TradeDetailProps = {
   account: TradingAccount | null;
-  accountTrades: Trade[];
   appPreferences: AppPreferences;
+  deleteError: string | null;
   trade: Trade;
-  onBack: () => void;
+  tradeName: string;
   onChanged: () => Promise<void>;
-  onDeleted: () => void | Promise<void>;
 };
 
 function TradeDetail({
   account,
-  accountTrades,
   appPreferences,
+  deleteError,
   trade,
-  onBack,
+  tradeName,
   onChanged,
-  onDeleted,
 }: TradeDetailProps) {
   const [preTradeOpen, setPreTradeOpen] = useState(false);
   const [entryOpen, setEntryOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const plannedRr = plannedRiskReward(trade);
-  const actualRr = actualRiskReward(trade);
   const currency = account?.currency ?? "USD";
-  const balance = tradeBalanceSummary(account, accountTrades, trade);
-
-  async function handleDeleteTrade() {
-    if (
-      shouldConfirmDelete(appPreferences) &&
-      !window.confirm(
-        "Delete this trade? Notes, screenshots, and recap links will be removed.",
-      )
-    ) {
-      return;
-    }
-
-    setDeleteError(null);
-    setDeleting(true);
-    try {
-      await Promise.allSettled(
-        trade.screenshots.map((screenshot) =>
-          deleteScreenshotFile(screenshot.path),
-        ),
-      );
-      await deleteTrade(trade.id);
-      await onDeleted();
-    } catch (error) {
-      console.error(error);
-      setDeleteError("Delete failed. Restart the app and try again.");
-    } finally {
-      setDeleting(false);
-    }
-  }
 
   return (
     <div className="trade-detail">
-      <header className="trade-detail-header">
-        <button
-          className="icon-button back-button"
-          type="button"
-          onClick={onBack}
-          aria-label="Back to trades list"
-        >
-          <ArrowLeft size={18} aria-hidden="true" />
-        </button>
-        <div className="trade-summary-strip" aria-label="Trade summary">
-          <SummaryMetric
-            label="Date"
-            value={formatDateValue(trade.date, appPreferences)}
-          />
-          <SummaryMetric label="Duration" value={tradeDuration(trade)} />
-          <SummaryMetric
-            label="Balance before"
-            value={fmtMoney(balance.before, currency, appPreferences)}
-          />
-          <SummaryMetric
-            label="Balance after"
-            value={fmtMoney(balance.after, currency, appPreferences)}
-            tone={pnlToneClass(trade.pnl)}
-          />
-          <SummaryMetric label="Planned RR" value={fmtRMultiple(plannedRr)} />
-          <SummaryMetric
-            label="Actual RR"
-            value={fmtRMultiple(actualRr)}
-            tone={pnlToneClass(trade.pnl)}
-          />
-          <SummaryMetric
-            label="Account growth %"
-            value={fmtPercent(balance.growthPercent, appPreferences)}
-            tone={pnlToneClass(balance.growthPercent)}
-          />
-        </div>
-        <button
-          className="ghost-button danger-button trade-delete-button"
-          type="button"
-          onClick={handleDeleteTrade}
-          disabled={deleting}
-        >
-          <Trash2 size={15} aria-hidden="true" />
-          <span>{deleting ? "Deleting..." : "Delete"}</span>
-        </button>
-      </header>
       {deleteError ? (
         <p className="trade-delete-error" role="alert">
           {deleteError}
@@ -2639,7 +2861,10 @@ function TradeDetail({
 
       {preTradeOpen ? (
         <PreTradeForm
+          confirmBeforeDelete={appPreferences.confirmBeforeDelete}
           trade={trade}
+          tradeName={tradeName}
+          onChanged={onChanged}
           onClose={() => setPreTradeOpen(false)}
           onSaved={async () => {
             setPreTradeOpen(false);
@@ -2649,7 +2874,10 @@ function TradeDetail({
       ) : null}
       {entryOpen ? (
         <EntryForm
+          appPreferences={appPreferences}
           trade={trade}
+          tradeName={tradeName}
+          onChanged={onChanged}
           onClose={() => setEntryOpen(false)}
           onSaved={async () => {
             setEntryOpen(false);
@@ -2659,7 +2887,10 @@ function TradeDetail({
       ) : null}
       {exitOpen ? (
         <ExitForm
+          appPreferences={appPreferences}
           trade={trade}
+          tradeName={tradeName}
+          onChanged={onChanged}
           onClose={() => setExitOpen(false)}
           onSaved={async () => {
             setExitOpen(false);
@@ -2667,6 +2898,53 @@ function TradeDetail({
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+function TradeSummaryStrip({
+  account,
+  accountTrades,
+  appPreferences,
+  trade,
+}: {
+  account: TradingAccount | null;
+  accountTrades: Trade[];
+  appPreferences: AppPreferences;
+  trade: Trade;
+}) {
+  const plannedRr = plannedRiskReward(trade);
+  const actualRr = actualRiskReward(trade);
+  const currency = account?.currency ?? "USD";
+  const balance = tradeBalanceSummary(account, accountTrades, trade);
+
+  return (
+    <div className="trade-summary-strip" aria-label="Trade summary">
+      <SummaryMetric
+        label="Date"
+        value={formatDateValue(trade.date, appPreferences)}
+      />
+      <SummaryMetric label="Duration" value={tradeDuration(trade)} />
+      <SummaryMetric
+        label="Balance before"
+        value={fmtMoney(balance.before, currency, appPreferences)}
+      />
+      <SummaryMetric
+        label="Balance after"
+        value={fmtMoney(balance.after, currency, appPreferences)}
+        tone={pnlToneClass(trade.pnl)}
+      />
+      <SummaryMetric label="Planned RR" value={fmtRMultiple(plannedRr)} />
+      <SummaryMetric
+        label="Actual RR"
+        value={fmtRMultiple(actualRr)}
+        tone={pnlToneClass(trade.pnl)}
+      />
+      <SummaryMetric
+        label="Account growth %"
+        value={fmtPercent(balance.growthPercent, appPreferences)}
+        tone={pnlToneClass(balance.growthPercent)}
+      />
     </div>
   );
 }
@@ -2722,11 +3000,6 @@ function EntryCard({
         <span className="stage-dot stage-entry" aria-hidden="true" />
         <h3>Entry</h3>
         <div className="trade-card-actions">
-          <ScreenshotImportButton
-            tradeId={trade.id}
-            stage="entry"
-            onChanged={onChanged}
-          />
           <button
             className="ghost-button ghost-button-sm"
             type="button"
@@ -2821,11 +3094,6 @@ function ExitCard({
         <span className="stage-dot stage-exit" aria-hidden="true" />
         <h3>Exit</h3>
         <div className="trade-card-actions">
-          <ScreenshotImportButton
-            tradeId={trade.id}
-            stage="exit"
-            onChanged={onChanged}
-          />
           <button
             className="ghost-button ghost-button-sm"
             type="button"
@@ -2904,12 +3172,22 @@ function ScaleDisplay({ label, value }: { label: string; value: number }) {
 }
 
 type EntryFormProps = {
+  appPreferences: AppPreferences;
   trade: Trade;
+  tradeName: string;
+  onChanged: () => void | Promise<void>;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 };
 
-function EntryForm({ trade, onClose, onSaved }: EntryFormProps) {
+function EntryForm({
+  appPreferences,
+  trade,
+  tradeName,
+  onChanged,
+  onClose,
+  onSaved,
+}: EntryFormProps) {
   const [form, setForm] = useState({
     direction: trade.direction,
     time: trade.entry.time ?? currentTimeInputValue(),
@@ -2955,7 +3233,7 @@ function EntryForm({ trade, onClose, onSaved }: EntryFormProps) {
       ariaLabel="Entry details"
       onClose={onClose}
       onSubmit={handleSubmit}
-      title={`Entry - ${trade.pair}`}
+      title={`Entry - ${tradeName}`}
       footer={
         <>
           <button
@@ -2972,88 +3250,112 @@ function EntryForm({ trade, onClose, onSaved }: EntryFormProps) {
         </>
       }
     >
-      <div className="form-grid">
-        <label className="field">
-          <span>Entry time</span>
-          <input
-            type="time"
-            value={form.time}
-            onChange={(event) => update("time", event.target.value)}
+      <div className="stage-editor-form">
+        <section className="pre-section">
+          <header className="pre-section-header">
+            <h4>Screenshots</h4>
+          </header>
+          <TradeScreenshotDropZone
+            confirmBeforeDelete={appPreferences.confirmBeforeDelete}
+            screenshots={trade.screenshots.filter((s) => s.stage === "entry")}
+            stage="entry"
+            tradeId={trade.id}
+            onChanged={onChanged}
           />
-        </label>
-        <label className="field">
-          <span>Direction</span>
-          <select
-            value={form.direction}
-            onChange={(event) =>
-              update("direction", event.target.value as "long" | "short")
-            }
-          >
-            <option value="long">Long</option>
-            <option value="short">Short</option>
-          </select>
-        </label>
-        <label className="field">
-          <span>Entry price</span>
-          <input
-            type="number"
-            step="any"
-            value={form.price}
-            onChange={(event) => update("price", event.target.value)}
+        </section>
+        <div className="form-grid">
+          <label className="field">
+            <span>Entry time</span>
+            <input
+              type="time"
+              value={form.time}
+              onChange={(event) => update("time", event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Direction</span>
+            <select
+              value={form.direction}
+              onChange={(event) =>
+                update("direction", event.target.value as "long" | "short")
+              }
+            >
+              <option value="long">Long</option>
+              <option value="short">Short</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Entry price</span>
+            <input
+              type="number"
+              step="any"
+              value={form.price}
+              onChange={(event) => update("price", event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Lot size</span>
+            <input
+              type="number"
+              step="any"
+              value={form.lotSize}
+              onChange={(event) => update("lotSize", event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Stop loss</span>
+            <input
+              type="number"
+              step="any"
+              value={form.stopLoss}
+              onChange={(event) => update("stopLoss", event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Take profit</span>
+            <input
+              type="number"
+              step="any"
+              value={form.takeProfit}
+              onChange={(event) => update("takeProfit", event.target.value)}
+            />
+          </label>
+          <label className="field field-wide">
+            <span>Entry notes</span>
+            <textarea
+              rows={4}
+              value={form.notes}
+              onChange={(event) => update("notes", event.target.value)}
+            />
+          </label>
+          <ScaleField
+            label="Confidence"
+            value={form.confidence}
+            onChange={(value) => update("confidence", value)}
           />
-        </label>
-        <label className="field">
-          <span>Lot size</span>
-          <input
-            type="number"
-            step="any"
-            value={form.lotSize}
-            onChange={(event) => update("lotSize", event.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Stop loss</span>
-          <input
-            type="number"
-            step="any"
-            value={form.stopLoss}
-            onChange={(event) => update("stopLoss", event.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Take profit</span>
-          <input
-            type="number"
-            step="any"
-            value={form.takeProfit}
-            onChange={(event) => update("takeProfit", event.target.value)}
-          />
-        </label>
-        <label className="field field-wide">
-          <span>Entry notes</span>
-          <textarea
-            rows={4}
-            value={form.notes}
-            onChange={(event) => update("notes", event.target.value)}
-          />
-        </label>
-        <ScaleField
-          label="Confidence"
-          value={form.confidence}
-          onChange={(value) => update("confidence", value)}
-        />
+        </div>
       </div>
     </ModalShell>
   );
 }
 
 type ExitFormProps = {
+  appPreferences: AppPreferences;
   trade: Trade;
+  tradeName: string;
+  onChanged: () => void | Promise<void>;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 };
 
-function ExitForm({ trade, onClose, onSaved }: ExitFormProps) {
+function ExitForm({
+  appPreferences,
+  trade,
+  tradeName,
+  onChanged,
+  onClose,
+  onSaved,
+}: ExitFormProps) {
   const [form, setForm] = useState({
     price: trade.exit.price?.toString() ?? "",
     result: trade.exit.result,
@@ -3095,7 +3397,7 @@ function ExitForm({ trade, onClose, onSaved }: ExitFormProps) {
       ariaLabel="Exit details"
       onClose={onClose}
       onSubmit={handleSubmit}
-      title={`Exit - ${trade.pair}`}
+      title={`Exit - ${tradeName}`}
       footer={
         <>
           <button
@@ -3112,60 +3414,74 @@ function ExitForm({ trade, onClose, onSaved }: ExitFormProps) {
         </>
       }
     >
-      <div className="form-grid">
-        <label className="field">
-          <span>Exit time</span>
-          <input
-            type="time"
-            value={form.time}
-            onChange={(event) => update("time", event.target.value)}
+      <div className="stage-editor-form">
+        <section className="pre-section">
+          <header className="pre-section-header">
+            <h4>Screenshots</h4>
+          </header>
+          <TradeScreenshotDropZone
+            confirmBeforeDelete={appPreferences.confirmBeforeDelete}
+            screenshots={trade.screenshots.filter((s) => s.stage === "exit")}
+            stage="exit"
+            tradeId={trade.id}
+            onChanged={onChanged}
           />
-        </label>
-        <label className="field">
-          <span>Exit price</span>
-          <input
-            type="number"
-            step="any"
-            value={form.price}
-            onChange={(event) => update("price", event.target.value)}
+        </section>
+        <div className="form-grid">
+          <label className="field">
+            <span>Exit time</span>
+            <input
+              type="time"
+              value={form.time}
+              onChange={(event) => update("time", event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Exit price</span>
+            <input
+              type="number"
+              step="any"
+              value={form.price}
+              onChange={(event) => update("price", event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Result</span>
+            <select
+              value={form.result}
+              onChange={(event) =>
+                update("result", event.target.value as TradeResult)
+              }
+            >
+              <option value="">Not closed</option>
+              <option value="win">Win</option>
+              <option value="loss">Loss</option>
+              <option value="break-even">Break-even</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>P&amp;L</span>
+            <input
+              type="number"
+              step="any"
+              value={form.pnl}
+              onChange={(event) => update("pnl", event.target.value)}
+            />
+          </label>
+          <label className="field field-wide">
+            <span>Exit note</span>
+            <textarea
+              rows={5}
+              value={form.note}
+              onChange={(event) => update("note", event.target.value)}
+            />
+          </label>
+          <ScaleField
+            label="Feeling after trade"
+            value={form.feeling}
+            onChange={(value) => update("feeling", value)}
           />
-        </label>
-        <label className="field">
-          <span>Result</span>
-          <select
-            value={form.result}
-            onChange={(event) =>
-              update("result", event.target.value as TradeResult)
-            }
-          >
-            <option value="">Not closed</option>
-            <option value="win">Win</option>
-            <option value="loss">Loss</option>
-            <option value="break-even">Break-even</option>
-          </select>
-        </label>
-        <label className="field">
-          <span>P&amp;L</span>
-          <input
-            type="number"
-            step="any"
-            value={form.pnl}
-            onChange={(event) => update("pnl", event.target.value)}
-          />
-        </label>
-        <label className="field field-wide">
-          <span>Exit note</span>
-          <textarea
-            rows={5}
-            value={form.note}
-            onChange={(event) => update("note", event.target.value)}
-          />
-        </label>
-        <ScaleField
-          label="Feeling after trade"
-          value={form.feeling}
-          onChange={(value) => update("feeling", value)}
-        />
+        </div>
       </div>
     </ModalShell>
   );

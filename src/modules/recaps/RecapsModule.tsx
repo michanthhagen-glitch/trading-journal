@@ -20,6 +20,7 @@ import {
   startOfWeekByPreference,
   type AppPreferences,
 } from "../../shared/appPreferences";
+import { formatTradeName } from "../../shared/tradeNames";
 
 type Cadence = JournalRecapRow["cadence"];
 
@@ -62,17 +63,168 @@ type CurrentRecapStatus = {
   tone: "done" | "missing" | "missing-danger" | "neutral" | "ongoing";
 };
 
+type ManualRecapField = {
+  defaultValue?: string;
+  key: string;
+  label: string;
+  placeholder?: string;
+  rows?: number;
+};
+
+type TagCount = {
+  count: number;
+  label: string;
+};
+
+type PeriodSourceRow = {
+  label: string;
+  meta: string;
+  period: string;
+  range: PeriodRange;
+  recap: JournalRecapRow | null;
+  stats: RecapStats;
+  status: CurrentRecapStatus;
+};
+
 const CADENCES: { id: Cadence; label: string; icon: ReactNode }[] = [
   { id: "daily", label: "Daily", icon: <CalendarDays size={16} /> },
   { id: "weekly", label: "Weekly", icon: <CalendarRange size={16} /> },
   { id: "monthly", label: "Monthly", icon: <CalendarRange size={16} /> },
 ];
 
-const MANUAL_RECAP_FIELDS = [
+const DAILY_RECAP_FIELDS: ManualRecapField[] = [
+  {
+    key: "patterns",
+    label: "Patterns noticed",
+    placeholder: "What repeated today?",
+    rows: 3,
+  },
+  {
+    key: "marketContext",
+    label: "Market context",
+    placeholder: "Clean, choppy, slow, volatile, news-heavy...",
+    rows: 3,
+  },
+  {
+    key: "executionQuality",
+    label: "Execution quality",
+    placeholder: "How well did you follow the plan?",
+    rows: 3,
+  },
+  {
+    key: "mindset",
+    label: "Mindset / condition",
+    placeholder: "Calm, rushed, tired, focused, distracted...",
+    rows: 3,
+  },
+  {
+    key: "mainLesson",
+    label: "Main lesson",
+    placeholder: "The main thing today taught you",
+    rows: 3,
+  },
+  {
+    key: "nextTradingDay",
+    label: "Next trading day",
+    placeholder: "1-3 concrete rules for tomorrow",
+    rows: 3,
+  },
+];
+
+const DAILY_SCORE_FIELDS: ManualRecapField[] = [
+  { key: "planScore", label: "Plan followed", defaultValue: "5" },
+  { key: "riskScore", label: "Risk control", defaultValue: "5" },
+  { key: "entryScore", label: "Entry quality", defaultValue: "5" },
+  { key: "exitScore", label: "Exit quality", defaultValue: "5" },
+  { key: "mindsetScore", label: "Mindset", defaultValue: "5" },
+];
+
+const PERIOD_SCORE_FIELDS: ManualRecapField[] = [
+  { key: "planScore", label: "Plan followed", defaultValue: "5" },
+  { key: "riskScore", label: "Risk control", defaultValue: "5" },
+  { key: "executionScore", label: "Execution quality", defaultValue: "5" },
+  { key: "reviewScore", label: "Review quality", defaultValue: "5" },
+  { key: "mindsetScore", label: "Mindset", defaultValue: "5" },
+];
+
+const LEGACY_PERIOD_RECAP_FIELDS: ManualRecapField[] = [
   { key: "mistakesMade", label: "Mistakes made" },
   { key: "wentWell", label: "What went well" },
   { key: "couldImprove", label: "What could be done better" },
 ];
+
+function periodReviewFields(cadence: Cadence): ManualRecapField[] {
+  const sourceUnit = cadence === "monthly" ? "week" : "day";
+  const nextPeriod = cadence === "monthly" ? "Next month" : "Next week";
+
+  return [
+    {
+      key: "patterns",
+      label: "Patterns noticed",
+      placeholder: "What repeated across the period?",
+      rows: 3,
+    },
+    {
+      key: "bestPeriod",
+      label: `Best ${sourceUnit}`,
+      placeholder: `Which ${sourceUnit} worked best and why?`,
+      rows: 3,
+    },
+    {
+      key: "needsAttention",
+      label: "Needs attention",
+      placeholder: "What hurt performance most?",
+      rows: 3,
+    },
+    {
+      key: "riskManagement",
+      label: "Risk management",
+      placeholder: "How clean was risk, sizing, and loss control?",
+      rows: 3,
+    },
+    {
+      key: "mindset",
+      label: "Mindset / discipline",
+      placeholder: "Calm, rushed, focused, impatient...",
+      rows: 3,
+    },
+    {
+      key: "mainLesson",
+      label: "Main lesson",
+      placeholder: "The main thing this period taught you",
+      rows: 3,
+    },
+    {
+      key: "nextPeriodFocus",
+      label: nextPeriod,
+      placeholder: "1-3 concrete focus points",
+      rows: 3,
+    },
+  ];
+}
+
+function reviewFieldsForCadence(cadence: Cadence) {
+  return cadence === "daily" ? DAILY_RECAP_FIELDS : periodReviewFields(cadence);
+}
+
+function scoreFieldsForCadence(cadence: Cadence) {
+  return cadence === "daily" ? DAILY_SCORE_FIELDS : PERIOD_SCORE_FIELDS;
+}
+
+function recapFieldsForCadence(cadence: Cadence) {
+  return [
+    ...reviewFieldsForCadence(cadence),
+    ...scoreFieldsForCadence(cadence),
+  ];
+}
+
+function reviewHeading(cadence: Cadence) {
+  return `${cadence[0].toUpperCase()}${cadence.slice(1)} review`;
+}
+
+function scoreHeading(cadence: Cadence) {
+  return `${cadence[0].toUpperCase()}${cadence.slice(1)} score`;
+}
 
 function pad(value: number) {
   return value.toString().padStart(2, "0");
@@ -188,6 +340,40 @@ function pnlTone(value: number | null) {
   return "flat";
 }
 
+function resultShortLabel(result: Trade["exit"]["result"]) {
+  switch (result) {
+    case "win":
+      return "Win";
+    case "loss":
+      return "Loss";
+    case "break-even":
+      return "BE";
+    default:
+      return "-";
+  }
+}
+
+function resultClass(result: Trade["exit"]["result"]) {
+  return result ? `result-${result}` : "result-pending";
+}
+
+function directionLabel(direction: Trade["direction"]) {
+  return direction === "long" ? "Long" : "Short";
+}
+
+function planFollowedLabel(value: NonNullable<Trade["recap"]>["followedPlan"]) {
+  switch (value) {
+    case "yes":
+      return "Yes";
+    case "partial":
+      return "Partial";
+    case "no":
+      return "No";
+    default:
+      return "-";
+  }
+}
+
 function tradeTime(trade: Trade) {
   return trade.entry.time ?? trade.exit.time ?? "--:--";
 }
@@ -225,6 +411,35 @@ function mostCommon(values: string[]) {
   );
 }
 
+function periodTrades(trades: Trade[], range: PeriodRange) {
+  return trades
+    .filter((trade) => trade.date >= range.start && trade.date <= range.end)
+    .sort((a, b) => {
+      const dateCompare = a.date.localeCompare(b.date);
+      if (dateCompare !== 0) return dateCompare;
+      return tradeTime(a).localeCompare(tradeTime(b));
+    });
+}
+
+function tradeTagCounts(
+  trades: Trade[],
+  key: "mistakeTags" | "positiveTags",
+): TagCount[] {
+  const counts = new Map<string, number>();
+  for (const trade of trades) {
+    for (const tag of trade.recap?.[key] ?? []) {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+  }
+  return Array.from(counts.entries())
+    .map(([label, count]) => ({ count, label }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+function tagCountText(tag: TagCount) {
+  return tag.count > 1 ? `${tag.label} x${tag.count}` : tag.label;
+}
+
 function average(values: number[]) {
   if (values.length === 0) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -258,10 +473,8 @@ function recapStats(
   trades: Trade[],
   range: PeriodRange,
 ): RecapStats {
-  const periodTrades = trades.filter(
-    (trade) => trade.date >= range.start && trade.date <= range.end,
-  );
-  const closedTrades = periodTrades.filter((trade) => trade.exit.result);
+  const tradesInPeriod = periodTrades(trades, range);
+  const closedTrades = tradesInPeriod.filter((trade) => trade.exit.result);
   const wins = closedTrades.filter(
     (trade) => trade.exit.result === "win",
   ).length;
@@ -271,9 +484,9 @@ function recapStats(
   const breakEven = closedTrades.filter(
     (trade) => trade.exit.result === "break-even",
   ).length;
-  const hasPnl = periodTrades.some((trade) => trade.pnl !== null);
+  const hasPnl = tradesInPeriod.some((trade) => trade.pnl !== null);
   const netPnl = hasPnl
-    ? periodTrades.reduce((sum, trade) => sum + (trade.pnl ?? 0), 0)
+    ? tradesInPeriod.reduce((sum, trade) => sum + (trade.pnl ?? 0), 0)
     : null;
   const olderPnl = trades
     .filter((trade) => trade.date < range.start)
@@ -283,7 +496,7 @@ function recapStats(
     netPnl === null || balanceBefore === null || balanceBefore === 0
       ? null
       : (netPnl / balanceBefore) * 100;
-  const withPnl = periodTrades.filter((trade) => trade.pnl !== null);
+  const withPnl = tradesInPeriod.filter((trade) => trade.pnl !== null);
   const bestTrade = withPnl.reduce<Trade | null>(
     (best, trade) =>
       best === null || (trade.pnl ?? 0) > (best.pnl ?? 0) ? trade : best,
@@ -295,7 +508,7 @@ function recapStats(
     null,
   );
   const strategyPnl = new Map<string, number>();
-  for (const trade of periodTrades) {
+  for (const trade of tradesInPeriod) {
     const strategy = trade.preTrade.strategy || "No strategy";
     strategyPnl.set(
       strategy,
@@ -305,7 +518,7 @@ function recapStats(
   const bestStrategy =
     Array.from(strategyPnl.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ??
     "-";
-  const recapRows = periodTrades
+  const recapRows = tradesInPeriod
     .map((trade) => trade.recap)
     .filter((recap): recap is NonNullable<Trade["recap"]> => recap !== null);
   const gradeAverage = average(
@@ -326,7 +539,7 @@ function recapStats(
 
   return {
     averageActualRr: average(
-      periodTrades
+      tradesInPeriod
         .map(actualRiskReward)
         .filter((value): value is number => value !== null),
     ),
@@ -343,7 +556,7 @@ function recapStats(
     ),
     growthPercent,
     losses,
-    missingRecaps: periodTrades.filter((trade) => !trade.hasRecap).length,
+    missingRecaps: tradesInPeriod.filter((trade) => !trade.hasRecap).length,
     netPnl,
     planFollowed: recapRows.filter((recap) => recap.followedPlan === "yes")
       .length,
@@ -351,9 +564,9 @@ function recapStats(
       .length,
     planPartial: recapRows.filter((recap) => recap.followedPlan === "partial")
       .length,
-    recapped: periodTrades.filter((trade) => trade.hasRecap).length,
+    recapped: tradesInPeriod.filter((trade) => trade.hasRecap).length,
     ruleBreaks: recapRows.filter((recap) => recap.ruleBroken).length,
-    totalTrades: periodTrades.length,
+    totalTrades: tradesInPeriod.length,
     winRate:
       closedTrades.length === 0 ? null : (wins / closedTrades.length) * 100,
     wins,
@@ -362,17 +575,46 @@ function recapStats(
 }
 
 function defaultTitle(cadence: Cadence, range: PeriodRange) {
+  if (cadence === "daily") {
+    const weekday = new Intl.DateTimeFormat(undefined, {
+      weekday: "long",
+    }).format(parseDate(range.start));
+    return `${weekday} recap`;
+  }
+
   const label = cadence[0].toUpperCase() + cadence.slice(1);
   return `${label} recap - ${range.label}`;
 }
 
-function extractManualNotes(body: string) {
+function recapTitleForPeriod(
+  cadence: Cadence,
+  period: string,
+  appPreferences: AppPreferences,
+) {
+  if (cadence === "daily") {
+    const weekday = new Intl.DateTimeFormat(undefined, {
+      weekday: "long",
+    }).format(parseDate(period));
+    return `${weekday} recap`;
+  }
+
+  const label = cadence[0].toUpperCase() + cadence.slice(1);
+  return `${label} recap - ${formatRecapPeriod(cadence, period, appPreferences)}`;
+}
+
+function emptyNotes(fields: ManualRecapField[]) {
   const notes = Object.fromEntries(
-    MANUAL_RECAP_FIELDS.map((field) => [field.key, ""]),
+    fields.map((field) => [field.key, field.defaultValue ?? ""]),
   );
+
+  return notes;
+}
+
+function extractManualNotes(body: string, fields: ManualRecapField[]) {
+  const notes = emptyNotes(fields);
   const lines = body.split("\n").map((line) => line.trim());
 
-  for (const field of MANUAL_RECAP_FIELDS) {
+  for (const field of fields) {
     const prefix = `- ${field.label}:`;
     const matchingLine = lines.find((line) => line.startsWith(prefix));
     if (matchingLine) {
@@ -383,6 +625,41 @@ function extractManualNotes(body: string) {
   return notes;
 }
 
+function extractRecapNotes(body: string, cadence: Cadence) {
+  const fields = recapFieldsForCadence(cadence);
+  const notes = extractManualNotes(body, fields);
+
+  if (cadence !== "daily") {
+    const legacyNotes = extractManualNotes(body, LEGACY_PERIOD_RECAP_FIELDS);
+    if (!notes.needsAttention && legacyNotes.mistakesMade) {
+      notes.needsAttention = legacyNotes.mistakesMade;
+    }
+    if (!notes.patterns && legacyNotes.wentWell) {
+      notes.patterns = legacyNotes.wentWell;
+    }
+    if (!notes.nextPeriodFocus && legacyNotes.couldImprove) {
+      notes.nextPeriodFocus = legacyNotes.couldImprove;
+    }
+  }
+
+  return notes;
+}
+
+function manualLines(
+  fields: ManualRecapField[],
+  notes: Record<string, string>,
+) {
+  return fields.map(
+    (field) => `- ${field.label}: ${notes[field.key]?.trim() || "-"}`,
+  );
+}
+
+function tagCountLines(counts: TagCount[]) {
+  return counts.length > 0
+    ? counts.map((tag) => `- ${tagCountText(tag)}`)
+    : ["- None"];
+}
+
 function buildBody(
   cadence: Cadence,
   range: PeriodRange,
@@ -390,26 +667,26 @@ function buildBody(
   notes: Record<string, string>,
   currency: string,
   appPreferences: AppPreferences,
+  tradesInPeriod: Trade[],
 ) {
-  const manualLines = MANUAL_RECAP_FIELDS.map(
-    (field) => `- ${field.label}: ${notes[field.key]?.trim() || "-"}`,
-  );
+  const mistakeCounts = tradeTagCounts(tradesInPeriod, "mistakeTags");
+  const positiveCounts = tradeTagCounts(tradesInPeriod, "positiveTags");
   const bestTrade = stats.bestTrade
-    ? `${stats.bestTrade.pair} ${formatTradeTime(stats.bestTrade, appPreferences)} ${fmtPnl(
+    ? `${formatTradeName(stats.bestTrade, tradesInPeriod)} ${stats.bestTrade.pair} ${formatTradeTime(stats.bestTrade, appPreferences)} ${fmtPnl(
         stats.bestTrade.pnl,
         currency,
         appPreferences,
       )}`
     : "-";
   const worstTrade = stats.worstTrade
-    ? `${stats.worstTrade.pair} ${formatTradeTime(stats.worstTrade, appPreferences)} ${fmtPnl(
+    ? `${formatTradeName(stats.worstTrade, tradesInPeriod)} ${stats.worstTrade.pair} ${formatTradeTime(stats.worstTrade, appPreferences)} ${fmtPnl(
         stats.worstTrade.pnl,
         currency,
         appPreferences,
       )}`
     : "-";
 
-  return [
+  const autoSummary = [
     `Period: ${range.label}`,
     "",
     "Auto summary",
@@ -436,9 +713,22 @@ function buildBody(
     `- Repeated good behavior: ${stats.commonPositive}`,
     `- Common mistake: ${stats.commonMistake}`,
     `- Common emotion: ${stats.commonEmotion}`,
+  ];
+
+  return [
+    ...autoSummary,
     "",
-    "Manual review",
-    ...manualLines,
+    "Imported mistakes",
+    ...tagCountLines(mistakeCounts),
+    "",
+    "Imported done well",
+    ...tagCountLines(positiveCounts),
+    "",
+    reviewHeading(cadence),
+    ...manualLines(reviewFieldsForCadence(cadence), notes),
+    "",
+    scoreHeading(cadence),
+    ...manualLines(scoreFieldsForCadence(cadence), notes),
   ]
     .filter((line) => line !== "")
     .join("\n");
@@ -496,12 +786,120 @@ function currentRecapStatus(
     : { label: "Missing", tone: "missing-danger" };
 }
 
+function sourceRecapStatus(
+  recap: JournalRecapRow | null,
+  stats: RecapStats,
+): CurrentRecapStatus {
+  if (recap) return { label: "Done", tone: "done" };
+  return stats.totalTrades === 0
+    ? { label: "No trades", tone: "neutral" }
+    : { label: "Missing", tone: "missing" };
+}
+
+function rangesForWeeklySource(range: PeriodRange) {
+  const rows: PeriodRange[] = [];
+  let cursor = parseDate(range.start);
+  const end = parseDate(range.end);
+
+  while (cursor <= end) {
+    const key = dateKey(cursor);
+    rows.push({
+      anchor: key,
+      end: key,
+      label: key,
+      period: key,
+      start: key,
+    });
+    cursor = addDays(cursor, 1);
+  }
+
+  return rows;
+}
+
+function rangesForMonthlySource(
+  range: PeriodRange,
+  appPreferences: AppPreferences,
+) {
+  const rows: PeriodRange[] = [];
+  const seen = new Set<string>();
+  let cursor = startOfWeek(parseDate(range.start), appPreferences);
+  const end = parseDate(range.end);
+
+  while (cursor <= end) {
+    const weeklyRange = periodRange("weekly", dateKey(cursor), appPreferences);
+    if (!seen.has(weeklyRange.period)) {
+      rows.push(weeklyRange);
+      seen.add(weeklyRange.period);
+    }
+    cursor = addDays(cursor, 7);
+  }
+
+  return rows;
+}
+
+function periodSourceRows({
+  account,
+  appPreferences,
+  cadence,
+  journalRecaps,
+  range,
+  trades,
+}: {
+  account: TradingAccount | null;
+  appPreferences: AppPreferences;
+  cadence: Cadence;
+  journalRecaps: Record<Cadence, JournalRecapRow[]>;
+  range: PeriodRange;
+  trades: Trade[];
+}): PeriodSourceRow[] {
+  if (cadence === "daily") return [];
+
+  const sourceCadence: Cadence = cadence === "weekly" ? "daily" : "weekly";
+  const sourceRanges =
+    cadence === "weekly"
+      ? rangesForWeeklySource(range)
+      : rangesForMonthlySource(range, appPreferences);
+
+  return sourceRanges.map((sourceRange, index) => {
+    const stats = recapStats(account, trades, sourceRange);
+    const recap =
+      journalRecaps[sourceCadence].find(
+        (item) => item.period === sourceRange.period,
+      ) ?? null;
+    const label =
+      sourceCadence === "daily"
+        ? defaultTitle("daily", sourceRange)
+        : `Week ${index + 1}`;
+    const meta =
+      sourceCadence === "daily"
+        ? formatDateValue(sourceRange.period, appPreferences)
+        : formatRecapPeriod("weekly", sourceRange.period, appPreferences);
+
+    return {
+      label,
+      meta,
+      period: sourceRange.period,
+      range: sourceRange,
+      recap,
+      stats,
+      status: sourceRecapStatus(recap, stats),
+    };
+  });
+}
+
 export function RecapsModule({
   appPreferences,
   selectedAccount,
   selectedAccountId,
 }: ModuleContext) {
   const [cadence, setCadence] = useState<Cadence>("daily");
+  const [allRecaps, setAllRecaps] = useState<
+    Record<Cadence, JournalRecapRow[]>
+  >({
+    daily: [],
+    monthly: [],
+    weekly: [],
+  });
   const [recaps, setRecaps] = useState<JournalRecapRow[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
@@ -511,11 +909,20 @@ export function RecapsModule({
   async function reload() {
     setLoading(true);
     try {
-      const [loadedRecaps, loadedTrades] = await Promise.all([
-        listJournalRecaps(cadence, selectedAccountId),
-        listTrades(selectedAccountId),
-      ]);
-      setRecaps(loadedRecaps);
+      const [dailyRecaps, weeklyRecaps, monthlyRecaps, loadedTrades] =
+        await Promise.all([
+          listJournalRecaps("daily", selectedAccountId),
+          listJournalRecaps("weekly", selectedAccountId),
+          listJournalRecaps("monthly", selectedAccountId),
+          listTrades(selectedAccountId),
+        ]);
+      const loadedRecaps = {
+        daily: dailyRecaps,
+        monthly: monthlyRecaps,
+        weekly: weeklyRecaps,
+      };
+      setAllRecaps(loadedRecaps);
+      setRecaps(loadedRecaps[cadence]);
       setTrades(loadedTrades);
     } finally {
       setLoading(false);
@@ -666,7 +1073,13 @@ export function RecapsModule({
                     title="Double-click to open recap"
                   >
                     <td>
-                      <strong>{recap.title}</strong>
+                      <strong>
+                        {recapTitleForPeriod(
+                          cadence,
+                          recap.period,
+                          appPreferences,
+                        )}
+                      </strong>
                     </td>
                     <td>
                       {formatRecapPeriod(cadence, recap.period, appPreferences)}
@@ -686,6 +1099,7 @@ export function RecapsModule({
           cadence={cadence}
           appPreferences={appPreferences}
           initialRecap={editorRecap}
+          journalRecaps={allRecaps}
           trades={trades}
           onClose={() => setEditorOpen(false)}
           onSaved={async () => {
@@ -758,11 +1172,471 @@ function StatTile({
   );
 }
 
+function RecapPeriodRow({
+  anchor,
+  cadence,
+  onAnchorChange,
+  title,
+}: {
+  anchor: string;
+  cadence: Cadence;
+  onAnchorChange: (value: string) => void;
+  title: string;
+}) {
+  return (
+    <div className="recaps-period-row">
+      <label className="field">
+        <span>{cadence === "monthly" ? "Month" : "Period date"}</span>
+        <input
+          type={cadence === "monthly" ? "month" : "date"}
+          value={anchor}
+          onChange={(event) => onAnchorChange(event.target.value)}
+        />
+      </label>
+      <div className="recaps-auto-title">
+        <strong>{title}</strong>
+      </div>
+    </div>
+  );
+}
+
+function PeriodRecapWorkspace({
+  appPreferences,
+  cadence,
+  currency,
+  mistakeCounts,
+  notes,
+  onNoteChange,
+  positiveCounts,
+  sourceRows,
+  trades,
+}: {
+  appPreferences: AppPreferences;
+  cadence: Cadence;
+  currency: string;
+  mistakeCounts: TagCount[];
+  notes: Record<string, string>;
+  onNoteChange: (key: string, value: string) => void;
+  positiveCounts: TagCount[];
+  sourceRows: PeriodSourceRow[];
+  trades: Trade[];
+}) {
+  const reviewFields = reviewFieldsForCadence(cadence);
+  const scoreFields = scoreFieldsForCadence(cadence);
+
+  return (
+    <div className="period-recap-workspace">
+      {cadence === "daily" ? (
+        <DailyTradeRecapList
+          appPreferences={appPreferences}
+          currency={currency}
+          trades={trades}
+        />
+      ) : (
+        <PeriodSourceList
+          appPreferences={appPreferences}
+          cadence={cadence}
+          currency={currency}
+          rows={sourceRows}
+        />
+      )}
+
+      <div className="period-recap-editor-pane">
+        <div className="daily-import-grid">
+          <DailyTagCountSection
+            counts={mistakeCounts}
+            emptyLabel="No mistakes imported yet."
+            title="Imported mistakes"
+          />
+          <DailyTagCountSection
+            counts={positiveCounts}
+            emptyLabel="Nothing imported yet."
+            title="Imported done well"
+          />
+        </div>
+
+        <section
+          className="daily-review-fields"
+          aria-label={reviewHeading(cadence)}
+        >
+          {reviewFields.map((field) => (
+            <label className="field daily-review-field" key={field.key}>
+              <span>{field.label}</span>
+              <textarea
+                rows={field.rows ?? 3}
+                placeholder={field.placeholder}
+                value={notes[field.key] ?? ""}
+                onChange={(event) =>
+                  onNoteChange(field.key, event.target.value)
+                }
+              />
+            </label>
+          ))}
+        </section>
+
+        <section
+          className="daily-score-fields"
+          aria-label={scoreHeading(cadence)}
+        >
+          {scoreFields.map((field) => (
+            <DailyScoreField
+              field={field}
+              key={field.key}
+              value={notes[field.key] ?? field.defaultValue ?? "5"}
+              onChange={(value) => onNoteChange(field.key, value)}
+            />
+          ))}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function PeriodSourceList({
+  appPreferences,
+  cadence,
+  currency,
+  rows,
+}: {
+  appPreferences: AppPreferences;
+  cadence: Cadence;
+  currency: string;
+  rows: PeriodSourceRow[];
+}) {
+  const done = rows.filter((row) => row.recap).length;
+  const title = cadence === "weekly" ? "Daily recaps" : "Weekly recaps";
+
+  return (
+    <aside className="period-source-pane" aria-label={title}>
+      <header className="daily-pane-header">
+        <span>{title}</span>
+        <strong>
+          {done}/{rows.length}
+        </strong>
+      </header>
+
+      {rows.length === 0 ? (
+        <p className="daily-recap-empty">Nothing to summarize yet.</p>
+      ) : (
+        <div className="period-source-list">
+          {rows.map((row) => (
+            <PeriodSourceRowItem
+              appPreferences={appPreferences}
+              currency={currency}
+              key={row.period}
+              row={row}
+            />
+          ))}
+        </div>
+      )}
+    </aside>
+  );
+}
+
+function PeriodSourceRowItem({
+  appPreferences,
+  currency,
+  row,
+}: {
+  appPreferences: AppPreferences;
+  currency: string;
+  row: PeriodSourceRow;
+}) {
+  return (
+    <details
+      className={`period-source-row${row.recap ? "" : " is-missing"}`}
+      aria-label={row.label}
+    >
+      <summary className="period-source-summary">
+        <span className="period-source-identity">
+          <span>{row.meta}</span>
+          <strong>{row.label}</strong>
+        </span>
+        <span className={`recaps-status ${row.status.tone}`}>
+          {row.status.label}
+        </span>
+      </summary>
+
+      <div className="period-source-details">
+        <div className="daily-trade-detail-grid">
+          <span>
+            Trades
+            <strong>{row.stats.totalTrades}</strong>
+          </span>
+          <span>
+            Win / Loss / BE
+            <strong>
+              {row.stats.wins} / {row.stats.losses} / {row.stats.breakEven}
+            </strong>
+          </span>
+          <span>
+            Net P&L
+            <strong className={pnlTone(row.stats.netPnl)}>
+              {fmtPnl(row.stats.netPnl, currency, appPreferences)}
+            </strong>
+          </span>
+          <span>
+            Growth
+            <strong className={pnlTone(row.stats.growthPercent)}>
+              {fmtPercent(row.stats.growthPercent, appPreferences)}
+            </strong>
+          </span>
+          <span>
+            Trade recaps
+            <strong>
+              {row.stats.recapped}/{row.stats.totalTrades}
+            </strong>
+          </span>
+          <span>
+            Best strategy
+            <strong>{row.stats.bestStrategy}</strong>
+          </span>
+        </div>
+
+        {row.recap ? (
+          <div className="daily-trade-note">
+            <span>Summary</span>
+            <p>{bodyPreview(row.recap.body) || "No summary written."}</p>
+          </div>
+        ) : (
+          <p>
+            {row.stats.totalTrades === 0
+              ? "No trades in this period."
+              : "No recap saved yet."}
+          </p>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function DailyTradeRecapList({
+  appPreferences,
+  currency,
+  trades,
+}: {
+  appPreferences: AppPreferences;
+  currency: string;
+  trades: Trade[];
+}) {
+  const recapped = trades.filter((trade) => trade.hasRecap).length;
+
+  return (
+    <aside className="daily-trade-recap-pane" aria-label="Trade recaps">
+      <header className="daily-pane-header">
+        <span>Trade recaps</span>
+        <strong>
+          {recapped}/{trades.length}
+        </strong>
+      </header>
+
+      {trades.length === 0 ? (
+        <p className="daily-recap-empty">No trades for this day.</p>
+      ) : (
+        <div className="daily-trade-recap-list">
+          {trades.map((trade) => (
+            <DailyTradeRecapRow
+              appPreferences={appPreferences}
+              currency={currency}
+              key={trade.id}
+              trade={trade}
+              tradeName={formatTradeName(trade, trades)}
+            />
+          ))}
+        </div>
+      )}
+    </aside>
+  );
+}
+
+function DailyTradeRecapRow({
+  appPreferences,
+  currency,
+  trade,
+  tradeName,
+}: {
+  appPreferences: AppPreferences;
+  currency: string;
+  trade: Trade;
+  tradeName: string;
+}) {
+  const recap = trade.recap;
+
+  return (
+    <details
+      className={`daily-trade-recap-row${recap ? "" : " is-missing"}`}
+      aria-label={`${tradeName} trade recap`}
+    >
+      <summary className="daily-trade-recap-summary">
+        <span className="daily-trade-recap-identity">
+          <span>{formatTradeTime(trade, appPreferences)}</span>
+          <strong>{tradeName}</strong>
+        </span>
+        <span className={`result-pill ${resultClass(trade.exit.result)}`}>
+          {resultShortLabel(trade.exit.result)}
+        </span>
+      </summary>
+
+      <div className="daily-trade-recap-details">
+        <div className="daily-trade-detail-grid">
+          <span>
+            Instrument
+            <strong>{trade.pair || "-"}</strong>
+          </span>
+          <span>
+            Direction
+            <strong>{directionLabel(trade.direction)}</strong>
+          </span>
+          <span>
+            Result
+            <strong>{resultShortLabel(trade.exit.result)}</strong>
+          </span>
+          <span>
+            P&L
+            <strong className={pnlTone(trade.pnl)}>
+              {fmtPnl(trade.pnl, currency, appPreferences)}
+            </strong>
+          </span>
+          <span>
+            Recap
+            <strong>{recap ? recap.grade || "Done" : "Missing"}</strong>
+          </span>
+          <span>
+            Plan
+            <strong>
+              {recap ? planFollowedLabel(recap.followedPlan) : "-"}
+            </strong>
+          </span>
+        </div>
+
+        {recap ? (
+          <>
+            <DailyTradeTags
+              emptyLabel="No mistakes"
+              label="Mistakes"
+              tags={recap.mistakeTags}
+            />
+            <DailyTradeTags
+              emptyLabel="Nothing marked"
+              label="Done well"
+              tags={recap.positiveTags}
+            />
+            <div className="daily-trade-note">
+              <span>Lesson</span>
+              <p>{recap.lesson || "No lesson written."}</p>
+            </div>
+            <div className="daily-trade-note">
+              <span>Next time</span>
+              <p>{recap.nextAction || "No next action written."}</p>
+            </div>
+          </>
+        ) : (
+          <p>Create the trade recap first to import its notes here.</p>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function DailyTradeTags({
+  emptyLabel,
+  label,
+  tags,
+}: {
+  emptyLabel: string;
+  label: string;
+  tags: string[];
+}) {
+  return (
+    <div className="daily-trade-tags">
+      <span>{label}</span>
+      <div>
+        {tags.length > 0 ? (
+          tags.map((tag) => <b key={tag}>{tag}</b>)
+        ) : (
+          <em>{emptyLabel}</em>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DailyTagCountSection({
+  counts,
+  emptyLabel,
+  title,
+}: {
+  counts: TagCount[];
+  emptyLabel: string;
+  title: string;
+}) {
+  return (
+    <section className="daily-import-section">
+      <header>
+        <span>{title}</span>
+        <strong>{counts.reduce((sum, item) => sum + item.count, 0)}</strong>
+      </header>
+      {counts.length > 0 ? (
+        <div className="daily-import-tags">
+          {counts.map((item) => (
+            <span key={item.label}>
+              {item.label}
+              {item.count > 1 ? <b>x{item.count}</b> : null}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p>{emptyLabel}</p>
+      )}
+    </section>
+  );
+}
+
+function DailyScoreField({
+  field,
+  onChange,
+  value,
+}: {
+  field: ManualRecapField;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const parsed = Number(value);
+  const score = Number.isFinite(parsed) ? parsed : 5;
+
+  return (
+    <label className="daily-score-field">
+      <span>
+        {field.label}
+        <strong>{score}/10</strong>
+      </span>
+      <input
+        type="range"
+        min={1}
+        max={10}
+        step={1}
+        value={score}
+        onChange={(event) => onChange(event.target.value)}
+        className="feeling-slider"
+      />
+      <div className="feeling-bar feeling-bar-large" aria-hidden="true">
+        {Array.from({ length: 10 }).map((_, index) => (
+          <span
+            key={index}
+            className={`feeling-cell ${index < score ? "filled" : ""}`}
+          />
+        ))}
+      </div>
+    </label>
+  );
+}
+
 function RecapDialog({
   account,
   cadence,
   appPreferences,
   initialRecap,
+  journalRecaps,
   trades,
   onClose,
   onSaved,
@@ -771,6 +1645,7 @@ function RecapDialog({
   cadence: Cadence;
   appPreferences: AppPreferences;
   initialRecap: JournalRecapRow | null;
+  journalRecaps: Record<Cadence, JournalRecapRow[]>;
   trades: Trade[];
   onClose: () => void;
   onSaved: () => void | Promise<void>;
@@ -785,18 +1660,40 @@ function RecapDialog({
     () => recapStats(account, trades, range),
     [account, range, trades],
   );
+  const tradesInPeriod = useMemo(
+    () => periodTrades(trades, range),
+    [range, trades],
+  );
+  const mistakeCounts = useMemo(
+    () => tradeTagCounts(tradesInPeriod, "mistakeTags"),
+    [tradesInPeriod],
+  );
+  const positiveCounts = useMemo(
+    () => tradeTagCounts(tradesInPeriod, "positiveTags"),
+    [tradesInPeriod],
+  );
+  const recapFields = recapFieldsForCadence(cadence);
+  const sourceRows = useMemo(
+    () =>
+      periodSourceRows({
+        account,
+        appPreferences,
+        cadence,
+        journalRecaps,
+        range,
+        trades,
+      }),
+    [account, appPreferences, cadence, journalRecaps, range, trades],
+  );
   const [notes, setNotes] = useState<Record<string, string>>(() => {
     return initialRecap
-      ? extractManualNotes(initialRecap.body)
-      : Object.fromEntries(MANUAL_RECAP_FIELDS.map((field) => [field.key, ""]));
+      ? extractRecapNotes(initialRecap.body, cadence)
+      : emptyNotes(recapFields);
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const currency = account?.currency ?? "USD";
-  const title =
-    initialRecap && initialRecap.period === range.period
-      ? initialRecap.title
-      : defaultTitle(cadence, range);
+  const title = defaultTitle(cadence, range);
 
   function updateNote(key: string, value: string) {
     setNotes((current) => ({ ...current, [key]: value }));
@@ -814,6 +1711,7 @@ function RecapDialog({
         notes,
         currency,
         appPreferences,
+        tradesInPeriod,
       );
       const input: JournalRecapInput = {
         id: initialRecap?.id,
@@ -836,12 +1734,27 @@ function RecapDialog({
   return (
     <ModalShell
       ariaLabel={`${cadence} recap`}
-      bodyClassName="recaps-modal-body"
-      modalClassName="recaps-modal"
+      bodyClassName="recaps-modal-body recaps-split-modal-body"
+      modalClassName="recaps-modal recaps-split-modal"
       onClose={onClose}
       onSubmit={handleSubmit}
       subtitle={range.label}
       title={`${initialRecap ? "Edit" : "Create"} ${cadence} recap`}
+      headerContent={
+        <div className="period-recap-header-summary">
+          <RecapPeriodRow
+            anchor={anchor}
+            cadence={cadence}
+            onAnchorChange={setAnchor}
+            title={title}
+          />
+          <RecapStatsGrid
+            appPreferences={appPreferences}
+            currency={currency}
+            stats={stats}
+          />
+        </div>
+      }
       footer={
         <>
           {error ? (
@@ -863,41 +1776,17 @@ function RecapDialog({
         </>
       }
     >
-      <div className="recaps-period-row">
-        <label className="field">
-          <span>{cadence === "monthly" ? "Month" : "Period date"}</span>
-          <input
-            type={cadence === "monthly" ? "month" : "date"}
-            value={anchor}
-            onChange={(event) => {
-              setAnchor(event.target.value);
-            }}
-          />
-        </label>
-        <div className="recaps-auto-title">
-          <span>Auto title</span>
-          <strong>{title}</strong>
-        </div>
-      </div>
-
-      <RecapStatsGrid
+      <PeriodRecapWorkspace
         appPreferences={appPreferences}
-        stats={stats}
+        cadence={cadence}
         currency={currency}
+        mistakeCounts={mistakeCounts}
+        notes={notes}
+        onNoteChange={updateNote}
+        positiveCounts={positiveCounts}
+        sourceRows={sourceRows}
+        trades={tradesInPeriod}
       />
-
-      <section className="recaps-manual-fields">
-        {MANUAL_RECAP_FIELDS.map((field) => (
-          <label className="field recaps-manual-field" key={field.key}>
-            <span>{field.label}</span>
-            <textarea
-              rows={3}
-              value={notes[field.key] ?? ""}
-              onChange={(event) => updateNote(field.key, event.target.value)}
-            />
-          </label>
-        ))}
-      </section>
     </ModalShell>
   );
 }

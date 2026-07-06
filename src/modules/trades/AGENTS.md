@@ -23,6 +23,7 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - Screenshot stages are `pre-trade`, `entry`, `exit`, and `recap`.
 - New trade workflow can collect draft screenshots and attaches them after the trade is saved.
 - New trades save under the selected top-bar account.
+- Trade display names are automatic per selected account and day: `Trade 1`, `Trade 2`, etc.; the instrument/pair is not the trade name.
 - New trade strategy choices come only from the selected account's linked strategies.
 - New trade risk % is checked against the selected account's risk plan without editing the plan.
 - Saved trade cards expose screenshot import for `pre-trade`, `entry`, and `exit`.
@@ -36,10 +37,13 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - Recap positive tags start from `tradeRecapPositives.ts`; keep the catalog grouped even if the UI later flattens it.
 - Recap quick tag buttons use quick exports from the catalog files, not duplicate local arrays.
 - Recap lesson and next action fields use quick options plus free text so journaling stays fast.
-- Recap modal uses a wide split workspace: read-only trade details on the left, recap tabs and fields on the right.
+- Trade rows open a shared trade workspace modal instead of a separate full-page detail view.
+- The shared trade workspace has two modes: trade mode gives trade details the wide side and recap summary the narrow side; recap mode gives trade context the narrow side and recap editing the wide side.
+- Trade mode shows the trade summary metrics in the modal header, above the split workspace body.
+- Create and Done recap actions both open the shared trade workspace in recap mode.
 - Recap modal trade details show saved pre-trade, entry, and exit screenshot thumbnails when available.
 - Recap tabs navigate Mistakes, Done Well, Lesson, and Score.
-- Trade popups use the shared `ModalShell` for popup chrome, including recap, day details, trade workflow, entry/exit forms, pre-trade, and screenshot previews.
+- Trade popups use the shared `ModalShell` for popup chrome, including the trade workspace, day details, trade workflow, entry/exit forms, pre-trade, and screenshot previews.
 - The trade list stays compact and shows date/time, buy/sell, strategy, result, P&L, and growth %.
 - Recaps are separate from the pre-trade, entry, and exit workflow.
 - All persistence must use `src/shared/db/database.ts` and `src/shared/db/storage.ts`.

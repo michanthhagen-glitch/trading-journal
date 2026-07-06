@@ -1,21 +1,17 @@
-import { ClipboardPaste, FileUp } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ModalShell } from "../../../components/ModalShell";
 import {
-  addScreenshot,
   savePreTrade,
   type PreTradeData,
-  type ScreenshotRow,
   type Trade,
 } from "../../../shared/db/database";
-import {
-  importScreenshotFromClipboard,
-  importScreenshotFromPath,
-  resolveScreenshotUrl,
-} from "../../../shared/db/storage";
+import { TradeScreenshotDropZone } from "./ScreenshotTools";
 
 type PreTradeFormProps = {
+  confirmBeforeDelete: boolean;
   trade: Trade;
+  tradeName: string;
+  onChanged: () => void | Promise<void>;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 };
@@ -29,13 +25,16 @@ const EMPTY_FORM: PreTradeData = {
   feeling: null,
 };
 
-export function PreTradeForm({ trade, onClose, onSaved }: PreTradeFormProps) {
+export function PreTradeForm({
+  confirmBeforeDelete,
+  trade,
+  tradeName,
+  onChanged,
+  onClose,
+  onSaved,
+}: PreTradeFormProps) {
   const [form, setForm] = useState<PreTradeData>(EMPTY_FORM);
-  const [screenshots, setScreenshots] = useState<ScreenshotRow[]>(
-    trade.screenshots.filter((s) => s.stage === "pre-trade"),
-  );
   const [saving, setSaving] = useState(false);
-  const [busyMsg, setBusyMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setForm({
@@ -55,44 +54,6 @@ export function PreTradeForm({ trade, onClose, onSaved }: PreTradeFormProps) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  async function handlePasteFromClipboard() {
-    setBusyMsg("Reading clipboard…");
-    try {
-      const relPath = await importScreenshotFromClipboard();
-      if (!relPath) {
-        setBusyMsg("No image found on clipboard.");
-        setTimeout(() => setBusyMsg(null), 2500);
-        return;
-      }
-      const row = await addScreenshot(trade.id, "pre-trade", relPath);
-      setScreenshots((cur) => [...cur, row]);
-      setBusyMsg(null);
-    } catch (err) {
-      console.error(err);
-      setBusyMsg("Could not read clipboard image.");
-      setTimeout(() => setBusyMsg(null), 2500);
-    }
-  }
-
-  async function handleImportFromDisk() {
-    setBusyMsg(null);
-    try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const picked = await open({
-        multiple: false,
-        filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
-      });
-      if (!picked || typeof picked !== "string") return;
-      const relPath = await importScreenshotFromPath(picked);
-      const row = await addScreenshot(trade.id, "pre-trade", relPath);
-      setScreenshots((cur) => [...cur, row]);
-    } catch (err) {
-      console.error(err);
-      setBusyMsg("Could not import the file.");
-      setTimeout(() => setBusyMsg(null), 2500);
-    }
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -110,7 +71,7 @@ export function PreTradeForm({ trade, onClose, onSaved }: PreTradeFormProps) {
       modalClassName="modal-card-wide"
       onClose={onClose}
       onSubmit={handleSubmit}
-      title={`Pre-trade - ${trade.pair}`}
+      title={`Pre-trade - ${tradeName}`}
       footer={
         <>
           <button
@@ -130,33 +91,14 @@ export function PreTradeForm({ trade, onClose, onSaved }: PreTradeFormProps) {
       <section className="pre-section">
         <header className="pre-section-header">
           <h4>Screenshots</h4>
-          <div className="pre-screenshot-actions">
-            <button
-              type="button"
-              className="ghost-button ghost-button-sm"
-              onClick={handlePasteFromClipboard}
-            >
-              <ClipboardPaste size={14} aria-hidden="true" />
-              <span>Paste from clipboard</span>
-            </button>
-            <button
-              type="button"
-              className="ghost-button ghost-button-sm"
-              onClick={handleImportFromDisk}
-            >
-              <FileUp size={14} aria-hidden="true" />
-              <span>Import from disk</span>
-            </button>
-          </div>
         </header>
-        {screenshots.length === 0 ? (
-          <p className="pre-empty">
-            No screenshots yet — paste a TradingView chart or import from disk.
-          </p>
-        ) : (
-          <ScreenshotStrip screenshots={screenshots} />
-        )}
-        {busyMsg ? <p className="pre-status">{busyMsg}</p> : null}
+        <TradeScreenshotDropZone
+          confirmBeforeDelete={confirmBeforeDelete}
+          screenshots={trade.screenshots.filter((s) => s.stage === "pre-trade")}
+          stage="pre-trade"
+          tradeId={trade.id}
+          onChanged={onChanged}
+        />
       </section>
 
       <section className="pre-section">
@@ -251,34 +193,5 @@ export function PreTradeForm({ trade, onClose, onSaved }: PreTradeFormProps) {
         </div>
       </section>
     </ModalShell>
-  );
-}
-
-function ScreenshotStrip({ screenshots }: { screenshots: ScreenshotRow[] }) {
-  const [urls, setUrls] = useState<Record<string, string>>({});
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all(
-      screenshots.map(async (s) => [s.id, await resolveScreenshotUrl(s.path)]),
-    ).then((pairs) => {
-      if (cancelled) return;
-      setUrls(Object.fromEntries(pairs as [string, string][]));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [screenshots]);
-  return (
-    <div className="screenshot-strip">
-      {screenshots.map((s) => (
-        <div className="screenshot-thumb" key={s.id}>
-          {urls[s.id] ? (
-            <img src={urls[s.id]} alt={s.caption || "Screenshot"} />
-          ) : (
-            <span className="screenshot-loading">…</span>
-          )}
-        </div>
-      ))}
-    </div>
   );
 }

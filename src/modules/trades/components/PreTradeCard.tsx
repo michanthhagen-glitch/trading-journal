@@ -3,10 +3,7 @@ import {
   formatCurrencyValue,
   type AppPreferences,
 } from "../../../shared/appPreferences";
-import {
-  ScreenshotImportButton,
-  TradeScreenshotGallery,
-} from "./ScreenshotTools";
+import { TradeScreenshotGallery } from "./ScreenshotTools";
 
 type PreTradeCardProps = {
   appPreferences: AppPreferences;
@@ -40,11 +37,6 @@ export function PreTradeCard({
         <span className="stage-dot stage-pre" aria-hidden="true" />
         <h3>Pre-trade</h3>
         <div className="trade-card-actions">
-          <ScreenshotImportButton
-            tradeId={trade.id}
-            stage="pre-trade"
-            onChanged={onChanged}
-          />
           <button
             className="ghost-button ghost-button-sm"
             type="button"

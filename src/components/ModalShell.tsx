@@ -7,6 +7,8 @@ type ModalShellProps = {
   children: ReactNode;
   closeLabel?: string;
   footer?: ReactNode;
+  headerActions?: ReactNode;
+  headerContent?: ReactNode;
   modalClassName?: string;
   onClose: () => void;
   onSubmit?: FormEventHandler<HTMLFormElement>;
@@ -20,6 +22,8 @@ export function ModalShell({
   children,
   closeLabel = "Close",
   footer,
+  headerActions,
+  headerContent,
   modalClassName = "",
   onClose,
   onSubmit,
@@ -30,18 +34,26 @@ export function ModalShell({
   const bodyClasses = `modal-body ${bodyClassName}`.trim();
   const header = (
     <header className="modal-header">
-      <div>
-        <h3>{title}</h3>
-        {subtitle ? <p className="modal-subtitle">{subtitle}</p> : null}
+      <div className="modal-header-main">
+        <div className="modal-heading">
+          <h3>{title}</h3>
+          {subtitle ? <p className="modal-subtitle">{subtitle}</p> : null}
+        </div>
+        <div className="modal-header-actions">
+          {headerActions}
+          <button
+            className="icon-button"
+            type="button"
+            aria-label={closeLabel}
+            onClick={onClose}
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
       </div>
-      <button
-        className="icon-button"
-        type="button"
-        aria-label={closeLabel}
-        onClick={onClose}
-      >
-        <X size={18} aria-hidden="true" />
-      </button>
+      {headerContent ? (
+        <div className="modal-header-content">{headerContent}</div>
+      ) : null}
     </header>
   );
   const content = (
