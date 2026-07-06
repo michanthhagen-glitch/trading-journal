@@ -1,6 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Trading Journal",
+  "mainBinaryName": "Trading Journal",
   "version": "0.1.0",
   "identifier": "com.mykey.tradingjournal",
   "build": {
@@ -38,7 +39,8 @@
     "longDescription": "Desktop trading journal for tracking trades, notes, and performance.",
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerHooks": "windows/installer-hooks.nsh"
       }
     }
   },

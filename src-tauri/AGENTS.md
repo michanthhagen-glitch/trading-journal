@@ -21,6 +21,7 @@ Owns the native desktop shell, Tauri configuration, native plugin registration, 
 - Do not bypass renderer shared DB/storage contracts from UI code.
 - Window capture commands live in `src/lib.rs` and are consumed through renderer storage helpers.
 - The asset protocol is enabled only for `$APPDATA/screenshots/**` so saved screenshots can render in the UI.
+- Windows NSIS installs create and remove a current-user desktop shortcut through `windows/installer-hooks.nsh`.
 
 ## Work Guidance
 
