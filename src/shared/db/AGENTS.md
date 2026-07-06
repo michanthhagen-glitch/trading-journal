@@ -23,6 +23,7 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 - Saving a per-trade recap marks that trade as reviewed.
 - Per-trade recaps store structured fields for later daily, weekly, and monthly automation.
 - The Recaps module uses shared save/list helpers and keeps browser fallback aligned with SQLite.
+- Time-bounded recap delete uses `deleteJournalRecap`; it removes only the `journal_recaps` row.
 - Screenshot backup/restore must treat the active database file and the `screenshots/` folder as one data set; database-only export is incomplete once screenshots exist.
 
 ## Work Guidance

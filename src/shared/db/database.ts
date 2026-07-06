@@ -1387,6 +1387,22 @@ export async function saveJournalRecap(
   return row;
 }
 
+export async function deleteJournalRecap(id: string): Promise<void> {
+  if (!isTauri()) {
+    for (const rows of Object.values(SEED_JOURNAL)) {
+      const index = rows.findIndex((recap) => recap.id === id);
+      if (index >= 0) {
+        rows.splice(index, 1);
+        return;
+      }
+    }
+    return;
+  }
+
+  const db = await getDb();
+  await db.execute("DELETE FROM journal_recaps WHERE id = $1", [id]);
+}
+
 const SEED_JOURNAL: Record<JournalRecapRow["cadence"], JournalRecapRow[]> = {
   daily: [
     {

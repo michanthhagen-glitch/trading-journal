@@ -3595,6 +3595,11 @@ button {
   padding-inline: 11px;
 }
 
+.recap-delete-button {
+  height: 34px;
+  padding-inline: 11px;
+}
+
 .trade-delete-error {
   margin: -8px 0 0;
   color: #ff9c9c;

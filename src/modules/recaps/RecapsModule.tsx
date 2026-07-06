@@ -1,7 +1,8 @@
-import { CalendarDays, CalendarRange, Edit3, Plus } from "lucide-react";
+import { CalendarDays, CalendarRange, Edit3, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ModalShell } from "../../components/ModalShell";
 import {
+  deleteJournalRecap,
   listJournalRecaps,
   listTrades,
   saveJournalRecap,
@@ -17,6 +18,7 @@ import {
   formatDateValue,
   formatPercentValue,
   formatTimeForDateValue,
+  shouldConfirmDelete,
   startOfWeekByPreference,
   type AppPreferences,
 } from "../../shared/appPreferences";
@@ -1691,6 +1693,7 @@ function RecapDialog({
       : emptyNotes(recapFields);
   });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const currency = account?.currency ?? "USD";
   const title = defaultTitle(cadence, range);
@@ -1731,6 +1734,31 @@ function RecapDialog({
     }
   }
 
+  async function handleDelete() {
+    if (!initialRecap) return;
+
+    if (
+      shouldConfirmDelete(appPreferences) &&
+      !window.confirm(
+        `Delete this ${cadence} recap? This only removes the saved recap.`,
+      )
+    ) {
+      return;
+    }
+
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteJournalRecap(initialRecap.id);
+      await onSaved();
+    } catch (deleteError) {
+      console.error(deleteError);
+      setError("Delete failed. Restart the app and try again.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <ModalShell
       ariaLabel={`${cadence} recap`}
@@ -1740,6 +1768,19 @@ function RecapDialog({
       onSubmit={handleSubmit}
       subtitle={range.label}
       title={`${initialRecap ? "Edit" : "Create"} ${cadence} recap`}
+      headerActions={
+        initialRecap ? (
+          <button
+            className="ghost-button danger-button recap-delete-button"
+            type="button"
+            onClick={handleDelete}
+            disabled={saving || deleting}
+          >
+            <Trash2 size={15} aria-hidden="true" />
+            <span>{deleting ? "Deleting..." : "Delete"}</span>
+          </button>
+        ) : null
+      }
       headerContent={
         <div className="period-recap-header-summary">
           <RecapPeriodRow
@@ -1766,11 +1807,15 @@ function RecapDialog({
             className="secondary-button"
             type="button"
             onClick={onClose}
-            disabled={saving}
+            disabled={saving || deleting}
           >
             Cancel
           </button>
-          <button className="primary-button" type="submit" disabled={saving}>
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={saving || deleting}
+          >
             {saving ? "Saving..." : "Save recap"}
           </button>
         </>
