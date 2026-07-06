@@ -4,7 +4,8 @@
 
 import Database from "@tauri-apps/plugin-sql";
 
-const DB_URL = "sqlite:trading-journal.db";
+const DB_URL =
+  import.meta.env.VITE_TRADING_JOURNAL_DB_URL ?? "sqlite:trading-journal.db";
 
 export type TradeStatus = "pre-trade" | "open" | "closed" | "reviewed";
 export type TradeResult = "" | "win" | "loss" | "break-even";

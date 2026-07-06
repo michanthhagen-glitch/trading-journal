@@ -42,23 +42,25 @@ export function AppShell({
       }
     >
       <Sidebar
+        accounts={accounts}
         activeModuleId={activeModule.id}
         isCollapsed={isSidebarCollapsed}
         modules={modules}
+        selectedAccountId={selectedAccountId}
+        onSelectAccount={onSelectAccount}
         onSelectModule={onSelectModule}
         onToggleCollapsed={() => setIsSidebarCollapsed((current) => !current)}
       />
 
       <div className="app-main">
-        <Topbar
-          accounts={accounts}
-          activeModule={activeModule}
-          selectedAccountId={selectedAccountId}
-          onSelectAccount={onSelectAccount}
-        />
+        <Topbar activeModule={activeModule} />
 
         <main
-          className="app-content"
+          className={
+            activeModule.id === "dashboard"
+              ? "app-content app-content-dashboard"
+              : "app-content"
+          }
           aria-label={`${activeModule.label} module`}
         >
           <ActiveModule

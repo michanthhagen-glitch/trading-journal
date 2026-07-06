@@ -11,7 +11,7 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 
 ## Local Contracts
 
-- Desktop mode uses `sqlite:trading-journal.db` through `@tauri-apps/plugin-sql`.
+- Official desktop mode uses `sqlite:trading-journal.db` through `@tauri-apps/plugin-sql`; dev-app mode uses `sqlite:trading-journal-dev.db`.
 - Browser mode uses in-memory trades and blob URLs so `npm run dev` works without Tauri.
 - Components must not import `@tauri-apps/plugin-sql` or `@tauri-apps/plugin-fs` directly.
 - Native window capture must stay behind `storage.ts`; components should call the typed helper functions.
@@ -19,11 +19,11 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 - Trade workflow fields include pre-trade strategy/risk, entry direction/time/price/lot size/SL/TP/notes/confidence, and exit time/price/result/P&L/note/feeling.
 - Strategy setup fields include strategy text, entry rules, SL/TP rules, and invalidation rules.
 - Risk management setup fields include per-trade/day/week risk ranges, trade-loss limits, and daily/weekly goal ranges.
-- Trades and time-bounded recaps belong to the selected top-bar account through `account_id`.
+- Trades and time-bounded recaps belong to the selected sidebar account through `account_id`.
 - Saving a per-trade recap marks that trade as reviewed.
 - Per-trade recaps store structured fields for later daily, weekly, and monthly automation.
 - The Recaps module uses shared save/list helpers and keeps browser fallback aligned with SQLite.
-- Screenshot backup/restore must treat `trading-journal.db` and the `screenshots/` folder as one data set; database-only export is incomplete once screenshots exist.
+- Screenshot backup/restore must treat the active database file and the `screenshots/` folder as one data set; database-only export is incomplete once screenshots exist.
 
 ## Work Guidance
 

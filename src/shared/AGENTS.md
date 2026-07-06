@@ -8,6 +8,7 @@ Owns cross-module helpers and data access used by more than one module.
 
 - `db/`: SQLite access, browser fallback data, screenshot file/blob storage.
 - `appPreferences.ts`: persisted app preferences for date, time, timezone, week start, number format, currency display, and delete confirmation.
+- `appUpdater.ts`: shared wrapper for Tauri updater checks and install progress.
 - `tradeNames.ts`: automatic per-day trade display names, such as `Trade 1`.
 
 ## Local Contracts

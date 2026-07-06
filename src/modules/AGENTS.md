@@ -19,6 +19,7 @@ Owns all sidebar modules. Each module owns its own main content surface and loca
 - Shared data access goes through `src/shared/db`.
 - Do not add extra shell chrome inside modules unless the module truly needs it.
 - Do not render duplicate module page headers inside workspaces; the top bar owns module title and description.
+- A module owns the workspace inside `.app-content`; keep it compact, and put overflow in the deepest practical panel/list/body.
 
 ## Work Guidance
 

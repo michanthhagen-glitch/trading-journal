@@ -20,7 +20,8 @@ Owns the compact account control room: total/month/week summaries, risk/goal rea
 - Worst win rate means the lowest win percentage, not the highest loss percentage.
 - Top summary rings reveal segment values on hover or focus instead of showing permanent legends below the ring.
 - Dashboard detail content belongs in tabs below the summary bands.
-- Lower dashboard detail uses a 50/50 layout: daily-balance line graph on the left, top winning/losing trade/day/week/month rankings on the right.
+- Lower dashboard detail uses a responsive desktop layout: daily-balance line graph on the left at about one-third width, top winning/losing trade/day/week/month rankings on the right at about two-thirds width.
+- The default dashboard should keep the visible top gap above the summary cards and bottom gap below the lower workspace even.
 - The Statistics tab groups all closed trades by day, session, time of day, direction, currency pair, and strategy; six cards should sit as three columns by two rows on desktop.
 - Statistics cards compare best/worst win rate where useful; Direction compares Long and Short directly, while Strategy can stay as a simple top-result card to avoid cramped names.
 - Statistics detail popups use Table and Chart tabs; Day detail must always show Monday through Sunday, including days with zero trades.
@@ -37,6 +38,7 @@ Owns the compact account control room: total/month/week summaries, risk/goal rea
 - The lower Total tab daily-balance chart shows all account history from the first logged trade through today, with tomorrow as a tick-only placeholder.
 - The lower Month tab daily-balance chart shows the current month; double-click opens year tabs with month-by-month chart history from first trade month through the current month.
 - The lower Week tab daily-balance chart shows the current Monday-to-Sunday week, labels ticks as `M T W T F S S`, double-click opens year tabs with saved week summary list rows, and week rows open a deeper week graph.
+- The default dashboard page should fit the visible desktop workspace without whole-page scrolling; keep lower chart and ranking cards compact, with deeper lists available through detail popups.
 - The chart history detail view should fit four monthly charts per row on desktop, so a full year is visible as three rows.
 - The Total daily-balance chart uses account-scale bounds: starting balance sits at one-third of the value range, with the top at 200% growth, then 300%, 400%, etc. when exceeded.
 - The dashboard should stay compact, summary-first, and warning-oriented.

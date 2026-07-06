@@ -23,6 +23,9 @@ struct CapturedWindowImage {
     png_bytes: Vec<u8>,
 }
 
+const OFFICIAL_DB_URL: &str = "sqlite:trading-journal.db";
+const DEV_DB_URL: &str = "sqlite:trading-journal-dev.db";
+
 fn window_info(window: &Window) -> Option<CaptureWindowInfo> {
     if window.is_minimized().unwrap_or(true) {
         return None;
@@ -112,9 +115,8 @@ fn capture_window_by_id(window_id: u32) -> Result<CapturedWindowImage, String> {
     capture_window_image(&window, info)
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    let migrations = vec![
+fn sql_migrations() -> Vec<tauri_plugin_sql::Migration> {
+    vec![
         tauri_plugin_sql::Migration {
             version: 1,
             description: "create_initial_tables",
@@ -163,8 +165,11 @@ pub fn run() {
             sql: include_str!("../migrations/0008_trade_recap_structure.sql"),
             kind: tauri_plugin_sql::MigrationKind::Up,
         },
-    ];
+    ]
+}
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_fs::init())
@@ -172,7 +177,8 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:trading-journal.db", migrations)
+                .add_migrations(OFFICIAL_DB_URL, sql_migrations())
+                .add_migrations(DEV_DB_URL, sql_migrations())
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![

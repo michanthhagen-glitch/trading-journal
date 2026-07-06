@@ -13,7 +13,7 @@ Owns daily, weekly, and monthly recap browsing.
 - Recaps aggregate time periods.
 - Per-trade recaps stay in Trades.
 - Cadence values are `daily`, `weekly`, and `monthly`.
-- Recaps filter by the selected top-bar account.
+- Recaps filter by the selected sidebar account.
 - Recap creation auto-fills period stats from trades and per-trade recap fields.
 - Daily, weekly, and monthly recaps use a split `ModalShell`.
 - Daily recap left pane lists trades; weekly lists days; monthly lists weeks.

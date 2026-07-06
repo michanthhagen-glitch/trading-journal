@@ -8,16 +8,17 @@ Owns reusable renderer components that are not specific to one module.
 
 - `ModalShell.tsx`: shared single-panel modal shell for reusable popup layout.
 - `layout/Sidebar.tsx`: collapsible module navigation.
-- `layout/Topbar.tsx`: active module title, account picker, and top actions.
+- `layout/Topbar.tsx`: active module title and top actions.
 
 ## Local Contracts
 
 - Components here must be reusable across modules or part of the shared shell.
 - Single-panel popups should use `ModalShell` before adding module-local modal chrome.
 - `ModalShell` supports optional full-width header content under the title/actions row.
+- Popup windows stay below the app topbar; modal cards own their shell, and `.modal-body` is the scroll area.
 - Module-specific components belong inside `src/modules/<module>/`.
 - Use lucide-react for icons.
-- `Topbar` receives account data through props; it must not query the database directly.
+- Shell components receive data through props; they must not query the database directly.
 
 ## Work Guidance
 
