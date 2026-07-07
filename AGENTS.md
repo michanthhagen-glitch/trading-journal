@@ -48,6 +48,7 @@ npm run format          # prettier --write .
 
 ## Root Ownership
 
+- `.github/`: GitHub Actions release automation.
 - `package.json`, `package-lock.json`: scripts and dependencies.
 - `vite.config.ts`, `tsconfig.json`, `index.html`, `.env.devapp`: frontend build setup.
 - `.gitignore`, `.prettierignore`: repo-level ignore rules.
@@ -69,6 +70,7 @@ npm run format          # prettier --write .
 
 ## Child DOX Index
 
+- `.github/AGENTS.md` - GitHub Actions release automation.
 - `docs/AGENTS.md` - project notes, checkpoints, and handoff documentation.
 - `src/AGENTS.md` - React renderer, app shell, modules, shared frontend code, and global CSS.
 - `src-tauri/AGENTS.md` - Tauri desktop shell, plugins, permissions, and SQLite migrations.

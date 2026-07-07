@@ -1,6 +1,6 @@
 [package]
 name = "trading-journal"
-version = "0.1.1"
+version = "0.1.2"
 description = "Trading Journal desktop app"
 authors = ["Mykey"]
 edition = "2021"

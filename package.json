@@ -1,6 +1,6 @@
 {
   "name": "trading-journal",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,7 @@
     "desktop:dev:official": "tauri dev",
     "desktop:dev:reuse": "tauri dev --config src-tauri/tauri.dev.conf.json --config \"{\\\"build\\\":{\\\"beforeDevCommand\\\":\\\"\\\"}}\"",
     "desktop:build": "tauri build",
+    "desktop:build:macos": "tauri build --config src-tauri/tauri.macos.conf.json",
     "desktop:build:dev-app": "tauri build --config src-tauri/tauri.dev.conf.json",
     "live:build": "npm run desktop:build",
     "test": "vitest run",

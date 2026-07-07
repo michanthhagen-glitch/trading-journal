@@ -7,7 +7,7 @@ Owns the native desktop shell, Tauri configuration, native plugin registration, 
 ## Ownership
 
 - `Cargo.toml`, `Cargo.lock`: Rust crate and Tauri plugin dependencies.
-- `tauri.conf.json`, `tauri.dev.conf.json`: official and dev-app window, bundle, product, and app identity settings.
+- `tauri.conf.json`, `tauri.dev.conf.json`, `tauri.macos.conf.json`: official, dev-app, and macOS release bundle settings.
 - `src/main.rs`, `src/lib.rs`: Tauri entry and plugin setup.
 - `capabilities/default.json`: desktop permissions.
 - `migrations/`: SQLite schema changes.
@@ -23,6 +23,7 @@ Owns the native desktop shell, Tauri configuration, native plugin registration, 
 - Window capture commands live in `src/lib.rs` and are consumed through renderer storage helpers.
 - The asset protocol is enabled only for `$APPDATA/screenshots/**` so saved screenshots can render in the UI.
 - Windows NSIS installs create and remove current-user desktop shortcuts through `windows/installer-hooks.nsh` for official builds and `windows/installer-hooks-dev.nsh` for dev-app builds; the official hook also labels the install-folder picker.
+- macOS release builds use `tauri.macos.conf.json` to produce a DMG without changing the Windows NSIS default.
 
 ## Work Guidance
 
