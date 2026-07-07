@@ -23,7 +23,7 @@ jobs:
             artifact_name: trading-journal-windows
             artifact_path: src-tauri/target/release/bundle/nsis/*.exe
           - name: macOS installer
-            os: macos-latest
+            os: macos-14
             build_command: npm run desktop:build:macos
             artifact_name: trading-journal-macos
             artifact_path: src-tauri/target/release/bundle/dmg/*.dmg
