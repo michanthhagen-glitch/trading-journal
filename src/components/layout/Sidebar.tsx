@@ -1,5 +1,5 @@
-import { RefreshCw, ShieldCheck, Wallet } from "lucide-react";
-import { useState } from "react";
+import { Pause, Play, RefreshCw, ShieldCheck, Wallet, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { AppModule } from "../../app/types";
 import { runAppUpdate, type AppUpdateState } from "../../shared/appUpdater";
 import type { TradingAccount } from "../../shared/db/database";
@@ -7,6 +7,7 @@ import type {
   TradingPlanSidebarInfo,
   TradingPlanToken,
 } from "../../shared/tradingPlan";
+import briocheSongUrl from "./assets/follow-the-plan.mp3";
 
 type SidebarProps = {
   accounts: TradingAccount[];
@@ -24,6 +25,8 @@ const appDisplayName =
   import.meta.env.VITE_APP_DISPLAY_NAME ?? "Trading Journal";
 const appBadgeLabel = import.meta.env.VITE_APP_BADGE_LABEL ?? "Desktop";
 const appBrandMark = import.meta.env.VITE_APP_BRAND_MARK ?? "T";
+const briocheNoteTriggerClicks = 5;
+const briochePlanNote = "Hey Brioche, are you following your plan? <3";
 
 export function Sidebar({
   accounts,
@@ -208,15 +211,111 @@ function PlanMetric({
 }
 
 function TradingPlanPanel({ info }: { info: TradingPlanSidebarInfo }) {
+  const [noteClicks, setNoteClicks] = useState(0);
+  const [isNoteOpen, setIsNoteOpen] = useState(false);
+  const [isSongPlaying, setIsSongPlaying] = useState(false);
+  const songRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      songRef.current?.pause();
+    };
+  }, []);
+
+  function handleNoteTrigger() {
+    setNoteClicks((currentClicks) => {
+      const nextClicks = currentClicks + 1;
+      if (nextClicks >= briocheNoteTriggerClicks) {
+        setIsNoteOpen(true);
+        return 0;
+      }
+      return nextClicks;
+    });
+  }
+
+  function stopSong() {
+    const song = songRef.current;
+    if (!song) return;
+    song.pause();
+    song.currentTime = 0;
+    setIsSongPlaying(false);
+  }
+
+  function closeNote() {
+    stopSong();
+    setIsNoteOpen(false);
+  }
+
+  async function handleSongToggle() {
+    const song = songRef.current;
+    if (!song) return;
+
+    if (isSongPlaying) {
+      song.pause();
+      setIsSongPlaying(false);
+      return;
+    }
+
+    try {
+      await song.play();
+      setIsSongPlaying(true);
+    } catch {
+      setIsSongPlaying(false);
+    }
+  }
+
   return (
     <section className="sidebar-plan-panel" aria-label="Trading plan">
-      <header className="sidebar-plan-header">
+      <button
+        aria-label="Trading plan"
+        className="sidebar-plan-header sidebar-plan-easter-trigger"
+        onClick={handleNoteTrigger}
+        title="Trading plan"
+        type="button"
+      >
         <ShieldCheck size={15} aria-hidden="true" />
         <div>
           <strong>Trading plan</strong>
           <span>{info.planLabel}</span>
         </div>
-      </header>
+      </button>
+
+      {isNoteOpen ? (
+        <aside className="sidebar-easter-egg" aria-label="Brioche plan note">
+          <button
+            aria-label="Close Brioche note"
+            className="sidebar-easter-close"
+            onClick={closeNote}
+            title="Close"
+            type="button"
+          >
+            <X size={13} aria-hidden="true" />
+          </button>
+          <strong>Brioche check</strong>
+          <p>{briochePlanNote}</p>
+          <audio
+            onEnded={() => setIsSongPlaying(false)}
+            preload="metadata"
+            ref={songRef}
+            src={briocheSongUrl}
+          />
+          <button
+            aria-label={
+              isSongPlaying ? "Pause Follow the Plan" : "Play Follow the Plan"
+            }
+            className="sidebar-easter-play"
+            onClick={handleSongToggle}
+            type="button"
+          >
+            {isSongPlaying ? (
+              <Pause size={13} aria-hidden="true" />
+            ) : (
+              <Play size={13} aria-hidden="true" />
+            )}
+            <span>{isSongPlaying ? "Pause song" : "Play song"}</span>
+          </button>
+        </aside>
+      ) : null}
 
       <div className="sidebar-plan-balance">
         <span>Current balance</span>
@@ -224,7 +323,7 @@ function TradingPlanPanel({ info }: { info: TradingPlanSidebarInfo }) {
       </div>
 
       <div className="sidebar-plan-section">
-        <h2>Risk</h2>
+        <span className="sidebar-plan-title">Risk</span>
         <div className="sidebar-plan-grid">
           <span />
           <span>Min</span>
@@ -237,7 +336,7 @@ function TradingPlanPanel({ info }: { info: TradingPlanSidebarInfo }) {
       </div>
 
       <div className="sidebar-plan-section">
-        <h2>Goal</h2>
+        <span className="sidebar-plan-title">Goal</span>
         <div className="sidebar-plan-grid">
           <span />
           <span>Min</span>
@@ -249,7 +348,7 @@ function TradingPlanPanel({ info }: { info: TradingPlanSidebarInfo }) {
       </div>
 
       <div className="sidebar-plan-rules">
-        <h2>Rules</h2>
+        <span className="sidebar-plan-title">Rules</span>
         {info.rules.map((rule) => (
           <div
             className={`sidebar-plan-rule ${rule.tone}`}

@@ -8,6 +8,7 @@ import {
   type DragEvent,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { ModalShell } from "../../../components/ModalShell";
 import {
@@ -36,6 +37,7 @@ export type DraftScreenshot = {
 type ScreenshotDropZoneFrameProps = {
   busyMessage: string | null;
   children: ReactNode;
+  dropZoneRef: RefObject<HTMLDivElement>;
   emptyMessage: string;
   isDragging: boolean;
   label: string;
@@ -52,6 +54,7 @@ type ScreenshotDropZoneFrameProps = {
 
 type ScreenshotDropZoneController = {
   busyMessage: string | null;
+  dropZoneRef: RefObject<HTMLDivElement>;
   isDragging: boolean;
   statusMessage: string | null;
   dropZoneHandlers: Pick<
@@ -71,8 +74,47 @@ type DraftScreenshotImportButtonProps = {
   onImported: (path: string) => void | Promise<void>;
 };
 
+type DropPoint = {
+  x: number;
+  y: number;
+};
+
+type RectLike = Pick<DOMRectReadOnly, "bottom" | "left" | "right" | "top">;
+
+type NativeDragDropPayload =
+  | { type: "enter"; paths: string[]; position: DropPoint }
+  | { type: "over"; position: DropPoint }
+  | { type: "drop"; paths: string[]; position: DropPoint }
+  | { type: "leave" };
+
+type NativeDragDropEvent = {
+  payload: NativeDragDropPayload;
+};
+
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+export function isSupportedScreenshotFilePath(path: string): boolean {
+  return /\.(png|jpe?g)$/i.test(path);
+}
+
+export function isPointInsideScreenshotDropRect(
+  point: DropPoint,
+  rect: RectLike,
+  devicePixelRatio = 1,
+): boolean {
+  const cssPoint =
+    devicePixelRatio > 1
+      ? { x: point.x / devicePixelRatio, y: point.y / devicePixelRatio }
+      : point;
+
+  return (
+    cssPoint.x >= rect.left &&
+    cssPoint.x <= rect.right &&
+    cssPoint.y >= rect.top &&
+    cssPoint.y <= rect.bottom
+  );
 }
 
 function imageExt(name: string): "png" | "jpg" | "jpeg" {
@@ -122,6 +164,7 @@ export function TradeScreenshotDropZone({
     <ScreenshotDropZoneFrame
       {...controller.dropZoneHandlers}
       busyMessage={controller.busyMessage}
+      dropZoneRef={controller.dropZoneRef}
       emptyMessage="Drop image here, or select this box and paste."
       isDragging={controller.isDragging}
       label={`Add ${stageLabel(stage)} screenshot`}
@@ -240,6 +283,11 @@ function useScreenshotDropZone(
   const [isDragging, setIsDragging] = useState(false);
   const [busyMessage, setBusyMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
+  const nativeHoverRef = useRef(false);
+  const nativePathImportRef = useRef<(paths: string[]) => Promise<void>>(
+    async () => {},
+  );
 
   function clearStatusSoon() {
     window.setTimeout(() => setStatusMessage(null), 2400);
@@ -276,6 +324,100 @@ function useScreenshotDropZone(
       setIsDragging(false);
     }
   }
+
+  async function importNativePaths(paths: string[]) {
+    const imagePaths = paths.filter(isSupportedScreenshotFilePath);
+    if (imagePaths.length === 0) {
+      setStatusMessage("No image found.");
+      clearStatusSoon();
+      return;
+    }
+
+    setBusyMessage("Adding screenshot...");
+    setStatusMessage(null);
+    try {
+      for (const path of imagePaths) {
+        const relPath = await importScreenshotFromPath(path);
+        await onImported(relPath);
+      }
+      setStatusMessage(
+        imagePaths.length === 1
+          ? `${stageLabel(stage)} screenshot added.`
+          : `${imagePaths.length} screenshots added.`,
+      );
+      clearStatusSoon();
+    } catch (error) {
+      console.error(error);
+      setStatusMessage("Could not add screenshot.");
+      clearStatusSoon();
+    } finally {
+      setBusyMessage(null);
+      setIsDragging(false);
+    }
+  }
+
+  nativePathImportRef.current = importNativePaths;
+
+  function nativeDropIsInside(position?: DropPoint): boolean {
+    if (!position) return nativeHoverRef.current;
+    const rect = dropZoneRef.current?.getBoundingClientRect();
+    if (!rect) return false;
+
+    return isPointInsideScreenshotDropRect(
+      position,
+      rect,
+      window.devicePixelRatio || 1,
+    );
+  }
+
+  useEffect(() => {
+    if (!isTauri()) return undefined;
+
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+
+    import("@tauri-apps/api/webview")
+      .then(({ getCurrentWebview }) =>
+        getCurrentWebview().onDragDropEvent(async (event) => {
+          const payload = (event as NativeDragDropEvent).payload;
+
+          if (payload.type === "enter" || payload.type === "over") {
+            const inside = nativeDropIsInside(payload.position);
+            nativeHoverRef.current = inside;
+            setIsDragging(inside);
+            return;
+          }
+
+          if (payload.type === "drop") {
+            const inside = nativeDropIsInside(payload.position);
+            nativeHoverRef.current = false;
+            setIsDragging(false);
+            if (!inside) return;
+            await nativePathImportRef.current(payload.paths);
+            return;
+          }
+
+          nativeHoverRef.current = false;
+          setIsDragging(false);
+        }),
+      )
+      .then((nextUnlisten) => {
+        if (cancelled) {
+          nextUnlisten();
+          return;
+        }
+        unlisten = nextUnlisten;
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+
+    return () => {
+      cancelled = true;
+      nativeHoverRef.current = false;
+      unlisten?.();
+    };
+  }, []);
 
   async function importFromClipboard(event: ClipboardEvent<HTMLDivElement>) {
     const files = Array.from(event.clipboardData.files);
@@ -320,6 +462,7 @@ function useScreenshotDropZone(
 
   return {
     busyMessage,
+    dropZoneRef,
     isDragging,
     statusMessage,
     dropZoneHandlers: {
@@ -347,6 +490,7 @@ function useScreenshotDropZone(
 function ScreenshotDropZoneFrame({
   busyMessage,
   children,
+  dropZoneRef,
   emptyMessage,
   isDragging,
   label,
@@ -362,6 +506,7 @@ function ScreenshotDropZoneFrame({
 }: ScreenshotDropZoneFrameProps) {
   return (
     <div
+      ref={dropZoneRef}
       className={`screenshot-drop-zone${isDragging ? " is-dragging" : ""}`}
       tabIndex={0}
       role="group"

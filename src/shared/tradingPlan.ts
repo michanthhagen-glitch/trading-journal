@@ -456,7 +456,7 @@ export function buildTradingPlanSidebarInfo({
     },
     rules: [
       countRule(
-        "Trades/day",
+        "Max trades/day",
         "Maximum trades allowed per day.",
         todayTrades,
         riskPlan?.maxTradesPerDay,

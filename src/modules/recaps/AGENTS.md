@@ -22,6 +22,7 @@ Owns daily, weekly, and monthly recap browsing.
 - Recap split panes scroll independently; left pane rows may grow downward and stack details so expanded rows stay readable.
 - Daily recap titles are derived names like `Wednesday recap`, and daily trade rows use shared automatic trade names.
 - Current recap and saved recap lists use compact table-style rows aligned with Trades/List.
+- Current recap status badges must stay fully readable in the compact table.
 - Mistake and done-well summaries are auto-imported from per-trade recap tags and repeated tags show counts.
 - Weekly/monthly recap writing uses period review fields and score sliders; the rest is generated from trades and trade recaps.
 

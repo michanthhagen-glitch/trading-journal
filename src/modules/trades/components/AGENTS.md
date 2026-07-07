@@ -14,6 +14,7 @@ Owns module-local trade UI components used by `TradesModule.tsx`.
 
 - Components here are trade-module only unless another module truly needs them.
 - Screenshot file, clipboard, and capture behavior goes through `src/shared/db/storage.ts`.
+- ScreenshotTools handles both browser `File` drops and Tauri native file-drop paths.
 - Popups use the shared `ModalShell`.
 - Screenshot stages stay aligned with trade workflow stages.
 
