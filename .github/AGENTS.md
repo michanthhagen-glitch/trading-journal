@@ -12,7 +12,7 @@ Owns GitHub Actions workflows for installer and release automation.
 
 - Release tags use `v<package version>`.
 - Windows release builds use the official NSIS installer target.
-- macOS release builds use the official app identity with a DMG bundle config.
+- macOS release builds use the official app identity and produce both updater artifacts and a DMG installer.
 - Tagged releases use the stored Tauri signing secrets and publish `latest.json` plus signed artifacts for the official app updater.
 - Dev-app builds never use the official updater endpoint.
 

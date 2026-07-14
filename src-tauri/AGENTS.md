@@ -24,7 +24,7 @@ Owns the native desktop shell, Tauri configuration, native plugin registration, 
 - Window capture commands live in `src/lib.rs` and are consumed through renderer storage helpers.
 - The asset protocol is enabled only for `$APPDATA/screenshots/**` so saved screenshots can render in the UI.
 - Windows NSIS installs create and remove current-user desktop shortcuts through `windows/installer-hooks.nsh` for official builds and `windows/installer-hooks-dev.nsh` for dev-app builds; the official hook also labels the install-folder picker.
-- macOS release builds use `tauri.macos.conf.json` to produce a DMG without changing the Windows NSIS default.
+- macOS release builds use `tauri.macos.conf.json` to produce updater-enabled app artifacts and a DMG without changing the Windows NSIS default.
 - Native backup/restore commands copy the active SQLite file and screenshot folder together, use staged swaps, and reject path traversal or official/dev cross-restore.
 - Normal local builds do not require updater signing; tagged official releases merge `tauri.release.conf.json` to create signed updater artifacts.
 
