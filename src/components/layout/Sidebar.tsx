@@ -8,6 +8,8 @@ import type {
   TradingPlanToken,
 } from "../../shared/tradingPlan";
 import briocheSongUrl from "./assets/follow-the-plan.mp3";
+import methodMarkLockupUrl from "./assets/methodmark-lockup.png";
+import methodMarkSymbolUrl from "./assets/methodmark-symbol.png";
 
 type SidebarProps = {
   accounts: TradingAccount[];
@@ -21,10 +23,8 @@ type SidebarProps = {
   onToggleCollapsed: () => void;
 };
 
-const appDisplayName =
-  import.meta.env.VITE_APP_DISPLAY_NAME ?? "Trading Journal";
+const appDisplayName = import.meta.env.VITE_APP_DISPLAY_NAME ?? "MethodMark";
 const appBadgeLabel = import.meta.env.VITE_APP_BADGE_LABEL ?? "Desktop";
-const appBrandMark = import.meta.env.VITE_APP_BRAND_MARK ?? "T";
 const briocheNoteTriggerClicks = 5;
 const briochePlanNote = "Hey Brioche, are you following your plan? <3";
 
@@ -89,17 +89,26 @@ export function Sidebar({
         <button
           aria-label={isCollapsed ? "Open sidebar" : "Collapse sidebar"}
           aria-pressed={isCollapsed}
-          className="brand-mark"
+          className={
+            isCollapsed ? "brand-toggle brand-toggle-compact" : "brand-toggle"
+          }
           onClick={onToggleCollapsed}
           title={isCollapsed ? "Open sidebar" : "Collapse sidebar"}
           type="button"
         >
-          {appBrandMark}
+          <img
+            alt=""
+            aria-hidden="true"
+            className={
+              isCollapsed ? "brand-symbol-image" : "brand-lockup-image"
+            }
+            src={isCollapsed ? methodMarkSymbolUrl : methodMarkLockupUrl}
+          />
+          <span className="sr-only">{appDisplayName}</span>
         </button>
-        <div className="brand-copy">
-          <strong>{appDisplayName}</strong>
-          <span>{appBadgeLabel}</span>
-        </div>
+        {!isCollapsed ? (
+          <span className="brand-badge">{appBadgeLabel}</span>
+        ) : null}
       </div>
 
       <label

@@ -1,7 +1,9 @@
 !macro NSIS_HOOK_POSTINSTALL
-  CreateShortcut "$DESKTOP\Trading Journal Dev.lnk" "$INSTDIR\Trading Journal Dev.exe"
+  Delete "$DESKTOP\Trading Journal Dev.lnk"
+  CreateShortcut "$DESKTOP\MethodMark Dev.lnk" "$INSTDIR\MethodMark Dev.exe"
 !macroend
 
 !macro NSIS_HOOK_POSTUNINSTALL
+  Delete "$DESKTOP\MethodMark Dev.lnk"
   Delete "$DESKTOP\Trading Journal Dev.lnk"
 !macroend

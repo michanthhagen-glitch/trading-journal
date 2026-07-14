@@ -1,8 +1,8 @@
-# Trading Journal - DOX Root
+# MethodMark - DOX Root
 
 ## Purpose
 
-Desktop trading journal for logging trades, pre-trade analysis, exits, screenshots, and daily/weekly/monthly recaps.
+MethodMark is a desktop trading journal for logging trades, pre-trade analysis, exits, screenshots, and daily/weekly/monthly recaps.
 
 ## DOX Core Contract
 
@@ -26,13 +26,13 @@ Desktop trading journal for logging trades, pre-trade analysis, exits, screensho
 
 ```text
 npm run dev             # Vite dev server on 127.0.0.1:5173
-npm run dev:dev-app     # Vite dev server with Trading Journal Dev labels/data config
+npm run dev:dev-app     # Vite dev server with MethodMark Dev labels/data config
 npm run build           # tsc --noEmit && vite build
-npm run build:dev-app   # frontend build with Trading Journal Dev labels/data config
+npm run build:dev-app   # frontend build with MethodMark Dev labels/data config
 npm run desktop:dev     # Tauri dev window
 npm run desktop:dev:official # Tauri dev window for the official app identity
 npm run desktop:build   # Tauri production build
-npm run desktop:build:dev-app # Tauri production build for Trading Journal Dev
+npm run desktop:build:dev-app # Tauri production build for MethodMark Dev
 npm run test            # vitest run
 npm run check           # format:check + build + test
 npm run format          # prettier --write .
@@ -53,6 +53,7 @@ npm run format          # prettier --write .
 - `package.json`, `package-lock.json`: scripts and dependencies.
 - `vite.config.ts`, `tsconfig.json`, `index.html`, `.env.devapp`: frontend build setup.
 - `.gitignore`, `.prettierignore`: repo-level ignore rules.
+- `design-qa.md`, `design-qa-*.png`: latest visual verification report and evidence for approved product branding.
 - `AGENTS.md`: root DOX contract and top-level index.
 
 ## Global Work Guidance

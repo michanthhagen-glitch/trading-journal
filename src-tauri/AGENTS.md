@@ -7,6 +7,7 @@ Owns the native desktop shell, Tauri configuration, native plugin registration, 
 ## Ownership
 
 - `Cargo.toml`, `Cargo.lock`: Rust crate and Tauri plugin dependencies.
+- `icons/`: approved MethodMark desktop icon source and generated platform icons.
 - `tauri.conf.json`, `tauri.dev.conf.json`, `tauri.macos.conf.json`, `tauri.release.conf.json`: official, dev-app, macOS, and signed updater release settings.
 - `src/main.rs`, `src/lib.rs`: Tauri entry and plugin setup.
 - `capabilities/default.json`: desktop permissions.
@@ -31,7 +32,7 @@ Owns the native desktop shell, Tauri configuration, native plugin registration, 
 
 - Add Tauri plugins only when a real workflow needs them.
 - Keep capabilities narrow and tied to the feature using them.
-- Production icon generation is still pending; dev can run without the final icon set.
+- Production icons use the approved MethodMark symbol while identifiers and database filenames remain unchanged for data continuity.
 
 ## Verification
 

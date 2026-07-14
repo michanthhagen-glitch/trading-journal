@@ -50,8 +50,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: Trading Journal ${{ github.ref_name }}
-          releaseBody: Signed Trading Journal installers and automatic-update files.
+          releaseName: MethodMark ${{ github.ref_name }}
+          releaseBody: Signed MethodMark installers and automatic-update files.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
@@ -109,4 +109,4 @@ jobs:
         with:
           args: ${{ matrix.args }}
           uploadWorkflowArtifacts: true
-          workflowArtifactNamePattern: trading-journal-[platform]-[arch]-[bundle]
+          workflowArtifactNamePattern: methodmark-[platform]-[arch]-[bundle]

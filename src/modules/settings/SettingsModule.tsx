@@ -371,8 +371,7 @@ export function SettingsModule({
                   <div>
                     <h5>Restore backup</h5>
                     <p>
-                      Replace current data with a complete Trading Journal
-                      backup.
+                      Replace current data with a complete MethodMark backup.
                     </p>
                   </div>
                   <button

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Trading Journal Dev",
-  "mainBinaryName": "Trading Journal Dev",
+  "productName": "MethodMark Dev",
+  "mainBinaryName": "MethodMark Dev",
   "identifier": "com.mykey.tradingjournal.dev",
   "build": {
     "beforeDevCommand": "npm run dev:dev-app",
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Trading Journal Dev",
+        "title": "MethodMark Dev",
         "width": 1440,
         "height": 900,
         "minWidth": 1100,
@@ -23,8 +23,8 @@
   },
   "bundle": {
     "createUpdaterArtifacts": false,
-    "shortDescription": "Trading Journal Dev desktop",
-    "longDescription": "Development build for testing Trading Journal features without real trade data.",
+    "shortDescription": "MethodMark Dev desktop",
+    "longDescription": "Development build for testing MethodMark features without real trade data.",
     "windows": {
       "nsis": {
         "installMode": "currentUser",

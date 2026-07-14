@@ -254,7 +254,7 @@ fn backup_journal(
         };
         let manifest = JournalBackupManifest {
             version: 1,
-            app: "Trading Journal".to_string(),
+            app: "MethodMark".to_string(),
             database: db_filename.clone(),
             created_at,
             screenshot_files,
@@ -465,7 +465,7 @@ pub fn run() {
             restore_journal
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Trading Journal");
+        .expect("error while running MethodMark");
 }
 
 #[cfg(test)]
@@ -475,7 +475,7 @@ mod tests {
 
     #[test]
     fn backup_names_cannot_escape_the_selected_folder() {
-        assert!(validate_backup_folder_name("Trading Journal Backup 2026-07-14").is_ok());
+        assert!(validate_backup_folder_name("MethodMark Backup 2026-07-14").is_ok());
         assert!(validate_backup_folder_name("../outside").is_err());
         assert!(validate_backup_folder_name("folder\\outside").is_err());
     }

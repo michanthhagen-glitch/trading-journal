@@ -1,14 +1,14 @@
-# Trading Journal
+# MethodMark
 
 **A local-first desktop journal designed to become part of the trading process.**
 
-Trading Journal helps you plan, record, and review trades while the decisions are still fresh. It is meant to be used before, during, and directly after a trade, rather than trying to reconstruct everything at the end of the day.
+MethodMark helps you plan, record, and review trades while the decisions are still fresh. It is meant to be used before, during, and directly after a trade, rather than trying to reconstruct everything at the end of the day.
 
 The goal is simple: make consistent journaling easy enough that it becomes part of how you trade.
 
 ## The philosophy
 
-Trading Journal is manual by design.
+MethodMark is manual by design.
 
 It does not connect to a broker, place trades, or automatically import results. You record the important decisions yourself because that small pause creates awareness and accountability.
 
@@ -92,17 +92,17 @@ Download the latest installer from [GitHub Releases](https://github.com/michanth
 - **Windows:** download and run the `.exe` installer.
 - **macOS with Apple Silicon:** download and open the `.dmg` file.
 
-After installation, open the app, create your account setup, and keep Trading Journal available while you trade.
+After installation, open the app, create your account setup, and keep MethodMark available while you trade.
 
 ## Your data
 
-Trading Journal stores its journal database and screenshots locally on your computer. There is no cloud account or broker connection.
+MethodMark stores its journal database and screenshots locally on your computer. There is no cloud account or broker connection.
 
 Use **Settings > Data > Create backup** regularly. A complete backup contains both the journal database and all saved chart screenshots. Restore also lives in **Settings > Data** and replaces the current journal after confirmation.
 
 ## Who it is for
 
-Trading Journal is best suited to discretionary traders who want to improve their process, discipline, and self-awareness.
+MethodMark is best suited to discretionary traders who want to improve their process, discipline, and self-awareness.
 
 It may not be the right tool if you want fully automatic broker imports or a journal that requires no input. The manual interaction is intentional because the journal is meant to influence the trading process, not only report on it later.
 
@@ -123,7 +123,7 @@ npm install
 npm run desktop:dev
 ```
 
-The development build has its own app identity and database, so it does not share data with the official Trading Journal app.
+The development build has its own app identity and database, so it does not share data with the official MethodMark app.
 
 ### Useful commands
 
@@ -136,4 +136,4 @@ npm run desktop:build:dev-app # Build the separate development app
 
 ## Disclaimer
 
-Trading Journal is a record-keeping and self-review tool. It does not provide financial advice, trading signals, or guarantees. You remain responsible for your own trades and risk decisions.
+MethodMark is a record-keeping and self-review tool. It does not provide financial advice, trading signals, or guarantees. You remain responsible for your own trades and risk decisions.

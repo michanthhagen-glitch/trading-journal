@@ -21,7 +21,7 @@ function backupFolderName() {
     .replace("T", " ")
     .replace(/:/g, "-")
     .slice(0, 19);
-  const appName = import.meta.env.VITE_APP_DISPLAY_NAME ?? "Trading Journal";
+  const appName = import.meta.env.VITE_APP_DISPLAY_NAME ?? "MethodMark";
   return `${appName} Backup ${stamp}`;
 }
 
@@ -38,14 +38,11 @@ function readableBackupError(error: unknown) {
       "BACKUP_FOLDER_INSIDE_ACTIVE_SCREENSHOTS",
       "Choose a backup stored outside the app's saved screenshots.",
     ],
-    [
-      "BACKUP_MANIFEST_NOT_FOUND",
-      "This folder is not a Trading Journal backup.",
-    ],
+    ["BACKUP_MANIFEST_NOT_FOUND", "This folder is not a MethodMark backup."],
     ["BACKUP_MANIFEST_INVALID", "The backup information is damaged."],
     [
       "BACKUP_DOES_NOT_MATCH_THIS_APP",
-      "This backup belongs to the other Trading Journal app.",
+      "This backup belongs to the other MethodMark app.",
     ],
     ["BACKUP_DATABASE_NOT_FOUND", "The backup database is missing."],
   ];
@@ -62,7 +59,7 @@ export async function createJournalBackup(): Promise<JournalBackupResult | null>
   const destination = await open({
     directory: true,
     multiple: false,
-    title: "Choose where to save the Trading Journal backup",
+    title: "Choose where to save the MethodMark backup",
   });
   if (!destination || Array.isArray(destination)) return null;
 
@@ -88,7 +85,7 @@ export async function restoreJournalBackup(): Promise<JournalBackupResult | null
   const backupFolder = await open({
     directory: true,
     multiple: false,
-    title: "Choose a Trading Journal backup folder",
+    title: "Choose a MethodMark backup folder",
   });
   if (!backupFolder || Array.isArray(backupFolder)) return null;
 

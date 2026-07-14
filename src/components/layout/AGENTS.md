@@ -6,7 +6,7 @@ Owns reusable shell layout components.
 
 ## Ownership
 
-- `Sidebar.tsx`: sidebar navigation and active module state display.
+- `Sidebar.tsx`: sidebar navigation, MethodMark branding, and active module state display.
 - `Topbar.tsx`: active module title, keyboard-accessible global search, and notification panel.
 
 ## Local Contracts
@@ -19,6 +19,7 @@ Owns reusable shell layout components.
 - Sidebar trading plan header owns the hidden Brioche plan-check Easter egg and bundled song button.
 - Sidebar trading plan section labels are visual labels, not document headings.
 - Sidebar Update checks the Tauri updater only from the installed desktop app; browser preview should show a friendly desktop-only message.
+- Expanded sidebar branding uses the full MethodMark lockup; collapsed branding uses the compact MethodMark symbol.
 - Topbar search supports Ctrl+K and receives prepared results through props; notifications receive prepared alerts through props.
 - Use lucide-react icons for shell actions.
 
