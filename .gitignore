@@ -7,3 +7,4 @@ coverage/
 storage/
 src-tauri/gen/
 src-tauri/target/
+.gstack/

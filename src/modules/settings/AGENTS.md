@@ -6,7 +6,7 @@ Owns preferences and data-management UI.
 
 ## Ownership
 
-- `SettingsModule.tsx`: general preferences plus future account, broker, backup, and theme settings.
+- `SettingsModule.tsx`: general preferences plus desktop data backup and restore.
 
 ## Local Contracts
 
@@ -16,6 +16,8 @@ Owns preferences and data-management UI.
 - General app preferences are saved in local browser storage through `src/shared/appPreferences.ts`.
 - Data import/export belongs here unless a more specific module owns the workflow.
 - Data backup/export must include both the SQLite database and screenshot files so restored trades do not lose chart images.
+- Backup and restore are desktop-only, use a user-selected folder, and reload the app after a successful restore.
+- Restore always requires confirmation and rejects backups from the other app identity.
 
 ## Work Guidance
 

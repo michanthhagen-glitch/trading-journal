@@ -49,6 +49,7 @@ npm run format          # prettier --write .
 ## Root Ownership
 
 - `.github/`: GitHub Actions release automation.
+- `README.md`: GitHub overview, product philosophy, trader workflow, installation, and development basics.
 - `package.json`, `package-lock.json`: scripts and dependencies.
 - `vite.config.ts`, `tsconfig.json`, `index.html`, `.env.devapp`: frontend build setup.
 - `.gitignore`, `.prettierignore`: repo-level ignore rules.

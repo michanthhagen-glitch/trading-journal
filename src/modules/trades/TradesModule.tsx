@@ -512,6 +512,18 @@ export function TradesModule({
     reload();
   }, [selectedAccountId]);
 
+  useEffect(() => {
+    function handleOpenTrade(event: Event) {
+      const detail = (event as CustomEvent<{ tradeId: string }>).detail;
+      if (!detail?.tradeId) return;
+      setActiveView("list");
+      setWorkspace({ tradeId: detail.tradeId, mode: "trade" });
+    }
+    window.addEventListener("trading-journal:open-trade", handleOpenTrade);
+    return () =>
+      window.removeEventListener("trading-journal:open-trade", handleOpenTrade);
+  }, []);
+
   const workspaceTrade = useMemo(
     () =>
       workspace

@@ -1,12 +1,25 @@
-import { ArrowLeft, Plus, ShieldCheck, Target, Wallet } from "lucide-react";
+import {
+  ArrowLeft,
+  Pencil,
+  Plus,
+  ShieldCheck,
+  Target,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  deleteRiskManagementPlan,
+  deleteStrategy,
+  deleteTradingAccount,
   listAccountSetup,
+  listTrades,
   type AccountType,
   type RiskManagementPlan,
   type Strategy,
   type TradingAccount,
 } from "../../shared/db/database";
+import { deleteScreenshotFile } from "../../shared/db/storage";
 import {
   CreateAccountSetupDialog,
   type AccountSetupCreateKind,
@@ -14,8 +27,10 @@ import {
 import type { ModuleContext } from "../../app/types";
 import {
   formatCurrencyValue,
+  shouldConfirmDelete,
   type AppPreferences,
 } from "../../shared/appPreferences";
+import { EditAccountSetupDialog } from "./EditAccountSetupDialog";
 
 type AccountTab = "accounts" | "strategies" | "risk";
 
@@ -113,6 +128,10 @@ export function AccountModule({
   const [createModal, setCreateModal] = useState<AccountSetupCreateKind | null>(
     null,
   );
+  const [editModal, setEditModal] = useState<AccountSetupCreateKind | null>(
+    null,
+  );
+  const [actionError, setActionError] = useState<string | null>(null);
 
   async function reload() {
     setLoading(true);
@@ -128,6 +147,27 @@ export function AccountModule({
 
   useEffect(() => {
     reload();
+  }, []);
+
+  useEffect(() => {
+    function handleOpenSetup(event: Event) {
+      const detail = (event as CustomEvent<{ kind: AccountTab; id: string }>)
+        .detail;
+      if (!detail?.id) return;
+      setActiveTab(detail.kind);
+      if (detail.kind === "accounts") openAccount(detail.id);
+      if (detail.kind === "strategies") openStrategy(detail.id);
+      if (detail.kind === "risk") openRiskPlan(detail.id);
+    }
+    window.addEventListener(
+      "trading-journal:open-account-setup",
+      handleOpenSetup,
+    );
+    return () =>
+      window.removeEventListener(
+        "trading-journal:open-account-setup",
+        handleOpenSetup,
+      );
   }, []);
 
   const selectedAccount = useMemo(
@@ -162,33 +202,131 @@ export function AccountModule({
     setSelectedRiskPlanId(riskPlanId);
   }
 
+  async function handleEdited() {
+    await reload();
+    await onAccountsChanged();
+    setEditModal(null);
+    setActionError(null);
+  }
+
+  async function handleDelete(kind: AccountSetupCreateKind) {
+    const label =
+      kind === "accounts"
+        ? selectedAccount?.name
+        : kind === "strategies"
+          ? selectedStrategy?.name
+          : selectedRiskPlan?.name;
+    if (!label) return;
+
+    const warning =
+      kind === "accounts"
+        ? `Delete ${label}? Its trades, recaps, and screenshots will also be permanently deleted.`
+        : `Delete ${label}? This cannot be undone.`;
+    if (shouldConfirmDelete(appPreferences) && !window.confirm(warning)) return;
+
+    setActionError(null);
+    try {
+      if (kind === "accounts" && selectedAccount) {
+        const trades = await listTrades(selectedAccount.id);
+        await Promise.allSettled(
+          trades.flatMap((trade) =>
+            trade.screenshots.map((screenshot) =>
+              deleteScreenshotFile(screenshot.path),
+            ),
+          ),
+        );
+        await deleteTradingAccount(selectedAccount.id);
+        setSelectedAccountId(null);
+      }
+      if (kind === "strategies" && selectedStrategy) {
+        await deleteStrategy(selectedStrategy.id);
+        setSelectedStrategyId(null);
+      }
+      if (kind === "risk" && selectedRiskPlan) {
+        await deleteRiskManagementPlan(selectedRiskPlan.id);
+        setSelectedRiskPlanId(null);
+      }
+      await reload();
+      await onAccountsChanged();
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : "Could not delete this item.",
+      );
+    }
+  }
+
   if (selectedAccount) {
     return (
-      <AccountDetailView
-        account={selectedAccount}
-        appPreferences={appPreferences}
-        strategies={strategies}
-        riskPlans={riskPlans}
-        onBack={() => setSelectedAccountId(null)}
-      />
+      <>
+        <AccountDetailView
+          account={selectedAccount}
+          actionError={actionError}
+          appPreferences={appPreferences}
+          strategies={strategies}
+          riskPlans={riskPlans}
+          onBack={() => setSelectedAccountId(null)}
+          onDelete={() => handleDelete("accounts")}
+          onEdit={() => setEditModal("accounts")}
+        />
+        {editModal === "accounts" ? (
+          <EditAccountSetupDialog
+            kind="accounts"
+            account={selectedAccount}
+            strategies={strategies}
+            riskPlans={riskPlans}
+            onClose={() => setEditModal(null)}
+            onSaved={handleEdited}
+          />
+        ) : null}
+      </>
     );
   }
 
   if (selectedStrategy) {
     return (
-      <StrategyDetailView
-        strategy={selectedStrategy}
-        onBack={() => setSelectedStrategyId(null)}
-      />
+      <>
+        <StrategyDetailView
+          strategy={selectedStrategy}
+          actionError={actionError}
+          onBack={() => setSelectedStrategyId(null)}
+          onDelete={() => handleDelete("strategies")}
+          onEdit={() => setEditModal("strategies")}
+        />
+        {editModal === "strategies" ? (
+          <EditAccountSetupDialog
+            kind="strategies"
+            strategy={selectedStrategy}
+            strategies={strategies}
+            riskPlans={riskPlans}
+            onClose={() => setEditModal(null)}
+            onSaved={handleEdited}
+          />
+        ) : null}
+      </>
     );
   }
 
   if (selectedRiskPlan) {
     return (
-      <RiskPlanDetailView
-        plan={selectedRiskPlan}
-        onBack={() => setSelectedRiskPlanId(null)}
-      />
+      <>
+        <RiskPlanDetailView
+          plan={selectedRiskPlan}
+          actionError={actionError}
+          onBack={() => setSelectedRiskPlanId(null)}
+          onDelete={() => handleDelete("risk")}
+          onEdit={() => setEditModal("risk")}
+        />
+        {editModal === "risk" ? (
+          <EditAccountSetupDialog
+            kind="risk"
+            riskPlan={selectedRiskPlan}
+            strategies={strategies}
+            riskPlans={riskPlans}
+            onClose={() => setEditModal(null)}
+            onSaved={handleEdited}
+          />
+        ) : null}
+      </>
     );
   }
 
@@ -465,12 +603,43 @@ function SimpleList({
   );
 }
 
+function DetailActions({
+  onEdit,
+  onDelete,
+}: {
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="account-detail-actions">
+      <button className="ghost-button" type="button" onClick={onEdit}>
+        <Pencil size={14} aria-hidden="true" />
+        Edit
+      </button>
+      <button
+        className="ghost-button danger-button"
+        type="button"
+        onClick={onDelete}
+      >
+        <Trash2 size={14} aria-hidden="true" />
+        Delete
+      </button>
+    </div>
+  );
+}
+
 function StrategyDetailView({
   strategy,
+  actionError,
   onBack,
+  onEdit,
+  onDelete,
 }: {
   strategy: Strategy;
+  actionError: string | null;
   onBack: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   return (
     <div className="account-module">
@@ -487,7 +656,12 @@ function StrategyDetailView({
           <h2>{strategy.name}</h2>
           <p className="page-subtitle">Strategy details.</p>
         </div>
+        <DetailActions onEdit={onEdit} onDelete={onDelete} />
       </header>
+
+      {actionError ? (
+        <p className="account-action-error">{actionError}</p>
+      ) : null}
 
       <section className="account-detail-grid">
         <article className="account-detail-panel">
@@ -524,10 +698,16 @@ function StrategyDetailView({
 
 function RiskPlanDetailView({
   plan,
+  actionError,
   onBack,
+  onEdit,
+  onDelete,
 }: {
   plan: RiskManagementPlan;
+  actionError: string | null;
   onBack: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   return (
     <div className="account-module">
@@ -544,7 +724,12 @@ function RiskPlanDetailView({
           <h2>{plan.name}</h2>
           <p className="page-subtitle">Risk management plan details.</p>
         </div>
+        <DetailActions onEdit={onEdit} onDelete={onDelete} />
       </header>
+
+      {actionError ? (
+        <p className="account-action-error">{actionError}</p>
+      ) : null}
 
       <section className="account-detail-grid">
         <article className="account-detail-panel">
@@ -634,16 +819,22 @@ function RiskPlanDetailView({
 
 function AccountDetailView({
   account,
+  actionError,
   appPreferences,
   strategies,
   riskPlans,
   onBack,
+  onEdit,
+  onDelete,
 }: {
   account: TradingAccount;
+  actionError: string | null;
   appPreferences: AppPreferences;
   strategies: Strategy[];
   riskPlans: RiskManagementPlan[];
   onBack: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   const strategyMap = new Map(
     strategies.map((strategy) => [strategy.id, strategy]),
@@ -672,7 +863,12 @@ function AccountDetailView({
             {accountTypeLabel(account.accountType)} account details.
           </p>
         </div>
+        <DetailActions onEdit={onEdit} onDelete={onDelete} />
       </header>
+
+      {actionError ? (
+        <p className="account-action-error">{actionError}</p>
+      ) : null}
 
       <section className="account-detail-grid">
         <article className="account-detail-panel">

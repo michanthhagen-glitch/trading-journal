@@ -74,9 +74,9 @@ function CreateAccountDialog({
   onCreated: () => Promise<void> | void;
 }) {
   const [name, setName] = useState("");
-  const [startingBalance, setStartingBalance] = useState("");
+  const [startingBalance, setStartingBalance] = useState("10000");
   const [currency, setCurrency] = useState("USD");
-  const [commission, setCommission] = useState("");
+  const [commission, setCommission] = useState("0");
   const [accountType, setAccountType] = useState<AccountType>("demo");
   const [strategyIds, setStrategyIds] = useState<string[]>(
     strategies[0] ? [strategies[0].id] : [],
@@ -101,7 +101,9 @@ function CreateAccountDialog({
     const balance = startingBalance.trim()
       ? Number(startingBalance)
       : Number.NaN;
-    const commissionPerLot = commission.trim() ? Number(commission) : 0;
+    const commissionPerLot = commission.trim()
+      ? Number(commission)
+      : Number.NaN;
 
     try {
       await createTradingAccount({
@@ -144,6 +146,7 @@ function CreateAccountDialog({
         <label className="field">
           <span>Account name</span>
           <input
+            required
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Main live account"
@@ -153,6 +156,7 @@ function CreateAccountDialog({
         <label className="field">
           <span>Starting balance</span>
           <input
+            required
             type="number"
             min="0"
             step="0.01"
@@ -179,6 +183,7 @@ function CreateAccountDialog({
         <label className="field">
           <span>Commission / lot</span>
           <input
+            required
             type="number"
             min="0"
             step="0.01"
@@ -305,6 +310,7 @@ function CreateStrategyDialog({
         <label className="field field-wide">
           <span>Strategy name</span>
           <input
+            required
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="London continuation"
@@ -360,29 +366,29 @@ function CreateRiskDialog({
 }) {
   const [name, setName] = useState("");
   const [activeRiskTab, setActiveRiskTab] = useState<RiskCreateTab>("risk");
-  const [riskPerTradeMinPercent, setRiskPerTradeMinPercent] = useState("");
-  const [riskPerTradeMaxPercent, setRiskPerTradeMaxPercent] = useState("");
-  const [riskPerDayMinPercent, setRiskPerDayMinPercent] = useState("");
-  const [riskPerDayMidPercent, setRiskPerDayMidPercent] = useState("");
-  const [riskPerDayMaxPercent, setRiskPerDayMaxPercent] = useState("");
-  const [riskPerWeekMinPercent, setRiskPerWeekMinPercent] = useState("");
-  const [riskPerWeekMaxPercent, setRiskPerWeekMaxPercent] = useState("");
-  const [maxTradesPerDay, setMaxTradesPerDay] = useState("");
-  const [maxLosingTradesPerDay, setMaxLosingTradesPerDay] = useState("");
-  const [maxLosingDaysInRow, setMaxLosingDaysInRow] = useState("");
-  const [dailyGoalMinPercent, setDailyGoalMinPercent] = useState("");
-  const [dailyGoalMaxPercent, setDailyGoalMaxPercent] = useState("");
-  const [weeklyGoalMinPercent, setWeeklyGoalMinPercent] = useState("");
-  const [weeklyGoalMidPercent, setWeeklyGoalMidPercent] = useState("");
-  const [weeklyGoalMaxPercent, setWeeklyGoalMaxPercent] = useState("");
+  const [riskPerTradeMinPercent, setRiskPerTradeMinPercent] = useState("0.5");
+  const [riskPerTradeMaxPercent, setRiskPerTradeMaxPercent] = useState("1");
+  const [riskPerDayMinPercent, setRiskPerDayMinPercent] = useState("1");
+  const [riskPerDayMidPercent, setRiskPerDayMidPercent] = useState("2");
+  const [riskPerDayMaxPercent, setRiskPerDayMaxPercent] = useState("3");
+  const [riskPerWeekMinPercent, setRiskPerWeekMinPercent] = useState("2");
+  const [riskPerWeekMaxPercent, setRiskPerWeekMaxPercent] = useState("6");
+  const [maxTradesPerDay, setMaxTradesPerDay] = useState("3");
+  const [maxLosingTradesPerDay, setMaxLosingTradesPerDay] = useState("2");
+  const [maxLosingDaysInRow, setMaxLosingDaysInRow] = useState("2");
+  const [dailyGoalMinPercent, setDailyGoalMinPercent] = useState("1");
+  const [dailyGoalMaxPercent, setDailyGoalMaxPercent] = useState("2");
+  const [weeklyGoalMinPercent, setWeeklyGoalMinPercent] = useState("3");
+  const [weeklyGoalMidPercent, setWeeklyGoalMidPercent] = useState("5");
+  const [weeklyGoalMaxPercent, setWeeklyGoalMaxPercent] = useState("8");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function optionalPercent(value: string) {
     if (!value.trim()) return null;
     const parsed = Number(value);
-    if (!Number.isFinite(parsed) || parsed < 0) {
-      throw new Error("Percent values must be 0 or higher.");
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      throw new Error("Risk and goal percentages must be higher than 0.");
     }
     return parsed;
   }
@@ -390,8 +396,8 @@ function CreateRiskDialog({
   function optionalAmount(value: string) {
     if (!value.trim()) return null;
     const parsed = Number(value);
-    if (!Number.isInteger(parsed) || parsed < 0) {
-      throw new Error("Amount values must be whole numbers, 0 or higher.");
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      throw new Error("Trade limits must be whole numbers higher than 0.");
     }
     return parsed;
   }
@@ -505,6 +511,7 @@ function CreateRiskDialog({
         <label className="field field-wide">
           <span>Risk plan name</span>
           <input
+            required
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="1% fixed risk"
@@ -694,8 +701,9 @@ function RiskNumberField({
       <span>{label}</span>
       <input
         type="number"
-        min="0"
+        min={integer ? "1" : "0.01"}
         step={integer ? "1" : "0.01"}
+        required
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}

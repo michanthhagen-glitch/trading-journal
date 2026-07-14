@@ -3,6 +3,7 @@ import {
   listAccountSetup,
   listTrades,
   type RiskManagementPlan,
+  type Strategy,
   type Trade,
   type TradingAccount,
 } from "../shared/db/database";
@@ -21,6 +22,7 @@ const SELECTED_ACCOUNT_STORAGE_KEY = "trading-journal:selected-account-id";
 export function App() {
   const [activeModuleId, setActiveModuleId] = useState(appModules[0].id);
   const [accounts, setAccounts] = useState<TradingAccount[]>([]);
+  const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [riskPlans, setRiskPlans] = useState<RiskManagementPlan[]>([]);
   const [selectedAccountTrades, setSelectedAccountTrades] = useState<Trade[]>(
     [],
@@ -45,6 +47,7 @@ export function App() {
   async function reloadAccounts() {
     const data = await listAccountSetup();
     setAccounts(data.accounts);
+    setStrategies(data.strategies);
     setRiskPlans(data.riskPlans);
     setSelectedAccountId((current) => {
       const stored =
@@ -176,6 +179,9 @@ export function App() {
       activeModule={activeModule}
       appPreferences={appPreferences}
       modules={appModules}
+      riskPlans={riskPlans}
+      selectedAccountTrades={selectedAccountTrades}
+      strategies={strategies}
       tradingPlanInfo={tradingPlanInfo}
       onSelectModule={setActiveModuleId}
       onSelectAccount={handleSelectAccount}

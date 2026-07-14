@@ -3,6 +3,15 @@
 // layout work stays fast without opening the desktop shell.
 
 import Database from "@tauri-apps/plugin-sql";
+import {
+  validateRiskPlanSetup,
+  validateStrategySetup,
+  validateTradingAccountSetup,
+  type AccountTypeValue,
+  type RiskPlanSetupInput,
+  type StrategySetupInput,
+  type TradingAccountSetupInput,
+} from "./accountSetupValidation";
 
 const DB_URL =
   import.meta.env.VITE_TRADING_JOURNAL_DB_URL ?? "sqlite:trading-journal.db";
@@ -107,7 +116,12 @@ export type JournalRecapInput = {
   body: string;
 };
 
-export type AccountType = "live" | "demo" | "backtesting";
+export type AccountType = AccountTypeValue;
+export type {
+  RiskPlanSetupInput,
+  StrategySetupInput,
+  TradingAccountSetupInput,
+};
 
 export type Strategy = {
   id: string;
@@ -598,6 +612,16 @@ async function getDb(): Promise<Database> {
   return cachedDb;
 }
 
+export function databaseFilename() {
+  return DB_URL.replace(/^sqlite:/, "");
+}
+
+export async function closeDatabase(): Promise<void> {
+  if (!isTauri() || !cachedDb) return;
+  await cachedDb.close();
+  cachedDb = null;
+}
+
 export async function initializeDatabase(): Promise<void> {
   if (!isTauri()) return;
   await getDb();
@@ -730,15 +754,11 @@ export async function listAccountSetup(): Promise<{
   };
 }
 
-export async function createStrategy(input: {
-  name: string;
-  strategy: string;
-  entryRules: string;
-  slTpRules: string;
-  invalidationRules: string;
-}): Promise<Strategy> {
+export async function createStrategy(
+  input: StrategySetupInput,
+): Promise<Strategy> {
+  validateStrategySetup(input);
   const name = input.name.trim();
-  if (!name) throw new Error("Strategy name is required.");
 
   const row: Strategy = {
     id: newEntityId("STR"),
@@ -774,27 +794,11 @@ export async function createStrategy(input: {
   return row;
 }
 
-export async function createRiskManagementPlan(input: {
-  name: string;
-  riskPerTradeMinPercent: number | null;
-  riskPerTradeMaxPercent: number | null;
-  riskPerDayMinPercent: number | null;
-  riskPerDayMidPercent: number | null;
-  riskPerDayMaxPercent: number | null;
-  riskPerWeekMinPercent: number | null;
-  riskPerWeekMaxPercent: number | null;
-  maxTradesPerDay: number | null;
-  maxLosingTradesPerDay: number | null;
-  maxLosingDaysInRow: number | null;
-  dailyGoalMinPercent: number | null;
-  dailyGoalMaxPercent: number | null;
-  weeklyGoalMinPercent: number | null;
-  weeklyGoalMidPercent: number | null;
-  weeklyGoalMaxPercent: number | null;
-  notes: string;
-}): Promise<RiskManagementPlan> {
+export async function createRiskManagementPlan(
+  input: RiskPlanSetupInput,
+): Promise<RiskManagementPlan> {
+  validateRiskPlanSetup(input);
   const name = input.name.trim();
-  if (!name) throw new Error("Risk plan name is required.");
 
   const row: RiskManagementPlan = {
     id: newEntityId("RISK"),
@@ -882,33 +886,14 @@ export async function createRiskManagementPlan(input: {
   return row;
 }
 
-export async function createTradingAccount(input: {
-  name: string;
-  startingBalance: number;
-  commission: number;
-  currency: string;
-  accountType: AccountType;
-  strategyIds: string[];
-  riskPlanId: string | null;
-}): Promise<TradingAccount> {
+export async function createTradingAccount(
+  input: TradingAccountSetupInput,
+): Promise<TradingAccount> {
+  validateTradingAccountSetup(input);
   const name = input.name.trim();
   const strategyIds = Array.from(new Set(input.strategyIds.filter(Boolean)));
   const riskPlanId =
     input.accountType === "backtesting" ? null : input.riskPlanId || null;
-
-  if (!name) throw new Error("Account name is required.");
-  if (!Number.isFinite(input.startingBalance) || input.startingBalance < 0) {
-    throw new Error("Starting balance must be 0 or higher.");
-  }
-  if (!Number.isFinite(input.commission) || input.commission < 0) {
-    throw new Error("Commission must be 0 or higher.");
-  }
-  if (strategyIds.length === 0) {
-    throw new Error("Select at least one strategy.");
-  }
-  if (input.accountType === "live" && !riskPlanId) {
-    throw new Error("Live accounts need one risk management plan.");
-  }
 
   const row: TradingAccount = {
     id: newEntityId("ACC"),
@@ -951,6 +936,305 @@ export async function createTradingAccount(input: {
   }
 
   return row;
+}
+
+export async function updateStrategy(
+  id: string,
+  input: StrategySetupInput,
+): Promise<Strategy> {
+  validateStrategySetup(input);
+  const current = memoryStrategies.get(id);
+  const row: Strategy = {
+    id,
+    name: input.name.trim(),
+    strategy: input.strategy.trim(),
+    entryRules: input.entryRules.trim(),
+    slTpRules: input.slTpRules.trim(),
+    invalidationRules: input.invalidationRules.trim(),
+    notes: input.strategy.trim(),
+    created_at: current?.created_at ?? new Date().toISOString(),
+  };
+
+  if (!isTauri()) {
+    if (!current) throw new Error("Strategy was not found.");
+    memoryStrategies.set(id, row);
+    return row;
+  }
+
+  const db = await getDb();
+  const result = await db.execute(
+    `UPDATE strategies
+        SET name = $1,
+            strategy = $2,
+            entry_rules = $3,
+            sl_tp_rules = $4,
+            invalidation_rules = $5,
+            notes = $6,
+            updated_at = datetime('now')
+      WHERE id = $7`,
+    [
+      row.name,
+      row.strategy,
+      row.entryRules,
+      row.slTpRules,
+      row.invalidationRules,
+      row.notes,
+      id,
+    ],
+  );
+  if (result.rowsAffected === 0) throw new Error("Strategy was not found.");
+  return row;
+}
+
+export async function deleteStrategy(id: string): Promise<void> {
+  if (!isTauri()) {
+    const linkedAccount = Array.from(memoryAccounts.values()).find((account) =>
+      account.strategyIds.includes(id),
+    );
+    if (linkedAccount) {
+      throw new Error(
+        `Remove this strategy from ${linkedAccount.name} before deleting it.`,
+      );
+    }
+    memoryStrategies.delete(id);
+    return;
+  }
+
+  const db = await getDb();
+  const links = (await db.select(
+    `SELECT a.name
+       FROM account_strategies link
+       JOIN accounts a ON a.id = link.account_id
+      WHERE link.strategy_id = $1
+      LIMIT 1`,
+    [id],
+  )) as { name: string }[];
+  if (links[0]) {
+    throw new Error(
+      `Remove this strategy from ${links[0].name} before deleting it.`,
+    );
+  }
+  await db.execute("DELETE FROM strategies WHERE id = $1", [id]);
+}
+
+function riskPlanFromInput(
+  id: string,
+  input: RiskPlanSetupInput,
+  createdAt: string,
+): RiskManagementPlan {
+  return {
+    id,
+    name: input.name.trim(),
+    riskPercent: input.riskPerTradeMaxPercent,
+    maxDailyLossPercent: input.riskPerDayMaxPercent,
+    riskPerTradeMinPercent: input.riskPerTradeMinPercent,
+    riskPerTradeMaxPercent: input.riskPerTradeMaxPercent,
+    riskPerDayMinPercent: input.riskPerDayMinPercent,
+    riskPerDayMidPercent: input.riskPerDayMidPercent,
+    riskPerDayMaxPercent: input.riskPerDayMaxPercent,
+    riskPerWeekMinPercent: input.riskPerWeekMinPercent,
+    riskPerWeekMaxPercent: input.riskPerWeekMaxPercent,
+    maxTradesPerDay: input.maxTradesPerDay,
+    maxLosingTradesPerDay: input.maxLosingTradesPerDay,
+    maxLosingDaysInRow: input.maxLosingDaysInRow,
+    dailyGoalMinPercent: input.dailyGoalMinPercent,
+    dailyGoalMaxPercent: input.dailyGoalMaxPercent,
+    weeklyGoalMinPercent: input.weeklyGoalMinPercent,
+    weeklyGoalMidPercent: input.weeklyGoalMidPercent,
+    weeklyGoalMaxPercent: input.weeklyGoalMaxPercent,
+    notes: input.notes.trim(),
+    created_at: createdAt,
+  };
+}
+
+export async function updateRiskManagementPlan(
+  id: string,
+  input: RiskPlanSetupInput,
+): Promise<RiskManagementPlan> {
+  validateRiskPlanSetup(input);
+  const current = memoryRiskPlans.get(id);
+  const row = riskPlanFromInput(
+    id,
+    input,
+    current?.created_at ?? new Date().toISOString(),
+  );
+
+  if (!isTauri()) {
+    if (!current) throw new Error("Risk plan was not found.");
+    memoryRiskPlans.set(id, row);
+    return row;
+  }
+
+  const db = await getDb();
+  const result = await db.execute(
+    `UPDATE risk_management_plans
+        SET name = $1,
+            risk_percent = $2,
+            max_daily_loss_percent = $3,
+            risk_per_trade_min_percent = $4,
+            risk_per_trade_max_percent = $5,
+            risk_per_day_min_percent = $6,
+            risk_per_day_mid_percent = $7,
+            risk_per_day_max_percent = $8,
+            risk_per_week_min_percent = $9,
+            risk_per_week_max_percent = $10,
+            max_trades_per_day = $11,
+            max_losing_trades_per_day = $12,
+            max_losing_days_in_row = $13,
+            daily_goal_min_percent = $14,
+            daily_goal_max_percent = $15,
+            weekly_goal_min_percent = $16,
+            weekly_goal_mid_percent = $17,
+            weekly_goal_max_percent = $18,
+            notes = $19,
+            updated_at = datetime('now')
+      WHERE id = $20`,
+    [
+      row.name,
+      row.riskPercent,
+      row.maxDailyLossPercent,
+      row.riskPerTradeMinPercent,
+      row.riskPerTradeMaxPercent,
+      row.riskPerDayMinPercent,
+      row.riskPerDayMidPercent,
+      row.riskPerDayMaxPercent,
+      row.riskPerWeekMinPercent,
+      row.riskPerWeekMaxPercent,
+      row.maxTradesPerDay,
+      row.maxLosingTradesPerDay,
+      row.maxLosingDaysInRow,
+      row.dailyGoalMinPercent,
+      row.dailyGoalMaxPercent,
+      row.weeklyGoalMinPercent,
+      row.weeklyGoalMidPercent,
+      row.weeklyGoalMaxPercent,
+      row.notes,
+      id,
+    ],
+  );
+  if (result.rowsAffected === 0) throw new Error("Risk plan was not found.");
+  return row;
+}
+
+export async function deleteRiskManagementPlan(id: string): Promise<void> {
+  if (!isTauri()) {
+    const linkedAccount = Array.from(memoryAccounts.values()).find(
+      (account) => account.riskPlanId === id,
+    );
+    if (linkedAccount) {
+      throw new Error(
+        `Choose another risk plan for ${linkedAccount.name} before deleting it.`,
+      );
+    }
+    memoryRiskPlans.delete(id);
+    return;
+  }
+
+  const db = await getDb();
+  const links = (await db.select(
+    "SELECT name FROM accounts WHERE risk_plan_id = $1 LIMIT 1",
+    [id],
+  )) as { name: string }[];
+  if (links[0]) {
+    throw new Error(
+      `Choose another risk plan for ${links[0].name} before deleting it.`,
+    );
+  }
+  await db.execute("DELETE FROM risk_management_plans WHERE id = $1", [id]);
+}
+
+export async function updateTradingAccount(
+  id: string,
+  input: TradingAccountSetupInput,
+): Promise<TradingAccount> {
+  validateTradingAccountSetup(input);
+  const strategyIds = Array.from(new Set(input.strategyIds.filter(Boolean)));
+  const riskPlanId =
+    input.accountType === "backtesting" ? null : input.riskPlanId || null;
+  const current = memoryAccounts.get(id);
+  const row: TradingAccount = {
+    id,
+    name: input.name.trim(),
+    startingBalance: input.startingBalance,
+    commission: input.commission,
+    currency: input.currency.trim().toUpperCase(),
+    accountType: input.accountType,
+    strategyIds,
+    riskPlanId,
+    created_at: current?.created_at ?? new Date().toISOString(),
+  };
+
+  if (!isTauri()) {
+    if (!current) throw new Error("Account was not found.");
+    memoryAccounts.set(id, row);
+    return row;
+  }
+
+  const db = await getDb();
+  const result = await db.execute(
+    `UPDATE accounts
+        SET name = $1,
+            starting_balance = $2,
+            commission = $3,
+            currency = $4,
+            account_type = $5,
+            risk_plan_id = $6,
+            updated_at = datetime('now')
+      WHERE id = $7`,
+    [
+      row.name,
+      row.startingBalance,
+      row.commission,
+      row.currency,
+      row.accountType,
+      row.riskPlanId,
+      id,
+    ],
+  );
+  if (result.rowsAffected === 0) throw new Error("Account was not found.");
+  await db.execute("DELETE FROM account_strategies WHERE account_id = $1", [
+    id,
+  ]);
+  for (const strategyId of row.strategyIds) {
+    await db.execute(
+      "INSERT INTO account_strategies (account_id, strategy_id) VALUES ($1, $2)",
+      [id, strategyId],
+    );
+  }
+  return row;
+}
+
+export async function deleteTradingAccount(id: string): Promise<void> {
+  if (!isTauri()) {
+    for (const [tradeId, trade] of memoryTrades.entries()) {
+      if (trade.accountId === id) memoryTrades.delete(tradeId);
+    }
+    for (const rows of Object.values(SEED_JOURNAL)) {
+      for (let index = rows.length - 1; index >= 0; index -= 1) {
+        if (rows[index].account_id === id) rows.splice(index, 1);
+      }
+    }
+    memoryAccounts.delete(id);
+    return;
+  }
+
+  const db = await getDb();
+  await db.execute(
+    `DELETE FROM screenshots
+      WHERE trade_id IN (SELECT id FROM trades WHERE account_id = $1)`,
+    [id],
+  );
+  await db.execute(
+    `DELETE FROM recaps
+      WHERE trade_id IN (SELECT id FROM trades WHERE account_id = $1)`,
+    [id],
+  );
+  await db.execute("DELETE FROM trades WHERE account_id = $1", [id]);
+  await db.execute("DELETE FROM journal_recaps WHERE account_id = $1", [id]);
+  await db.execute("DELETE FROM account_strategies WHERE account_id = $1", [
+    id,
+  ]);
+  await db.execute("DELETE FROM accounts WHERE id = $1", [id]);
 }
 
 export async function listTrades(accountId?: string | null): Promise<Trade[]> {

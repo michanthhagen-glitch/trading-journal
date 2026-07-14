@@ -39,6 +39,7 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - Recap quick tag buttons use quick exports from the catalog files, not duplicate local arrays.
 - Recap lesson and next action fields use quick options plus free text so journaling stays fast.
 - Trade rows open a shared trade workspace modal instead of a separate full-page detail view.
+- Global search can switch to Trades/List and open a specific trade in the shared workspace modal.
 - The shared trade workspace has two modes: trade mode gives trade details the wide side and recap summary the narrow side; recap mode gives trade context the narrow side and recap editing the wide side.
 - Trade mode shows the trade summary metrics in the modal header, above the split workspace body.
 - Create and Done recap actions both open the shared trade workspace in recap mode.

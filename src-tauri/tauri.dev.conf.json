@@ -22,6 +22,7 @@
     ]
   },
   "bundle": {
+    "createUpdaterArtifacts": false,
     "shortDescription": "Trading Journal Dev desktop",
     "longDescription": "Development build for testing Trading Journal features without real trade data.",
     "windows": {
@@ -29,6 +30,12 @@
         "installMode": "currentUser",
         "installerHooks": "windows/installer-hooks-dev.nsh"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [],
+      "pubkey": ""
     }
   }
 }

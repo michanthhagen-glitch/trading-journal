@@ -22,6 +22,8 @@ Owns the fixed app shell and maps sidebar items to module components.
 - The main app window stays fixed; module content owns any needed scrolling.
 - The selected sidebar account is shell state and is passed to modules as context.
 - App preferences are shell context so modules stay visually consistent.
+- The shell builds global search results and notification summaries from loaded account, strategy, risk-plan, and trade data.
+- Search opens exact account setup records or trade workspaces through named custom events handled by their owning modules.
 
 ## Work Guidance
 

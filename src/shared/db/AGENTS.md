@@ -7,6 +7,8 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 ## Ownership
 
 - `database.ts`: types, SQLite connection, trade workflow APIs, recap APIs, screenshot metadata APIs, browser fallback seeds.
+- `accountSetupValidation.ts`: shared account, strategy, commission, and risk-plan validation.
+- `backup.ts`: typed desktop backup/restore wrapper and folder picker flow.
 - `storage.ts`: screenshot bytes, clipboard import, file import, window capture, URL resolution, physical file deletion.
 
 ## Local Contracts
@@ -19,12 +21,15 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 - Trade workflow fields include pre-trade strategy/risk, entry direction/time/price/lot size/SL/TP/notes/confidence, and exit time/price/result/P&L/note/feeling.
 - Strategy setup fields include strategy text, entry rules, SL/TP rules, and invalidation rules.
 - Risk management setup fields include per-trade/day/week risk ranges, trade-loss limits, and daily/weekly goal ranges.
+- Commission is required and may be zero; every risk-plan value is required and must be greater than zero.
+- Account, strategy, and risk-plan editing and deletion go through typed database APIs. Linked strategies and risk plans cannot be deleted until unlinked.
 - Trades and time-bounded recaps belong to the selected sidebar account through `account_id`.
 - Saving a per-trade recap marks that trade as reviewed.
 - Per-trade recaps store structured fields for later daily, weekly, and monthly automation.
 - The Recaps module uses shared save/list helpers and keeps browser fallback aligned with SQLite.
 - Time-bounded recap delete uses `deleteJournalRecap`; it removes only the `journal_recaps` row.
 - Screenshot backup/restore must treat the active database file and the `screenshots/` folder as one data set; database-only export is incomplete once screenshots exist.
+- Backup/restore must keep official and dev-app data separate by accepting only the active build's exact database filename.
 
 ## Work Guidance
 

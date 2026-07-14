@@ -7,6 +7,7 @@ Owns Vitest tests for app behavior and project contracts.
 ## Ownership
 
 - `appPreferences.test.ts`: shared app preference formatting and week-start behavior.
+- `accountSetupValidation.test.ts`: commission and risk-plan safety rules.
 - `moduleRegistry.test.ts`: smoke test for sidebar module registration.
 - `screenshotTools.test.ts`: screenshot drop helper behavior.
 - `tradeNames.test.ts`: automatic per-day trade display naming.
