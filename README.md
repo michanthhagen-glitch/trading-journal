@@ -87,7 +87,7 @@ Use **Recaps** at the end of the day, week, or month to review the larger patter
 
 ## Install the app
 
-Download the latest installer from [GitHub Releases](https://github.com/michanthhagen-glitch/trading-journal/releases/latest).
+Download the latest installer from [GitHub Releases](https://github.com/michanthhagen-glitch/MethodMark/releases/latest).
 
 - **Windows:** download and run the `.exe` installer.
 - **macOS with Apple Silicon:** download and open the `.dmg` file.
@@ -110,7 +110,7 @@ It may not be the right tool if you want fully automatic broker imports or a jou
 
 The project is under active development. The current focus is a calm, fast desktop workflow that is reliable enough to use alongside real trading.
 
-Feedback and bug reports are welcome through [GitHub Issues](https://github.com/michanthhagen-glitch/trading-journal/issues).
+Feedback and bug reports are welcome through [GitHub Issues](https://github.com/michanthhagen-glitch/MethodMark/issues).
 
 ## Development
 
