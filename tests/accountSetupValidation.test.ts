@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  validateEducatorSetup,
   validateRiskPlanSetup,
   validateTradingAccountSetup,
   type RiskPlanSetupInput,
@@ -26,6 +27,17 @@ const validRiskPlan: RiskPlanSetupInput = {
 };
 
 describe("account setup validation", () => {
+  it("requires an educator name", () => {
+    expect(() =>
+      validateEducatorSetup({
+        name: "",
+        community: "Alpha",
+        notes: "",
+        strategyId: null,
+      }),
+    ).toThrow("Educator name is required");
+  });
+
   it("allows an explicit zero commission", () => {
     expect(() =>
       validateTradingAccountSetup({
@@ -35,6 +47,7 @@ describe("account setup validation", () => {
         currency: "USD",
         accountType: "demo",
         strategyIds: ["STR-1"],
+        educatorIds: [],
         riskPlanId: null,
       }),
     ).not.toThrow();
@@ -49,9 +62,38 @@ describe("account setup validation", () => {
         currency: "USD",
         accountType: "demo",
         strategyIds: ["STR-1"],
+        educatorIds: [],
         riskPlanId: null,
       }),
     ).toThrow("Commission is required");
+  });
+
+  it("uses educators instead of strategies for system accounts", () => {
+    expect(() =>
+      validateTradingAccountSetup({
+        name: "Community calls",
+        startingBalance: 10000,
+        commission: 0,
+        currency: "USD",
+        accountType: "system",
+        strategyIds: [],
+        educatorIds: ["EDU-1"],
+        riskPlanId: null,
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      validateTradingAccountSetup({
+        name: "Community calls",
+        startingBalance: 10000,
+        commission: 0,
+        currency: "USD",
+        accountType: "system",
+        strategyIds: ["STR-1"],
+        educatorIds: [],
+        riskPlanId: null,
+      }),
+    ).toThrow("Select at least one educator");
   });
 
   it("requires every risk value and rejects zero", () => {

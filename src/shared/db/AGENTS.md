@@ -7,7 +7,8 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 ## Ownership
 
 - `database.ts`: types, SQLite connection, trade workflow APIs, recap APIs, screenshot metadata APIs, browser fallback seeds.
-- `accountSetupValidation.ts`: shared account, strategy, commission, and risk-plan validation.
+- `strategyQueries.ts`: account-setup strategy query, including reusable journaling-choice columns.
+- `accountSetupValidation.ts`: shared account, strategy, educator, commission, and risk-plan validation.
 - `backup.ts`: typed desktop backup/restore wrapper and folder picker flow.
 - `storage.ts`: screenshot bytes, clipboard import, file import, window capture, URL resolution, physical file deletion.
 
@@ -18,11 +19,14 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 - Components must not import `@tauri-apps/plugin-sql` or `@tauri-apps/plugin-fs` directly.
 - Native window capture must stay behind `storage.ts`; components should call the typed helper functions.
 - Schema changes require a new SQL migration in `src-tauri/migrations` and registration in `src-tauri/src/lib.rs`.
-- Trade workflow fields include pre-trade strategy/risk, entry direction/time/price/lot size/SL/TP/notes/confidence, and exit time/price/result/P&L/note/feeling.
-- Strategy setup fields include strategy text, entry rules, SL/TP rules, and invalidation rules.
+- Trade workflow fields include reusable key-level and entry/exit-condition selections alongside the existing planning, entry, and exit data.
+- Backtesting trades also store a session id, date of backtesting, and flexible TP/result scenarios.
+- Strategy setup fields include strategy text, rules, and reusable key-level, entry-condition, and exit-condition option lists.
+- Educator setup fields include educator name, community, notes, and an optional linked strategy.
 - Risk management setup fields include per-trade/day/week risk ranges, trade-loss limits, and daily/weekly goal ranges.
 - Commission is required and may be zero; every risk-plan value is required and must be greater than zero.
 - Account, strategy, and risk-plan editing and deletion go through typed database APIs. Linked strategies and risk plans cannot be deleted until unlinked.
+- System Accounts link educators instead of strategies; linked educators cannot be deleted until unlinked.
 - Trades and time-bounded recaps belong to the selected sidebar account through `account_id`.
 - Saving a per-trade recap marks that trade as reviewed.
 - Per-trade recaps store structured fields for later daily, weekly, and monthly automation.

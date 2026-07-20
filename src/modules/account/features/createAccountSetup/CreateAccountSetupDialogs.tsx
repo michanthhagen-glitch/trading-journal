@@ -1,21 +1,30 @@
 import { type FormEvent, type ReactNode, useState } from "react";
 import { ModalShell } from "../../../../components/ModalShell";
+import { StrategyOptionListField } from "../../StrategyOptionListField";
+import { strategyOptionsWithDraft } from "../../strategyOptions";
 import {
+  createEducator,
   createRiskManagementPlan,
   createStrategy,
   createTradingAccount,
   type AccountType,
+  type Educator,
   type RiskManagementPlan,
   type Strategy,
 } from "../../../../shared/db/database";
 
-export type AccountSetupCreateKind = "accounts" | "strategies" | "risk";
+export type AccountSetupCreateKind =
+  | "accounts"
+  | "strategies"
+  | "educators"
+  | "risk";
 type RiskCreateTab = "risk" | "goal";
 
 const ACCOUNT_TYPES: { id: AccountType; label: string }[] = [
   { id: "live", label: "Live" },
   { id: "demo", label: "Demo" },
   { id: "backtesting", label: "Backtesting" },
+  { id: "system", label: "System Account" },
 ];
 
 const CURRENCIES = [
@@ -32,6 +41,7 @@ const CURRENCIES = [
 type CreateDialogProps = {
   kind: AccountSetupCreateKind;
   strategies: Strategy[];
+  educators: Educator[];
   riskPlans: RiskManagementPlan[];
   onClose: () => void;
   onCreated: () => Promise<void> | void;
@@ -40,6 +50,7 @@ type CreateDialogProps = {
 export function CreateAccountSetupDialog({
   kind,
   strategies,
+  educators,
   riskPlans,
   onClose,
   onCreated,
@@ -48,6 +59,7 @@ export function CreateAccountSetupDialog({
     return (
       <CreateAccountDialog
         strategies={strategies}
+        educators={educators}
         riskPlans={riskPlans}
         onClose={onClose}
         onCreated={onCreated}
@@ -59,16 +71,28 @@ export function CreateAccountSetupDialog({
     return <CreateStrategyDialog onClose={onClose} onCreated={onCreated} />;
   }
 
+  if (kind === "educators") {
+    return (
+      <CreateEducatorDialog
+        strategies={strategies}
+        onClose={onClose}
+        onCreated={onCreated}
+      />
+    );
+  }
+
   return <CreateRiskDialog onClose={onClose} onCreated={onCreated} />;
 }
 
 function CreateAccountDialog({
   strategies,
+  educators,
   riskPlans,
   onClose,
   onCreated,
 }: {
   strategies: Strategy[];
+  educators: Educator[];
   riskPlans: RiskManagementPlan[];
   onClose: () => void;
   onCreated: () => Promise<void> | void;
@@ -81,6 +105,9 @@ function CreateAccountDialog({
   const [strategyIds, setStrategyIds] = useState<string[]>(
     strategies[0] ? [strategies[0].id] : [],
   );
+  const [educatorIds, setEducatorIds] = useState<string[]>(
+    educators[0] ? [educators[0].id] : [],
+  );
   const [riskPlanId, setRiskPlanId] = useState(riskPlans[0]?.id ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +117,14 @@ function CreateAccountDialog({
       checked
         ? Array.from(new Set([...current, strategyId]))
         : current.filter((id) => id !== strategyId),
+    );
+  }
+
+  function toggleEducator(educatorId: string, checked: boolean) {
+    setEducatorIds((current) =>
+      checked
+        ? Array.from(new Set([...current, educatorId]))
+        : current.filter((id) => id !== educatorId),
     );
   }
 
@@ -113,6 +148,7 @@ function CreateAccountDialog({
         currency,
         accountType,
         strategyIds,
+        educatorIds,
         riskPlanId:
           accountType === "backtesting" ? null : riskPlanId.trim() || null,
       });
@@ -228,25 +264,148 @@ function CreateAccountDialog({
           </select>
         </label>
 
-        <fieldset className="account-strategy-picker">
-          <legend>Strategies</legend>
-          {strategies.length === 0 ? (
-            <p>No strategies created yet.</p>
-          ) : (
-            strategies.map((strategy) => (
-              <label key={strategy.id}>
-                <input
-                  type="checkbox"
-                  checked={strategyIds.includes(strategy.id)}
-                  onChange={(event) =>
-                    toggleStrategy(strategy.id, event.target.checked)
-                  }
-                />
-                <span>{strategy.name}</span>
-              </label>
-            ))
-          )}
-        </fieldset>
+        {accountType === "system" ? (
+          <fieldset className="account-strategy-picker">
+            <legend>Educators</legend>
+            {educators.length === 0 ? (
+              <p>Create an educator first.</p>
+            ) : (
+              educators.map((educator) => (
+                <label key={educator.id}>
+                  <input
+                    type="checkbox"
+                    checked={educatorIds.includes(educator.id)}
+                    onChange={(event) =>
+                      toggleEducator(educator.id, event.target.checked)
+                    }
+                  />
+                  <span>
+                    {educator.name}
+                    {educator.community ? ` · ${educator.community}` : ""}
+                  </span>
+                </label>
+              ))
+            )}
+          </fieldset>
+        ) : (
+          <fieldset className="account-strategy-picker">
+            <legend>Strategies</legend>
+            {strategies.length === 0 ? (
+              <p>No strategies created yet.</p>
+            ) : (
+              strategies.map((strategy) => (
+                <label key={strategy.id}>
+                  <input
+                    type="checkbox"
+                    checked={strategyIds.includes(strategy.id)}
+                    onChange={(event) =>
+                      toggleStrategy(strategy.id, event.target.checked)
+                    }
+                  />
+                  <span>{strategy.name}</span>
+                </label>
+              ))
+            )}
+          </fieldset>
+        )}
+      </form>
+    </CreateModalShell>
+  );
+}
+
+function CreateEducatorDialog({
+  strategies,
+  onClose,
+  onCreated,
+}: {
+  strategies: Strategy[];
+  onClose: () => void;
+  onCreated: () => Promise<void> | void;
+}) {
+  const [name, setName] = useState("");
+  const [community, setCommunity] = useState("");
+  const [notes, setNotes] = useState("");
+  const [strategyId, setStrategyId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await createEducator({
+        name,
+        community,
+        notes,
+        strategyId: strategyId || null,
+      });
+      await onCreated();
+    } catch (createError) {
+      setError(
+        createError instanceof Error
+          ? createError.message
+          : "Could not create educator.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <CreateModalShell
+      title="Create educator"
+      subtitle="Who provides the community trade calls."
+      formId="create-educator-form"
+      submitLabel="Create educator"
+      saving={saving}
+      error={error}
+      onClose={onClose}
+    >
+      <form
+        id="create-educator-form"
+        className="account-create-form"
+        onSubmit={handleSubmit}
+      >
+        <label className="field field-wide">
+          <span>Educator name</span>
+          <input
+            required
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Educator or signal provider"
+          />
+        </label>
+        <label className="field field-wide">
+          <span>Community</span>
+          <input
+            value={community}
+            onChange={(event) => setCommunity(event.target.value)}
+            placeholder="Community or platform name"
+          />
+        </label>
+        <label className="field field-wide">
+          <span>Strategy</span>
+          <select
+            value={strategyId}
+            onChange={(event) => setStrategyId(event.target.value)}
+          >
+            <option value="">No linked strategy</option>
+            {strategies.map((strategy) => (
+              <option key={strategy.id} value={strategy.id}>
+                {strategy.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field field-wide">
+          <span>Notes</span>
+          <textarea
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            placeholder="Anything useful about their trade calls"
+          />
+        </label>
       </form>
     </CreateModalShell>
   );
@@ -264,6 +423,12 @@ function CreateStrategyDialog({
   const [entryRules, setEntryRules] = useState("");
   const [slTpRules, setSlTpRules] = useState("");
   const [invalidationRules, setInvalidationRules] = useState("");
+  const [keyLevels, setKeyLevels] = useState<string[]>([]);
+  const [entryConditions, setEntryConditions] = useState<string[]>([]);
+  const [exitConditions, setExitConditions] = useState<string[]>([]);
+  const [keyLevelDraft, setKeyLevelDraft] = useState("");
+  const [entryConditionDraft, setEntryConditionDraft] = useState("");
+  const [exitConditionDraft, setExitConditionDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -279,6 +444,15 @@ function CreateStrategyDialog({
         entryRules,
         slTpRules,
         invalidationRules,
+        keyLevels: strategyOptionsWithDraft(keyLevels, keyLevelDraft),
+        entryConditions: strategyOptionsWithDraft(
+          entryConditions,
+          entryConditionDraft,
+        ),
+        exitConditions: strategyOptionsWithDraft(
+          exitConditions,
+          exitConditionDraft,
+        ),
       });
       await onCreated();
     } catch (createError) {
@@ -352,6 +526,31 @@ function CreateStrategyDialog({
             placeholder="When this setup is no longer valid"
           />
         </label>
+
+        <StrategyOptionListField
+          label="Key levels"
+          placeholder="Previous day high"
+          values={keyLevels}
+          onChange={setKeyLevels}
+          draft={keyLevelDraft}
+          onDraftChange={setKeyLevelDraft}
+        />
+        <StrategyOptionListField
+          label="Entry conditions"
+          placeholder="Retest confirmation"
+          values={entryConditions}
+          onChange={setEntryConditions}
+          draft={entryConditionDraft}
+          onDraftChange={setEntryConditionDraft}
+        />
+        <StrategyOptionListField
+          label="Exit conditions"
+          placeholder="Target reached"
+          values={exitConditions}
+          onChange={setExitConditions}
+          draft={exitConditionDraft}
+          onDraftChange={setExitConditionDraft}
+        />
       </form>
     </CreateModalShell>
   );

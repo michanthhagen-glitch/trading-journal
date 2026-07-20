@@ -1,4 +1,4 @@
-export type AccountTypeValue = "live" | "demo" | "backtesting";
+export type AccountTypeValue = "live" | "demo" | "backtesting" | "system";
 
 export type StrategySetupInput = {
   name: string;
@@ -6,6 +6,16 @@ export type StrategySetupInput = {
   entryRules: string;
   slTpRules: string;
   invalidationRules: string;
+  keyLevels: string[];
+  entryConditions: string[];
+  exitConditions: string[];
+};
+
+export type EducatorSetupInput = {
+  name: string;
+  community: string;
+  notes: string;
+  strategyId: string | null;
 };
 
 export type RiskPlanSetupInput = {
@@ -35,6 +45,7 @@ export type TradingAccountSetupInput = {
   currency: string;
   accountType: AccountTypeValue;
   strategyIds: string[];
+  educatorIds: string[];
   riskPlanId: string | null;
 };
 
@@ -76,6 +87,10 @@ export function validateStrategySetup(input: StrategySetupInput) {
   if (!input.name.trim()) throw new Error("Strategy name is required.");
 }
 
+export function validateEducatorSetup(input: EducatorSetupInput) {
+  if (!input.name.trim()) throw new Error("Educator name is required.");
+}
+
 export function validateTradingAccountSetup(input: TradingAccountSetupInput) {
   if (!input.name.trim()) throw new Error("Account name is required.");
   if (!Number.isFinite(input.startingBalance) || input.startingBalance < 0) {
@@ -85,8 +100,17 @@ export function validateTradingAccountSetup(input: TradingAccountSetupInput) {
     throw new Error("Commission is required and must be 0 or higher.");
   }
   if (!input.currency.trim()) throw new Error("Currency is required.");
-  if (input.strategyIds.filter(Boolean).length === 0) {
+  if (
+    input.accountType !== "system" &&
+    input.strategyIds.filter(Boolean).length === 0
+  ) {
     throw new Error("Select at least one strategy.");
+  }
+  if (
+    input.accountType === "system" &&
+    input.educatorIds.filter(Boolean).length === 0
+  ) {
+    throw new Error("Select at least one educator.");
   }
   if (input.accountType === "live" && !input.riskPlanId) {
     throw new Error("Live accounts need one risk management plan.");

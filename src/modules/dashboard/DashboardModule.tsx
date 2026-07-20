@@ -5,6 +5,7 @@ import { ModalShell } from "../../components/ModalShell";
 import {
   listAccountSetup,
   listTrades,
+  type Educator,
   type RiskManagementPlan,
   type Strategy,
   type Trade,
@@ -25,6 +26,7 @@ import {
   weekdayShortLabel,
 } from "../../shared/appPreferences";
 import { formatTradeName } from "../../shared/tradeNames";
+import { BacktestingDashboard } from "./BacktestingDashboard";
 
 type Tone = "flat" | "negative" | "positive" | "warning";
 type Outcome = "break-even" | "empty" | "loss" | "win";
@@ -311,7 +313,7 @@ function pairLabel(trade: Trade) {
 }
 
 function strategyLabel(trade: Trade) {
-  return trade.preTrade.strategy.trim() || "No strategy";
+  return trade.preTrade.strategy.trim() || "Unassigned";
 }
 
 function fmtCurrency(
@@ -2313,6 +2315,7 @@ export function DashboardModule({
   const [trades, setTrades] = useState<Trade[]>([]);
   const [riskPlan, setRiskPlan] = useState<RiskManagementPlan | null>(null);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
+  const [educators, setEducators] = useState<Educator[]>([]);
   const [activeTab, setActiveTab] = useState<DashboardTab>("total");
   const [detail, setDetail] = useState<DetailState>(null);
   const [chartDetailKind, setChartDetailKind] = useState<
@@ -2334,6 +2337,7 @@ export function DashboardModule({
 
       setTrades(tradeRows);
       setStrategies(setup.strategies);
+      setEducators(setup.educators);
       setRiskPlan(
         setup.riskPlans.find(
           (plan) =>
@@ -2525,14 +2529,26 @@ export function DashboardModule({
       : activeTab === "week"
         ? dashboard.weekRankings
         : dashboard.totalRankings;
-  const strategyDetailRows = useMemo(
+  const sourceDetailRows = useMemo(
     () =>
       rateRowsWithLabels(
         dashboard.total.rateGroups.strategy.rows,
-        strategies.map((strategy) => strategy.name),
+        selectedAccount?.accountType === "system"
+          ? educators.map((educator) => educator.name)
+          : strategies.map((strategy) => strategy.name),
       ),
-    [dashboard.total.rateGroups.strategy.rows, strategies],
+    [
+      dashboard.total.rateGroups.strategy.rows,
+      educators,
+      selectedAccount?.accountType,
+      strategies,
+    ],
   );
+  if (selectedAccount?.accountType === "backtesting") {
+    return <BacktestingDashboard trades={trades} />;
+  }
+  const sourceLabel =
+    selectedAccount?.accountType === "system" ? "Educator" : "Strategy";
   const currentMonthChart = dashboard.monthlyCharts[
     dashboard.monthlyCharts.length - 1
   ] ?? {
@@ -2697,13 +2713,13 @@ export function DashboardModule({
               }
             />
             <RateStatsCard
-              title="Strategy"
+              title={sourceLabel}
               leaders={dashboard.total.rateGroups.strategy}
               variant="simple"
               onOpen={() =>
                 setDetail({
-                  rows: strategyDetailRows,
-                  title: "Strategy statistics",
+                  rows: sourceDetailRows,
+                  title: `${sourceLabel} statistics`,
                   type: "rate",
                 })
               }

@@ -3,11 +3,14 @@
 // layout work stays fast without opening the desktop shell.
 
 import Database from "@tauri-apps/plugin-sql";
+import { LIST_ACCOUNT_SETUP_STRATEGIES_SQL } from "./strategyQueries";
 import {
+  validateEducatorSetup,
   validateRiskPlanSetup,
   validateStrategySetup,
   validateTradingAccountSetup,
   type AccountTypeValue,
+  type EducatorSetupInput,
   type RiskPlanSetupInput,
   type StrategySetupInput,
   type TradingAccountSetupInput,
@@ -52,6 +55,12 @@ export type TradeRow = {
   exit_result: string;
   exit_feeling: number | null;
   pnl: number | null;
+  key_level: string;
+  entry_condition: string;
+  exit_condition: string;
+  backtest_session_id: string | null;
+  backtest_tested_at: string | null;
+  backtest_targets: string;
   created_at: string;
   updated_at: string;
 };
@@ -118,6 +127,7 @@ export type JournalRecapInput = {
 
 export type AccountType = AccountTypeValue;
 export type {
+  EducatorSetupInput,
   RiskPlanSetupInput,
   StrategySetupInput,
   TradingAccountSetupInput,
@@ -130,7 +140,19 @@ export type Strategy = {
   entryRules: string;
   slTpRules: string;
   invalidationRules: string;
+  keyLevels: string[];
+  entryConditions: string[];
+  exitConditions: string[];
   notes: string;
+  created_at: string;
+};
+
+export type Educator = {
+  id: string;
+  name: string;
+  community: string;
+  notes: string;
+  strategyId: string | null;
   created_at: string;
 };
 
@@ -166,6 +188,7 @@ export type TradingAccount = {
   currency: string;
   accountType: AccountType;
   strategyIds: string[];
+  educatorIds: string[];
   riskPlanId: string | null;
   created_at: string;
 };
@@ -177,7 +200,19 @@ type StrategyRow = {
   entry_rules: string;
   sl_tp_rules: string;
   invalidation_rules: string;
+  key_levels: string;
+  entry_conditions: string;
+  exit_conditions: string;
   notes: string;
+  created_at: string;
+};
+
+type EducatorRow = {
+  id: string;
+  name: string;
+  community: string;
+  notes: string;
+  strategy_id: string | null;
   created_at: string;
 };
 
@@ -221,6 +256,11 @@ type AccountStrategyRow = {
   strategy_id: string;
 };
 
+type AccountEducatorRow = {
+  account_id: string;
+  educator_id: string;
+};
+
 export type ScreenshotRow = {
   id: string;
   trade_id: string;
@@ -232,6 +272,8 @@ export type ScreenshotRow = {
 
 export type PreTradeData = {
   strategy: string;
+  keyLevel: string;
+  entryCondition: string;
   riskPercent: number | null;
   riskAmount: number | null;
   bias: string;
@@ -255,6 +297,12 @@ export type ExitData = {
   note: string;
   feeling: number | null;
   time: string | null;
+  exitCondition: string;
+};
+
+export type BacktestTarget = {
+  takeProfit: number | null;
+  result: TradeResult;
 };
 
 export type Trade = {
@@ -268,6 +316,9 @@ export type Trade = {
   entry: EntryData;
   exit: ExitData;
   pnl: number | null;
+  backtestSessionId: string | null;
+  backtestTestedAt: string | null;
+  backtestTargets: BacktestTarget[];
   hasRecap: boolean;
   recap: TradeRecap | null;
   screenshots: ScreenshotRow[];
@@ -312,6 +363,29 @@ function stringArrayFromJson(value: string): string[] {
   return [];
 }
 
+function backtestTargetsFromJson(value: string): BacktestTarget[] {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const target = item as { takeProfit?: unknown; result?: unknown };
+      const takeProfit =
+        typeof target.takeProfit === "number" &&
+        Number.isFinite(target.takeProfit)
+          ? target.takeProfit
+          : null;
+      const result =
+        typeof target.result === "string"
+          ? normalizedResult(target.result)
+          : "";
+      return [{ takeProfit, result }];
+    });
+  } catch {
+    return [];
+  }
+}
+
 function recapRowToRecap(row: RecapRow): TradeRecap {
   return {
     id: row.id,
@@ -347,6 +421,8 @@ function rowToTrade(
     status: row.status,
     preTrade: {
       strategy: row.pre_strategy ?? "",
+      keyLevel: row.key_level ?? "",
+      entryCondition: row.entry_condition ?? "",
       riskPercent: row.risk_percent,
       riskAmount: row.risk_amount,
       bias: row.pre_bias ?? "",
@@ -368,8 +444,12 @@ function rowToTrade(
       note: row.exit_reason ?? "",
       feeling: row.exit_feeling,
       time: row.exit_time,
+      exitCondition: row.exit_condition ?? "",
     },
     pnl: row.pnl,
+    backtestSessionId: row.backtest_session_id,
+    backtestTestedAt: row.backtest_tested_at,
+    backtestTargets: backtestTargetsFromJson(row.backtest_targets ?? "[]"),
     hasRecap: recap !== null,
     recap,
     screenshots,
@@ -420,6 +500,7 @@ function isTauri(): boolean {
 
 const memoryTrades = new Map<string, Trade>();
 const memoryStrategies = new Map<string, Strategy>();
+const memoryEducators = new Map<string, Educator>();
 const memoryRiskPlans = new Map<string, RiskManagementPlan>();
 const memoryAccounts = new Map<string, TradingAccount>();
 
@@ -433,6 +514,8 @@ const SEED_TRADES: Trade[] = [
     status: "closed",
     preTrade: {
       strategy: "London continuation",
+      keyLevel: "Previous day high",
+      entryCondition: "Retest confirmation",
       riskPercent: 1,
       riskAmount: 150,
       bias: "Long from 4H demand",
@@ -454,8 +537,12 @@ const SEED_TRADES: Trade[] = [
       note: "Target hit. Followed plan.",
       feeling: 7,
       time: null,
+      exitCondition: "Target reached",
     },
     pnl: 240,
+    backtestSessionId: null,
+    backtestTestedAt: null,
+    backtestTargets: [],
     hasRecap: true,
     recap: {
       id: "R-128",
@@ -486,6 +573,8 @@ const SEED_TRADES: Trade[] = [
     status: "open",
     preTrade: {
       strategy: "Supply rejection",
+      keyLevel: "",
+      entryCondition: "",
       riskPercent: 0.5,
       riskAmount: 100,
       bias: "Short from 2380 supply",
@@ -501,8 +590,18 @@ const SEED_TRADES: Trade[] = [
       notes: "Entered after 5m lower high.",
       confidence: 6,
     },
-    exit: { price: null, result: "", note: "", feeling: null, time: null },
+    exit: {
+      price: null,
+      result: "",
+      note: "",
+      feeling: null,
+      time: null,
+      exitCondition: "",
+    },
     pnl: null,
+    backtestSessionId: null,
+    backtestTestedAt: null,
+    backtestTargets: [],
     hasRecap: false,
     recap: null,
     screenshots: [],
@@ -516,6 +615,8 @@ const SEED_TRADES: Trade[] = [
     status: "closed",
     preTrade: {
       strategy: "Breakout retest",
+      keyLevel: "",
+      entryCondition: "",
       riskPercent: 1,
       riskAmount: 150,
       bias: "Long above 19800",
@@ -537,8 +638,12 @@ const SEED_TRADES: Trade[] = [
       note: "Stopped out. Entry was too early.",
       feeling: 3,
       time: null,
+      exitCondition: "Structure invalidated",
     },
     pnl: -150,
+    backtestSessionId: null,
+    backtestTestedAt: null,
+    backtestTargets: [],
     hasRecap: false,
     recap: null,
     screenshots: [],
@@ -555,6 +660,9 @@ const SEED_STRATEGIES: Strategy[] = [
     entryRules: "Wait for setup confirmation before entry.",
     slTpRules: "Place stop past invalidation and target at least 2R.",
     invalidationRules: "Skip when structure no longer supports the idea.",
+    keyLevels: ["Previous day high", "Previous day low"],
+    entryConditions: ["Structure break", "Retest confirmation"],
+    exitConditions: ["Target reached", "Structure invalidated"],
     notes: "Default planning strategy for early workflow testing.",
     created_at: "2026-07-03T00:00:00Z",
   },
@@ -595,6 +703,7 @@ const SEED_ACCOUNTS: TradingAccount[] = [
     currency: "USD",
     accountType: "demo",
     strategyIds: ["STR-1"],
+    educatorIds: [],
     riskPlanId: "RISK-1",
     created_at: "2026-07-03T00:00:00Z",
   },
@@ -662,7 +771,21 @@ function rowToStrategy(row: StrategyRow): Strategy {
     entryRules: row.entry_rules,
     slTpRules: row.sl_tp_rules,
     invalidationRules: row.invalidation_rules,
+    keyLevels: stringArrayFromJson(row.key_levels ?? "[]"),
+    entryConditions: stringArrayFromJson(row.entry_conditions ?? "[]"),
+    exitConditions: stringArrayFromJson(row.exit_conditions ?? "[]"),
     notes: row.notes,
+    created_at: row.created_at,
+  };
+}
+
+function rowToEducator(row: EducatorRow): Educator {
+  return {
+    id: row.id,
+    name: row.name,
+    community: row.community,
+    notes: row.notes,
+    strategyId: row.strategy_id,
     created_at: row.created_at,
   };
 }
@@ -670,6 +793,7 @@ function rowToStrategy(row: StrategyRow): Strategy {
 function rowToAccount(
   row: TradingAccountRow,
   strategyIds: string[],
+  educatorIds: string[],
 ): TradingAccount {
   return {
     id: row.id,
@@ -679,6 +803,7 @@ function rowToAccount(
     currency: row.currency,
     accountType: row.account_type,
     strategyIds,
+    educatorIds,
     riskPlanId: row.risk_plan_id,
     created_at: row.created_at,
   };
@@ -687,22 +812,27 @@ function rowToAccount(
 export async function listAccountSetup(): Promise<{
   accounts: TradingAccount[];
   strategies: Strategy[];
+  educators: Educator[];
   riskPlans: RiskManagementPlan[];
 }> {
   if (!isTauri()) {
     return {
       accounts: Array.from(memoryAccounts.values()),
       strategies: Array.from(memoryStrategies.values()),
+      educators: Array.from(memoryEducators.values()),
       riskPlans: Array.from(memoryRiskPlans.values()),
     };
   }
 
   const db = await getDb();
   const strategyRows = (await db.select(
-    `SELECT id, name, strategy, entry_rules, sl_tp_rules, invalidation_rules, notes, created_at
-       FROM strategies
-      ORDER BY created_at DESC`,
+    LIST_ACCOUNT_SETUP_STRATEGIES_SQL,
   )) as StrategyRow[];
+  const educatorRows = (await db.select(
+    `SELECT id, name, community, notes, strategy_id, created_at
+       FROM educators
+      ORDER BY created_at DESC`,
+  )) as EducatorRow[];
   const riskRows = (await db.select(
     `SELECT
         id,
@@ -737,6 +867,9 @@ export async function listAccountSetup(): Promise<{
   const links = (await db.select(
     "SELECT account_id, strategy_id FROM account_strategies",
   )) as AccountStrategyRow[];
+  const educatorLinks = (await db.select(
+    "SELECT account_id, educator_id FROM account_educators",
+  )) as AccountEducatorRow[];
 
   const strategiesByAccount = new Map<string, string[]>();
   for (const link of links) {
@@ -744,12 +877,23 @@ export async function listAccountSetup(): Promise<{
     ids.push(link.strategy_id);
     strategiesByAccount.set(link.account_id, ids);
   }
+  const educatorsByAccount = new Map<string, string[]>();
+  for (const link of educatorLinks) {
+    const ids = educatorsByAccount.get(link.account_id) ?? [];
+    ids.push(link.educator_id);
+    educatorsByAccount.set(link.account_id, ids);
+  }
 
   return {
     accounts: accountRows.map((row) =>
-      rowToAccount(row, strategiesByAccount.get(row.id) ?? []),
+      rowToAccount(
+        row,
+        strategiesByAccount.get(row.id) ?? [],
+        educatorsByAccount.get(row.id) ?? [],
+      ),
     ),
     strategies: strategyRows.map(rowToStrategy),
+    educators: educatorRows.map(rowToEducator),
     riskPlans: riskRows.map(rowToRiskPlan),
   };
 }
@@ -767,6 +911,13 @@ export async function createStrategy(
     entryRules: input.entryRules.trim(),
     slTpRules: input.slTpRules.trim(),
     invalidationRules: input.invalidationRules.trim(),
+    keyLevels: input.keyLevels.map((value) => value.trim()).filter(Boolean),
+    entryConditions: input.entryConditions
+      .map((value) => value.trim())
+      .filter(Boolean),
+    exitConditions: input.exitConditions
+      .map((value) => value.trim())
+      .filter(Boolean),
     notes: input.strategy.trim(),
     created_at: new Date().toISOString(),
   };
@@ -779,8 +930,9 @@ export async function createStrategy(
   const db = await getDb();
   await db.execute(
     `INSERT INTO strategies
-       (id, name, strategy, entry_rules, sl_tp_rules, invalidation_rules, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+       (id, name, strategy, entry_rules, sl_tp_rules, invalidation_rules,
+        key_levels, entry_conditions, exit_conditions, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       row.id,
       row.name,
@@ -788,8 +940,38 @@ export async function createStrategy(
       row.entryRules,
       row.slTpRules,
       row.invalidationRules,
+      JSON.stringify(row.keyLevels),
+      JSON.stringify(row.entryConditions),
+      JSON.stringify(row.exitConditions),
       row.notes,
     ],
+  );
+  return row;
+}
+
+export async function createEducator(
+  input: EducatorSetupInput,
+): Promise<Educator> {
+  validateEducatorSetup(input);
+  const row: Educator = {
+    id: newEntityId("EDU"),
+    name: input.name.trim(),
+    community: input.community.trim(),
+    notes: input.notes.trim(),
+    strategyId: input.strategyId || null,
+    created_at: new Date().toISOString(),
+  };
+
+  if (!isTauri()) {
+    memoryEducators.set(row.id, row);
+    return row;
+  }
+
+  const db = await getDb();
+  await db.execute(
+    `INSERT INTO educators (id, name, community, notes, strategy_id)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [row.id, row.name, row.community, row.notes, row.strategyId],
   );
   return row;
 }
@@ -891,7 +1073,14 @@ export async function createTradingAccount(
 ): Promise<TradingAccount> {
   validateTradingAccountSetup(input);
   const name = input.name.trim();
-  const strategyIds = Array.from(new Set(input.strategyIds.filter(Boolean)));
+  const strategyIds =
+    input.accountType === "system"
+      ? []
+      : Array.from(new Set(input.strategyIds.filter(Boolean)));
+  const educatorIds =
+    input.accountType === "system"
+      ? Array.from(new Set(input.educatorIds.filter(Boolean)))
+      : [];
   const riskPlanId =
     input.accountType === "backtesting" ? null : input.riskPlanId || null;
 
@@ -903,6 +1092,7 @@ export async function createTradingAccount(
     currency: input.currency.trim().toUpperCase(),
     accountType: input.accountType,
     strategyIds,
+    educatorIds,
     riskPlanId,
     created_at: new Date().toISOString(),
   };
@@ -934,6 +1124,12 @@ export async function createTradingAccount(
       [row.id, strategyId],
     );
   }
+  for (const educatorId of row.educatorIds) {
+    await db.execute(
+      "INSERT INTO account_educators (account_id, educator_id) VALUES ($1, $2)",
+      [row.id, educatorId],
+    );
+  }
 
   return row;
 }
@@ -951,6 +1147,13 @@ export async function updateStrategy(
     entryRules: input.entryRules.trim(),
     slTpRules: input.slTpRules.trim(),
     invalidationRules: input.invalidationRules.trim(),
+    keyLevels: input.keyLevels.map((value) => value.trim()).filter(Boolean),
+    entryConditions: input.entryConditions
+      .map((value) => value.trim())
+      .filter(Boolean),
+    exitConditions: input.exitConditions
+      .map((value) => value.trim())
+      .filter(Boolean),
     notes: input.strategy.trim(),
     created_at: current?.created_at ?? new Date().toISOString(),
   };
@@ -969,15 +1172,21 @@ export async function updateStrategy(
             entry_rules = $3,
             sl_tp_rules = $4,
             invalidation_rules = $5,
-            notes = $6,
+            key_levels = $6,
+            entry_conditions = $7,
+            exit_conditions = $8,
+            notes = $9,
             updated_at = datetime('now')
-      WHERE id = $7`,
+      WHERE id = $10`,
     [
       row.name,
       row.strategy,
       row.entryRules,
       row.slTpRules,
       row.invalidationRules,
+      JSON.stringify(row.keyLevels),
+      JSON.stringify(row.entryConditions),
+      JSON.stringify(row.exitConditions),
       row.notes,
       id,
     ],
@@ -1015,6 +1224,73 @@ export async function deleteStrategy(id: string): Promise<void> {
     );
   }
   await db.execute("DELETE FROM strategies WHERE id = $1", [id]);
+}
+
+export async function updateEducator(
+  id: string,
+  input: EducatorSetupInput,
+): Promise<Educator> {
+  validateEducatorSetup(input);
+  const current = memoryEducators.get(id);
+  const row: Educator = {
+    id,
+    name: input.name.trim(),
+    community: input.community.trim(),
+    notes: input.notes.trim(),
+    strategyId: input.strategyId || null,
+    created_at: current?.created_at ?? new Date().toISOString(),
+  };
+
+  if (!isTauri()) {
+    if (!current) throw new Error("Educator was not found.");
+    memoryEducators.set(id, row);
+    return row;
+  }
+
+  const db = await getDb();
+  const result = await db.execute(
+    `UPDATE educators
+        SET name = $1,
+            community = $2,
+            notes = $3,
+            strategy_id = $4,
+            updated_at = datetime('now')
+      WHERE id = $5`,
+    [row.name, row.community, row.notes, row.strategyId, id],
+  );
+  if (result.rowsAffected === 0) throw new Error("Educator was not found.");
+  return row;
+}
+
+export async function deleteEducator(id: string): Promise<void> {
+  if (!isTauri()) {
+    const linkedAccount = Array.from(memoryAccounts.values()).find((account) =>
+      account.educatorIds.includes(id),
+    );
+    if (linkedAccount) {
+      throw new Error(
+        `Remove this educator from ${linkedAccount.name} before deleting them.`,
+      );
+    }
+    memoryEducators.delete(id);
+    return;
+  }
+
+  const db = await getDb();
+  const links = (await db.select(
+    `SELECT a.name
+       FROM account_educators link
+       JOIN accounts a ON a.id = link.account_id
+      WHERE link.educator_id = $1
+      LIMIT 1`,
+    [id],
+  )) as { name: string }[];
+  if (links[0]) {
+    throw new Error(
+      `Remove this educator from ${links[0].name} before deleting them.`,
+    );
+  }
+  await db.execute("DELETE FROM educators WHERE id = $1", [id]);
 }
 
 function riskPlanFromInput(
@@ -1148,7 +1424,14 @@ export async function updateTradingAccount(
   input: TradingAccountSetupInput,
 ): Promise<TradingAccount> {
   validateTradingAccountSetup(input);
-  const strategyIds = Array.from(new Set(input.strategyIds.filter(Boolean)));
+  const strategyIds =
+    input.accountType === "system"
+      ? []
+      : Array.from(new Set(input.strategyIds.filter(Boolean)));
+  const educatorIds =
+    input.accountType === "system"
+      ? Array.from(new Set(input.educatorIds.filter(Boolean)))
+      : [];
   const riskPlanId =
     input.accountType === "backtesting" ? null : input.riskPlanId || null;
   const current = memoryAccounts.get(id);
@@ -1160,6 +1443,7 @@ export async function updateTradingAccount(
     currency: input.currency.trim().toUpperCase(),
     accountType: input.accountType,
     strategyIds,
+    educatorIds,
     riskPlanId,
     created_at: current?.created_at ?? new Date().toISOString(),
   };
@@ -1201,6 +1485,13 @@ export async function updateTradingAccount(
       [id, strategyId],
     );
   }
+  await db.execute("DELETE FROM account_educators WHERE account_id = $1", [id]);
+  for (const educatorId of row.educatorIds) {
+    await db.execute(
+      "INSERT INTO account_educators (account_id, educator_id) VALUES ($1, $2)",
+      [id, educatorId],
+    );
+  }
   return row;
 }
 
@@ -1234,6 +1525,7 @@ export async function deleteTradingAccount(id: string): Promise<void> {
   await db.execute("DELETE FROM account_strategies WHERE account_id = $1", [
     id,
   ]);
+  await db.execute("DELETE FROM account_educators WHERE account_id = $1", [id]);
   await db.execute("DELETE FROM accounts WHERE id = $1", [id]);
 }
 
@@ -1309,7 +1601,8 @@ export async function insertTrade(input: NewTrade): Promise<Trade> {
       entry_price, entry_size, entry_time, stop_loss, take_profit,
       entry_notes, entry_confidence,
       exit_price, exit_time, exit_reason, exit_result, exit_feeling,
-      pnl
+      pnl, key_level, entry_condition, exit_condition,
+      backtest_session_id, backtest_tested_at, backtest_targets
     ) VALUES (
       $1,$2,$3,$4,$5,$6,
       $7,$8,$9,
@@ -1318,7 +1611,8 @@ export async function insertTrade(input: NewTrade): Promise<Trade> {
       $18,$19,$20,$21,$22,
       $23,$24,
       $25,$26,$27,$28,$29,
-      $30
+      $30,$31,$32,$33,
+      $34,$35,$36
     )`,
     [
       trade.id,
@@ -1351,6 +1645,12 @@ export async function insertTrade(input: NewTrade): Promise<Trade> {
       trade.exit.result,
       trade.exit.feeling,
       trade.pnl,
+      trade.preTrade.keyLevel,
+      trade.preTrade.entryCondition,
+      trade.exit.exitCondition,
+      trade.backtestSessionId,
+      trade.backtestTestedAt,
+      JSON.stringify(trade.backtestTargets),
     ],
   );
   return trade;
@@ -1376,8 +1676,10 @@ export async function savePreTrade(
        pre_strategy = $4,
        risk_percent = $5,
        risk_amount = $6,
+       key_level = $7,
+       entry_condition = $8,
        updated_at = datetime('now')
-     WHERE id = $7`,
+     WHERE id = $9`,
     [
       data.bias,
       data.notes,
@@ -1385,6 +1687,8 @@ export async function savePreTrade(
       data.strategy,
       data.riskPercent,
       data.riskAmount,
+      data.keyLevel,
+      data.entryCondition,
       tradeId,
     ],
   );
@@ -1461,10 +1765,20 @@ export async function closeTrade(
            exit_result = $4,
            exit_feeling = $5,
            pnl = $6,
+           exit_condition = $7,
            status = 'closed',
            updated_at = datetime('now')
-     WHERE id = $7`,
-    [exit.price, exit.time, exit.note, exit.result, exit.feeling, pnl, id],
+     WHERE id = $8`,
+    [
+      exit.price,
+      exit.time,
+      exit.note,
+      exit.result,
+      exit.feeling,
+      pnl,
+      exit.exitCondition,
+      id,
+    ],
   );
 }
 

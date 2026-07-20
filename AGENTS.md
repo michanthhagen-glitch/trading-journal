@@ -41,6 +41,8 @@ npm run format          # prettier --write .
 ## Product Model
 
 - Modules: Dashboard, Account, Trades, Recaps, Settings.
+- Account types: Live, Demo, Backtesting, and System Account.
+- System Accounts follow educator/community trade calls instead of strategies.
 - Trade workflow: pre-trade, entry, exit.
 - Per-trade recaps stay on the trade.
 - Recaps are a separate feature from the trade entry/exit workflow.

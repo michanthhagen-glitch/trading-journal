@@ -19,6 +19,7 @@ export type CaptureWindowInfo = {
   x: number;
   y: number;
   isFocused: boolean;
+  isMinimized: boolean;
 };
 
 type CapturedWindowImage = {

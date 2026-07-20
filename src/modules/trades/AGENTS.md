@@ -6,7 +6,8 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 
 ## Ownership
 
-- `TradesModule.tsx`: trade table, selected trade detail, three-card new trade workflow, entry form, exit form.
+- `TradesModule.tsx`: trade table, selected trade detail, standard three-card workflow, simplified System Account workflow, and saved-stage editors.
+- `components/BacktestWorkflow.tsx`: Backtest Session setup and rapid multi-target trade logger.
 - `tradeRecapMistakes.ts`: categorized starter catalog for trade recap mistake tags.
 - `tradeRecapPositives.ts`: categorized starter catalog for trade recap positive tags.
 - `components/PreTradeCard.tsx`: pre-trade summary and screenshot gallery.
@@ -26,6 +27,13 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - Trade save/delete/exit changes notify the shell so sidebar account plan numbers refresh.
 - Trade display names are automatic per selected account and day: `Trade 1`, `Trade 2`, etc.; the instrument/pair is not the trade name.
 - New trade strategy choices come only from the selected account's linked strategies.
+- New System Account trades use linked educators in the same saved trade-source field and label it Educator.
+- System Account trades use an Entry + Exit workflow only. Date, pair, and educator belong to the Entry card; pre-trade planning, risk fields, confidence, and feelings are omitted.
+- System Account screenshots and notes stay attached to their Entry or Exit stage, and saved trade details and recap context omit the Pre-trade card.
+- Backtesting starts a session with strategy, pair, and date of backtesting, then keeps those values while rapidly saving trades.
+- Backtesting trade logging includes historical date/time, buy/sell, entry, SL, flexible TP/result rows, calculated RR, strategy selectors, and before/after screenshots.
+- Backtesting trades do not raise missing-recap or open-trade reminders.
+- Strategy key-level, entry-condition, and exit-condition choices are available in normal, System Account, and Backtesting trade workflows.
 - New trade risk % is checked against the selected account's risk plan without editing the plan.
 - Saved trade cards expose screenshot import for `pre-trade`, `entry`, and `exit`.
 - Screenshot buttons try TradingView capture first, then a window selector, then file import fallback.
@@ -46,7 +54,7 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - Recap modal trade details show saved pre-trade, entry, and exit screenshot thumbnails when available.
 - Recap tabs navigate Mistakes, Done Well, Lesson, and Score.
 - Trade popups use the shared `ModalShell` for popup chrome, including the trade workspace, day details, trade workflow, entry/exit forms, pre-trade, and screenshot previews.
-- The trade list stays compact and shows date/time, buy/sell, strategy, result, P&L, and growth %.
+- The trade list stays compact and shows date/time, buy/sell, strategy or educator, result, P&L, and growth %.
 - Recaps are separate from the pre-trade, entry, and exit workflow.
 - All persistence must use `src/shared/db/database.ts` and `src/shared/db/storage.ts`.
 

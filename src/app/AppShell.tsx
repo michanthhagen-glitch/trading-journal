@@ -6,6 +6,7 @@ import {
   type TopbarSearchItem,
 } from "../components/layout/Topbar";
 import type {
+  Educator,
   RiskManagementPlan,
   Strategy,
   Trade,
@@ -19,6 +20,7 @@ type AppShellProps = {
   accounts: TradingAccount[];
   activeModule: AppModule;
   appPreferences: AppPreferences;
+  educators: Educator[];
   modules: AppModule[];
   riskPlans: RiskManagementPlan[];
   selectedAccount: TradingAccount | null;
@@ -39,6 +41,7 @@ export function AppShell({
   accounts,
   activeModule,
   appPreferences,
+  educators,
   modules,
   riskPlans,
   selectedAccount,
@@ -56,7 +59,7 @@ export function AppShell({
   const ActiveModule = activeModule.Component;
 
   function openAccountSetup(
-    kind: "accounts" | "strategies" | "risk",
+    kind: "accounts" | "strategies" | "educators" | "risk",
     id: string,
   ) {
     onSelectModule("account");
@@ -107,6 +110,15 @@ export function AppShell({
         onSelect: () => openAccountSetup("strategies", strategy.id),
       });
     }
+    for (const educator of educators) {
+      items.push({
+        id: `educator-${educator.id}`,
+        label: educator.name,
+        description: educator.community || "Educator",
+        keywords: `${educator.community} ${educator.notes}`,
+        onSelect: () => openAccountSetup("educators", educator.id),
+      });
+    }
     for (const plan of riskPlans) {
       items.push({
         id: `risk-${plan.id}`,
@@ -126,16 +138,26 @@ export function AppShell({
       });
     }
     return items;
-  }, [accounts, onSelectAccount, riskPlans, selectedAccountTrades, strategies]);
+  }, [
+    accounts,
+    educators,
+    onSelectAccount,
+    riskPlans,
+    selectedAccountTrades,
+    strategies,
+  ]);
 
   const notifications = useMemo<TopbarNotification[]>(() => {
     const notices: TopbarNotification[] = [];
-    const missingRecaps = selectedAccountTrades.filter(
-      (trade) => trade.status === "closed" && !trade.hasRecap,
-    ).length;
-    const openTrades = selectedAccountTrades.filter(
-      (trade) => trade.status === "open",
-    ).length;
+    const isBacktesting = selectedAccount?.accountType === "backtesting";
+    const missingRecaps = isBacktesting
+      ? 0
+      : selectedAccountTrades.filter(
+          (trade) => trade.status === "closed" && !trade.hasRecap,
+        ).length;
+    const openTrades = isBacktesting
+      ? 0
+      : selectedAccountTrades.filter((trade) => trade.status === "open").length;
     if (missingRecaps > 0) {
       notices.push({
         id: "missing-recaps",

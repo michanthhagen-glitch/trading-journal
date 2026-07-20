@@ -14,6 +14,9 @@ Owns SQLite schema migration files for the desktop database.
 - `0006_risk_plan_limits.sql`: risk limits, trade limits, and goal fields.
 - `0007_account_context.sql`: account assignment for trades and journal recaps.
 - `0008_trade_recap_structure.sql`: structured fields for per-trade recap automation.
+- `0009_system_accounts.sql`: System Account type, educators, and account-educator links.
+- `0010_educator_strategy.sql`: optional educator-to-strategy link.
+- `0011_backtest_workflow.sql`: reusable strategy selectors plus Backtesting session, condition, and multi-target trade fields.
 
 ## Local Contracts
 

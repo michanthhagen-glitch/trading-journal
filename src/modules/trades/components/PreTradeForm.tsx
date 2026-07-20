@@ -3,6 +3,7 @@ import { ModalShell } from "../../../components/ModalShell";
 import {
   savePreTrade,
   type PreTradeData,
+  type Strategy,
   type Trade,
 } from "../../../shared/db/database";
 import { TradeScreenshotDropZone } from "./ScreenshotTools";
@@ -11,6 +12,8 @@ type PreTradeFormProps = {
   confirmBeforeDelete: boolean;
   trade: Trade;
   tradeName: string;
+  sourceLabel: string;
+  strategyTemplate: Strategy | null;
   onChanged: () => void | Promise<void>;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
@@ -18,6 +21,8 @@ type PreTradeFormProps = {
 
 const EMPTY_FORM: PreTradeData = {
   strategy: "",
+  keyLevel: "",
+  entryCondition: "",
   riskPercent: null,
   riskAmount: null,
   bias: "",
@@ -29,6 +34,8 @@ export function PreTradeForm({
   confirmBeforeDelete,
   trade,
   tradeName,
+  sourceLabel,
+  strategyTemplate,
   onChanged,
   onClose,
   onSaved,
@@ -39,6 +46,8 @@ export function PreTradeForm({
   useEffect(() => {
     setForm({
       strategy: trade.preTrade.strategy ?? "",
+      keyLevel: trade.preTrade.keyLevel ?? "",
+      entryCondition: trade.preTrade.entryCondition ?? "",
       riskPercent: trade.preTrade.riskPercent,
       riskAmount: trade.preTrade.riskAmount,
       bias: trade.preTrade.bias ?? "",
@@ -107,12 +116,12 @@ export function PreTradeForm({
         </header>
         <div className="form-grid">
           <label className="field field-wide">
-            <span>Strategy</span>
+            <span>{sourceLabel}</span>
             <input
               type="text"
               value={form.strategy}
               onChange={(e) => update("strategy", e.target.value)}
-              placeholder="Mock strategy for now"
+              placeholder={`Select or enter the ${sourceLabel.toLowerCase()}`}
             />
           </label>
           <label className="field">
@@ -154,6 +163,18 @@ export function PreTradeForm({
               placeholder="Long / Short / Neutral"
             />
           </label>
+          <TemplateSelect
+            label="Key level"
+            options={strategyTemplate?.keyLevels ?? []}
+            value={form.keyLevel}
+            onChange={(value) => update("keyLevel", value)}
+          />
+          <TemplateSelect
+            label="Entry condition"
+            options={strategyTemplate?.entryConditions ?? []}
+            value={form.entryCondition}
+            onChange={(value) => update("entryCondition", value)}
+          />
           <label className="field field-wide">
             <span>Setup notes</span>
             <textarea
@@ -193,5 +214,37 @@ export function PreTradeForm({
         </div>
       </section>
     </ModalShell>
+  );
+}
+
+function TemplateSelect({
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: string[];
+  value: string;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={options.length === 0}
+      >
+        <option value="">
+          {options.length > 0 ? "None" : `No ${label.toLowerCase()} options`}
+        </option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

@@ -22,7 +22,7 @@ Owns the compact account control room: total/month/week summaries, risk/goal rea
 - Dashboard detail content belongs in tabs below the summary bands.
 - Lower dashboard detail uses a responsive desktop layout: daily-balance line graph on the left at about one-third width, top winning/losing trade/day/week/month rankings on the right at about two-thirds width.
 - The default dashboard should keep the visible top gap above the summary cards and bottom gap below the lower workspace even.
-- The Statistics tab groups all closed trades by day, session, time of day, direction, currency pair, and strategy; six cards should sit as three columns by two rows on desktop.
+- The Statistics tab groups all closed trades by day, session, time of day, direction, currency pair, and strategy or educator; six cards should sit as three columns by two rows on desktop.
 - Statistics cards compare best/worst win rate where useful; Direction compares Long and Short directly, while Strategy can stay as a simple top-result card to avoid cramped names.
 - Statistics detail popups use Table and Chart tabs; Day detail must always show Monday through Sunday, including days with zero trades.
 - Direction detail must always show Long and Short rows.
@@ -30,6 +30,9 @@ Owns the compact account control room: total/month/week summaries, risk/goal rea
 - Time detail must always show 15-minute buckets from `00:00-00:15` through `23:45-00:00`.
 - Currency pair detail grows automatically from pairs used on trades.
 - Strategy detail must include every created strategy, with unused strategies shown as zero-trade rows.
+- System Account source statistics are labeled Educator and include every created educator.
+- Backtesting accounts replace balance-period summaries with testing metrics: sample size, sessions, win rate, total R, average RR, and maximum loss streak.
+- Backtesting performance is compared by strategy, target number, key level, entry condition, and exit condition.
 - Statistics detail table popups should shrink around the table content without empty right-side space; chart views should stay capped so they do not over-expand.
 - Statistics chart bars should keep Loss centered between Win and BE, with only total trades visible by default; per-result counts belong on hover.
 - Daily-balance charts include the starting balance point, a dotted starting-balance level line, balance grid labels, day ticks, per-dot P&L hover details, and growth in the footer.

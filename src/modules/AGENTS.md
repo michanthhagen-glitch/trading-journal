@@ -7,7 +7,7 @@ Owns all sidebar modules. Each module owns its own main content surface and loca
 ## Ownership
 
 - `dashboard/`: performance summary and activity view.
-- `account/`: accounts, strategies, and risk management setup.
+- `account/`: accounts, strategies, educators, and risk management setup.
 - `trades/`: trade list, trade detail, lifecycle actions, pre-trade UI.
 - `recaps/`: daily, weekly, monthly recap views.
 - `settings/`: preferences and data-management area.

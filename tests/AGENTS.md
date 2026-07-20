@@ -10,6 +10,7 @@ Owns Vitest tests for app behavior and project contracts.
 - `accountSetupValidation.test.ts`: commission and risk-plan safety rules.
 - `moduleRegistry.test.ts`: smoke test for sidebar module registration.
 - `screenshotTools.test.ts`: screenshot drop helper behavior.
+- `strategyQueries.test.ts`: SQLite strategy reload coverage for reusable journaling choices.
 - `tradeNames.test.ts`: automatic per-day trade display naming.
 - `tradingPlan.test.ts`: sidebar trading plan milestones and rule counters.
 

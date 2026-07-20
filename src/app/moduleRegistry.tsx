@@ -37,7 +37,7 @@ export const appModules: AppModule[] = [
   {
     id: "account",
     label: "Account",
-    description: "Accounts, strategies, and risk management",
+    description: "Accounts, strategies, educators, and risk management",
     Icon: Wallet,
     Component: AccountModule,
   },

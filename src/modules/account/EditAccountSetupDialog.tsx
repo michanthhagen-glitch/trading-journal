@@ -1,10 +1,14 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { ModalShell } from "../../components/ModalShell";
+import { StrategyOptionListField } from "./StrategyOptionListField";
+import { strategyOptionsWithDraft } from "./strategyOptions";
 import {
+  updateEducator,
   updateRiskManagementPlan,
   updateStrategy,
   updateTradingAccount,
   type AccountType,
+  type Educator,
   type RiskManagementPlan,
   type Strategy,
   type TradingAccount,
@@ -13,11 +17,13 @@ import {
 const CURRENCIES = ["USD", "EUR", "GBP", "CHF", "JPY", "CAD", "AUD"];
 
 type EditDialogProps = {
-  kind: "accounts" | "strategies" | "risk";
+  kind: "accounts" | "strategies" | "educators" | "risk";
   account?: TradingAccount;
   strategy?: Strategy;
+  educator?: Educator;
   riskPlan?: RiskManagementPlan;
   strategies: Strategy[];
+  educators: Educator[];
   riskPlans: RiskManagementPlan[];
   onClose: () => void;
   onSaved: () => void | Promise<void>;
@@ -30,6 +36,9 @@ export function EditAccountSetupDialog(props: EditDialogProps) {
   if (props.kind === "strategies" && props.strategy) {
     return <EditStrategyDialog {...props} strategy={props.strategy} />;
   }
+  if (props.kind === "educators" && props.educator) {
+    return <EditEducatorDialog {...props} educator={props.educator} />;
+  }
   if (props.kind === "risk" && props.riskPlan) {
     return <EditRiskPlanDialog {...props} riskPlan={props.riskPlan} />;
   }
@@ -39,6 +48,7 @@ export function EditAccountSetupDialog(props: EditDialogProps) {
 function EditAccountDialog({
   account,
   strategies,
+  educators,
   riskPlans,
   onClose,
   onSaved,
@@ -51,12 +61,21 @@ function EditAccountDialog({
   const [currency, setCurrency] = useState(account.currency);
   const [accountType, setAccountType] = useState(account.accountType);
   const [strategyIds, setStrategyIds] = useState(account.strategyIds);
+  const [educatorIds, setEducatorIds] = useState(account.educatorIds);
   const [riskPlanId, setRiskPlanId] = useState(account.riskPlanId ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function toggleStrategy(id: string, checked: boolean) {
     setStrategyIds((current) =>
+      checked
+        ? Array.from(new Set([...current, id]))
+        : current.filter((item) => item !== id),
+    );
+  }
+
+  function toggleEducator(id: string, checked: boolean) {
+    setEducatorIds((current) =>
       checked
         ? Array.from(new Set([...current, id]))
         : current.filter((item) => item !== id),
@@ -77,6 +96,7 @@ function EditAccountDialog({
         currency,
         accountType,
         strategyIds,
+        educatorIds,
         riskPlanId:
           accountType === "backtesting" ? null : riskPlanId.trim() || null,
       });
@@ -146,6 +166,7 @@ function EditAccountDialog({
             <option value="live">Live</option>
             <option value="demo">Demo</option>
             <option value="backtesting">Backtesting</option>
+            <option value="system">System Account</option>
           </select>
         </label>
         <label className="field">
@@ -163,21 +184,133 @@ function EditAccountDialog({
             ))}
           </select>
         </label>
-        <fieldset className="account-strategy-picker">
-          <legend>Strategies</legend>
-          {strategies.map((item) => (
-            <label key={item.id}>
-              <input
-                type="checkbox"
-                checked={strategyIds.includes(item.id)}
-                onChange={(event) =>
-                  toggleStrategy(item.id, event.target.checked)
-                }
-              />
-              <span>{item.name}</span>
-            </label>
-          ))}
-        </fieldset>
+        {accountType === "system" ? (
+          <fieldset className="account-strategy-picker">
+            <legend>Educators</legend>
+            {educators.length === 0 ? (
+              <p>Create an educator first.</p>
+            ) : (
+              educators.map((item) => (
+                <label key={item.id}>
+                  <input
+                    type="checkbox"
+                    checked={educatorIds.includes(item.id)}
+                    onChange={(event) =>
+                      toggleEducator(item.id, event.target.checked)
+                    }
+                  />
+                  <span>
+                    {item.name}
+                    {item.community ? ` · ${item.community}` : ""}
+                  </span>
+                </label>
+              ))
+            )}
+          </fieldset>
+        ) : (
+          <fieldset className="account-strategy-picker">
+            <legend>Strategies</legend>
+            {strategies.length === 0 ? (
+              <p>Create a strategy first.</p>
+            ) : (
+              strategies.map((item) => (
+                <label key={item.id}>
+                  <input
+                    type="checkbox"
+                    checked={strategyIds.includes(item.id)}
+                    onChange={(event) =>
+                      toggleStrategy(item.id, event.target.checked)
+                    }
+                  />
+                  <span>{item.name}</span>
+                </label>
+              ))
+            )}
+          </fieldset>
+        )}
+      </form>
+    </EditorShell>
+  );
+}
+
+function EditEducatorDialog({
+  educator,
+  strategies,
+  onClose,
+  onSaved,
+}: EditDialogProps & { educator: Educator }) {
+  const [name, setName] = useState(educator.name);
+  const [community, setCommunity] = useState(educator.community);
+  const [notes, setNotes] = useState(educator.notes);
+  const [strategyId, setStrategyId] = useState(educator.strategyId ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await updateEducator(educator.id, {
+        name,
+        community,
+        notes,
+        strategyId: strategyId || null,
+      });
+      await onSaved();
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Could not save educator.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <EditorShell
+      title="Edit educator"
+      subtitle="Update the educator and community details."
+      formId="edit-educator-form"
+      saving={saving}
+      error={error}
+      onClose={onClose}
+    >
+      <form
+        id="edit-educator-form"
+        className="account-create-form"
+        onSubmit={handleSubmit}
+      >
+        <RequiredInput
+          className="field-wide"
+          label="Educator name"
+          value={name}
+          onChange={setName}
+        />
+        <RequiredInput
+          className="field-wide"
+          label="Community"
+          value={community}
+          onChange={setCommunity}
+          required={false}
+        />
+        <label className="field field-wide">
+          <span>Strategy</span>
+          <select
+            value={strategyId}
+            onChange={(event) => setStrategyId(event.target.value)}
+          >
+            <option value="">No linked strategy</option>
+            {strategies.map((strategy) => (
+              <option key={strategy.id} value={strategy.id}>
+                {strategy.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <TextArea label="Notes" value={notes} onChange={setNotes} />
       </form>
     </EditorShell>
   );
@@ -195,6 +328,14 @@ function EditStrategyDialog({
   const [invalidationRules, setInvalidationRules] = useState(
     strategy.invalidationRules,
   );
+  const [keyLevels, setKeyLevels] = useState(strategy.keyLevels);
+  const [entryConditions, setEntryConditions] = useState(
+    strategy.entryConditions,
+  );
+  const [exitConditions, setExitConditions] = useState(strategy.exitConditions);
+  const [keyLevelDraft, setKeyLevelDraft] = useState("");
+  const [entryConditionDraft, setEntryConditionDraft] = useState("");
+  const [exitConditionDraft, setExitConditionDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -209,6 +350,15 @@ function EditStrategyDialog({
         entryRules,
         slTpRules,
         invalidationRules,
+        keyLevels: strategyOptionsWithDraft(keyLevels, keyLevelDraft),
+        entryConditions: strategyOptionsWithDraft(
+          entryConditions,
+          entryConditionDraft,
+        ),
+        exitConditions: strategyOptionsWithDraft(
+          exitConditions,
+          exitConditionDraft,
+        ),
       });
       await onSaved();
     } catch (saveError) {
@@ -261,6 +411,30 @@ function EditStrategyDialog({
           label="Invalidation rules"
           value={invalidationRules}
           onChange={setInvalidationRules}
+        />
+        <StrategyOptionListField
+          label="Key levels"
+          placeholder="Previous day high"
+          values={keyLevels}
+          onChange={setKeyLevels}
+          draft={keyLevelDraft}
+          onDraftChange={setKeyLevelDraft}
+        />
+        <StrategyOptionListField
+          label="Entry conditions"
+          placeholder="Retest confirmation"
+          values={entryConditions}
+          onChange={setEntryConditions}
+          draft={entryConditionDraft}
+          onDraftChange={setEntryConditionDraft}
+        />
+        <StrategyOptionListField
+          label="Exit conditions"
+          placeholder="Target reached"
+          values={exitConditions}
+          onChange={setExitConditions}
+          draft={exitConditionDraft}
+          onDraftChange={setExitConditionDraft}
         />
       </form>
     </EditorShell>
@@ -441,17 +615,19 @@ function RequiredInput({
   value,
   onChange,
   className = "",
+  required = true,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   className?: string;
+  required?: boolean;
 }) {
   return (
     <label className={`field ${className}`}>
       <span>{label}</span>
       <input
-        required
+        required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />

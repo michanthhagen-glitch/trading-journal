@@ -6,7 +6,7 @@ Owns account-module feature subfolders that are larger than the main tab view.
 
 ## Ownership
 
-- `createAccountSetup/`: account, strategy, and risk plan creation dialogs.
+- `createAccountSetup/`: account, strategy, educator, and risk plan creation dialogs.
 
 ## Local Contracts
 

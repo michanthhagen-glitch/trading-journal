@@ -8,6 +8,7 @@ import { TradeScreenshotGallery } from "./ScreenshotTools";
 type PreTradeCardProps = {
   appPreferences: AppPreferences;
   currency: string;
+  sourceLabel: string;
   trade: Trade;
   onEdit: () => void;
   onChanged: () => void | Promise<void>;
@@ -16,6 +17,7 @@ type PreTradeCardProps = {
 export function PreTradeCard({
   appPreferences,
   currency,
+  sourceLabel,
   trade,
   onEdit,
   onChanged,
@@ -24,6 +26,8 @@ export function PreTradeCard({
   const screenshots = trade.screenshots.filter((s) => s.stage === "pre-trade");
   const hasContent =
     pre.strategy ||
+    pre.keyLevel ||
+    pre.entryCondition ||
     pre.riskPercent != null ||
     pre.riskAmount != null ||
     pre.bias ||
@@ -56,7 +60,7 @@ export function PreTradeCard({
           <dl className="trade-card-body">
             <div className="trade-card-fields">
               <div>
-                <dt>Strategy</dt>
+                <dt>{sourceLabel}</dt>
                 <dd>{pre.strategy || "—"}</dd>
               </div>
               <div>
@@ -78,6 +82,14 @@ export function PreTradeCard({
               <div>
                 <dt>Bias</dt>
                 <dd>{pre.bias || "—"}</dd>
+              </div>
+              <div>
+                <dt>Key level</dt>
+                <dd>{pre.keyLevel || "—"}</dd>
+              </div>
+              <div>
+                <dt>Entry condition</dt>
+                <dd>{pre.entryCondition || "—"}</dd>
               </div>
             </div>
             <div className="trade-card-note">

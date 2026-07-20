@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   listAccountSetup,
   listTrades,
+  type Educator,
   type RiskManagementPlan,
   type Strategy,
   type Trade,
@@ -23,6 +24,7 @@ export function App() {
   const [activeModuleId, setActiveModuleId] = useState(appModules[0].id);
   const [accounts, setAccounts] = useState<TradingAccount[]>([]);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
+  const [educators, setEducators] = useState<Educator[]>([]);
   const [riskPlans, setRiskPlans] = useState<RiskManagementPlan[]>([]);
   const [selectedAccountTrades, setSelectedAccountTrades] = useState<Trade[]>(
     [],
@@ -48,6 +50,7 @@ export function App() {
     const data = await listAccountSetup();
     setAccounts(data.accounts);
     setStrategies(data.strategies);
+    setEducators(data.educators);
     setRiskPlans(data.riskPlans);
     setSelectedAccountId((current) => {
       const stored =
@@ -178,6 +181,7 @@ export function App() {
       accounts={accounts}
       activeModule={activeModule}
       appPreferences={appPreferences}
+      educators={educators}
       modules={appModules}
       riskPlans={riskPlans}
       selectedAccountTrades={selectedAccountTrades}

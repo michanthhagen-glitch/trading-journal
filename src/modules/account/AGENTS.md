@@ -2,12 +2,13 @@
 
 ## Purpose
 
-Owns account setup, strategy setup, and risk management setup.
+Owns account setup, strategy setup, educator setup, and risk management setup.
 
 ## Ownership
 
-- `AccountModule.tsx`: Accounts, Strategy, and Risk Management tabs.
-- `EditAccountSetupDialog.tsx`: edit flows for accounts, strategies, and risk plans.
+- `AccountModule.tsx`: Accounts, Strategy, Educators, and Risk Management tabs.
+- `StrategyOptionListField.tsx`: add/remove editor for reusable Strategy journal choices.
+- `EditAccountSetupDialog.tsx`: edit flows for accounts, strategies, educators, and risk plans.
 - `features/createAccountSetup/`: modal creation flows for account setup records, wrapped by the shared `ModalShell`.
 
 ## Local Contracts
@@ -15,8 +16,12 @@ Owns account setup, strategy setup, and risk management setup.
 - Live accounts require at least one strategy and one risk management plan.
 - Demo accounts require at least one strategy; risk management is optional.
 - Backtesting accounts require at least one strategy and no risk management plan.
+- System Accounts require at least one educator and use educators instead of strategies.
 - Accounts can connect multiple strategies and only one risk management plan.
-- Account, Strategy, and Risk Management tabs stay list-first; creation opens modal dialogs.
+- System Accounts can connect multiple educators.
+- Each educator can optionally connect to one existing strategy.
+- Strategies own reusable key-level, entry-condition, and exit-condition choices that appear in journaling workflows.
+- Account, Strategy, Educators, and Risk Management tabs stay list-first; creation opens modal dialogs.
 - Account setup tabs use framed table-style lists aligned with Trades/List.
 - Risk plan creation uses Risk and Goal tabs inside the modal.
 - Account, Strategy, and Risk Management detail views own Edit and Delete actions.

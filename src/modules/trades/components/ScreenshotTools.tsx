@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Camera, FolderOpen, Monitor, Plus, RefreshCw } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -17,12 +17,15 @@ import {
   type ScreenshotRow,
 } from "../../../shared/db/database";
 import {
+  captureWindowScreenshot,
   captureTradingViewScreenshot,
   deleteScreenshotFile,
   importScreenshotFromClipboard,
   importScreenshotFromPath,
+  listCaptureWindows,
   resolveScreenshotUrl,
   saveScreenshotBytes,
+  type CaptureWindowInfo,
 } from "../../../shared/db/storage";
 
 type ScreenshotStage = ScreenshotRow["stage"];
@@ -117,6 +120,24 @@ export function isPointInsideScreenshotDropRect(
   );
 }
 
+export function selectableCaptureWindows(
+  windows: CaptureWindowInfo[],
+): CaptureWindowInfo[] {
+  return windows
+    .filter(
+      (window) =>
+        !`${window.appName} ${window.title}`
+          .toLowerCase()
+          .includes("methodmark"),
+    )
+    .sort((left, right) => {
+      if (left.isFocused !== right.isFocused) return left.isFocused ? -1 : 1;
+      return `${left.appName} ${left.title}`.localeCompare(
+        `${right.appName} ${right.title}`,
+      );
+    });
+}
+
 function imageExt(name: string): "png" | "jpg" | "jpeg" {
   const match = name.match(/\.(png|jpg|jpeg)$/i);
   return match ? (match[1].toLowerCase() as "png" | "jpg" | "jpeg") : "png";
@@ -148,13 +169,65 @@ export function TradeScreenshotDropZone({
   tradeId: string;
   onChanged: () => void | Promise<void>;
 }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [localScreenshots, setLocalScreenshots] =
     useState<ScreenshotRow[]>(screenshots);
-  const controller = useScreenshotDropZone(stage, async (relPath) => {
+  const [selecting, setSelecting] = useState(false);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+
+  async function addImportedScreenshot(relPath: string) {
     const row = await addScreenshot(tradeId, stage, relPath);
     setLocalScreenshots((current) => [...current, row]);
     await onChanged();
-  });
+  }
+
+  const controller = useScreenshotDropZone(stage, addImportedScreenshot);
+
+  async function selectImage() {
+    if (selecting) return;
+    setSelectionError(null);
+
+    if (!isTauri()) {
+      inputRef.current?.click();
+      return;
+    }
+
+    setSelecting(true);
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const picked = await open({
+        multiple: false,
+        filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
+      });
+      if (!picked || typeof picked !== "string") return;
+      await addImportedScreenshot(await importScreenshotFromPath(picked));
+    } catch (error) {
+      console.error(error);
+      setSelectionError("Could not import that screenshot.");
+    } finally {
+      setSelecting(false);
+    }
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+
+    setSelecting(true);
+    setSelectionError(null);
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      await addImportedScreenshot(
+        await saveScreenshotBytes(bytes, imageExt(file.name)),
+      );
+    } catch (error) {
+      console.error(error);
+      setSelectionError("Could not import that screenshot.");
+    } finally {
+      setSelecting(false);
+    }
+  }
 
   useEffect(() => {
     setLocalScreenshots(screenshots);
@@ -165,12 +238,36 @@ export function TradeScreenshotDropZone({
       {...controller.dropZoneHandlers}
       busyMessage={controller.busyMessage}
       dropZoneRef={controller.dropZoneRef}
-      emptyMessage="Drop image here, or select this box and paste."
+      emptyMessage="Select or drag and drop an image."
       isDragging={controller.isDragging}
       label={`Add ${stageLabel(stage)} screenshot`}
       stage={stage}
       statusMessage={controller.statusMessage}
     >
+      <div className="screenshot-edit-actions">
+        <button
+          className="secondary-button screenshot-edit-select"
+          type="button"
+          onClick={selectImage}
+          disabled={selecting}
+        >
+          <FolderOpen size={15} aria-hidden="true" />
+          {selecting ? "Adding..." : "Select image"}
+        </button>
+        <span>or drag and drop</span>
+      </div>
+      <input
+        ref={inputRef}
+        className="screenshot-file-input"
+        type="file"
+        accept="image/png,image/jpeg"
+        onChange={handleFileChange}
+      />
+      {selectionError ? (
+        <p className="screenshot-drop-status" role="alert">
+          {selectionError}
+        </p>
+      ) : null}
       {localScreenshots.length > 0 ? (
         <TradeScreenshotGallery
           confirmBeforeDelete={confirmBeforeDelete}
@@ -193,6 +290,10 @@ export function DraftScreenshotImportButton({
 }: DraftScreenshotImportButtonProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [importing, setImporting] = useState(false);
+  const [windowPickerOpen, setWindowPickerOpen] = useState(false);
+  const [windowChoices, setWindowChoices] = useState<CaptureWindowInfo[]>([]);
+  const [loadingWindows, setLoadingWindows] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
 
   async function importFromDisk() {
     const { open } = await import("@tauri-apps/plugin-dialog");
@@ -200,9 +301,25 @@ export function DraftScreenshotImportButton({
       multiple: false,
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
     });
-    if (!picked || typeof picked !== "string") return;
+    if (!picked || typeof picked !== "string") return false;
     const relPath = await importScreenshotFromPath(picked);
     await onImported(relPath);
+    return true;
+  }
+
+  async function openWindowPicker(errorMessage: string | null = null) {
+    setWindowPickerOpen(true);
+    setLoadingWindows(true);
+    setCaptureError(errorMessage);
+    try {
+      setWindowChoices(selectableCaptureWindows(await listCaptureWindows()));
+    } catch (error) {
+      console.error(error);
+      setWindowChoices([]);
+      setCaptureError("Could not read the open app windows.");
+    } finally {
+      setLoadingWindows(false);
+    }
   }
 
   async function handleClick() {
@@ -221,14 +338,44 @@ export function DraftScreenshotImportButton({
         return;
       }
 
-      await importFromDisk();
+      await openWindowPicker();
     } catch (error) {
       console.error(error);
-      try {
-        await importFromDisk();
-      } catch (fallbackError) {
-        console.error(fallbackError);
-      }
+      await openWindowPicker(
+        "TradingView could not be captured. Choose another open window.",
+      );
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function handleWindowCapture(window: CaptureWindowInfo) {
+    if (importing) return;
+    setImporting(true);
+    setCaptureError(null);
+    try {
+      const path = await captureWindowScreenshot(window.id);
+      await onImported(path);
+      setWindowPickerOpen(false);
+    } catch (error) {
+      console.error(error);
+      setCaptureError(
+        "Could not capture that window. Try again or select a saved screenshot.",
+      );
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function handleFileFallback() {
+    if (importing) return;
+    setImporting(true);
+    setCaptureError(null);
+    try {
+      if (await importFromDisk()) setWindowPickerOpen(false);
+    } catch (error) {
+      console.error(error);
+      setCaptureError("Could not import that screenshot.");
     } finally {
       setImporting(false);
     }
@@ -251,7 +398,7 @@ export function DraftScreenshotImportButton({
     }
   }
 
-  const label = `Import ${stageLabel(stage)} screenshot`;
+  const label = `Capture ${stageLabel(stage)} screenshot`;
 
   return (
     <>
@@ -272,6 +419,79 @@ export function DraftScreenshotImportButton({
         accept="image/png,image/jpeg"
         onChange={handleFileChange}
       />
+      {windowPickerOpen ? (
+        <ModalShell
+          title="Choose screenshot source"
+          subtitle="Pick an open app window, or use a saved image as the final fallback."
+          modalClassName="screenshot-source-modal"
+          onClose={() => setWindowPickerOpen(false)}
+          headerActions={
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Refresh open windows"
+              title="Refresh open windows"
+              onClick={() => openWindowPicker(captureError)}
+              disabled={loadingWindows || importing}
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+            </button>
+          }
+          footer={
+            <button
+              className="secondary-button screenshot-file-fallback"
+              type="button"
+              onClick={handleFileFallback}
+              disabled={importing}
+            >
+              <FolderOpen size={15} aria-hidden="true" />
+              Select saved screenshot
+            </button>
+          }
+        >
+          <div className="screenshot-source-content">
+            {captureError ? (
+              <p className="screenshot-source-error" role="alert">
+                {captureError}
+              </p>
+            ) : null}
+            {loadingWindows ? (
+              <p className="screenshot-source-empty">Reading open windows...</p>
+            ) : windowChoices.length === 0 ? (
+              <p className="screenshot-source-empty">
+                No other app windows are available. You can still select a saved
+                screenshot below.
+              </p>
+            ) : (
+              <div className="screenshot-window-list">
+                {windowChoices.map((window) => (
+                  <button
+                    className="screenshot-window-option"
+                    type="button"
+                    key={window.id}
+                    onClick={() => handleWindowCapture(window)}
+                    disabled={importing}
+                  >
+                    <span className="screenshot-window-icon" aria-hidden="true">
+                      <Monitor size={17} />
+                    </span>
+                    <span className="screenshot-window-copy">
+                      <strong>{window.appName || "App window"}</strong>
+                      <small>{window.title || "Untitled window"}</small>
+                    </span>
+                    <span className="screenshot-window-meta">
+                      {window.isMinimized
+                        ? "Minimized"
+                        : `${window.width} x ${window.height}`}
+                    </span>
+                    <Camera size={16} aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </ModalShell>
+      ) : null}
     </>
   );
 }

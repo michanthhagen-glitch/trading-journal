@@ -19,6 +19,7 @@ struct CaptureWindowInfo {
     x: i32,
     y: i32,
     is_focused: bool,
+    is_minimized: bool,
 }
 
 #[derive(Serialize)]
@@ -48,8 +49,13 @@ struct JournalBackupManifest {
 const OFFICIAL_DB_URL: &str = "sqlite:trading-journal.db";
 const DEV_DB_URL: &str = "sqlite:trading-journal-dev.db";
 
+fn capture_window_dimensions_are_usable(is_minimized: bool, width: u32, height: u32) -> bool {
+    (cfg!(target_os = "windows") && is_minimized) || (width >= 80 && height >= 80)
+}
+
 fn window_info(window: &Window) -> Option<CaptureWindowInfo> {
-    if window.is_minimized().unwrap_or(true) {
+    let is_minimized = window.is_minimized().unwrap_or(true);
+    if !cfg!(target_os = "windows") && is_minimized {
         return None;
     }
 
@@ -58,7 +64,7 @@ fn window_info(window: &Window) -> Option<CaptureWindowInfo> {
     let width = window.width().unwrap_or(0);
     let height = window.height().unwrap_or(0);
 
-    if width < 80 || height < 80 {
+    if !capture_window_dimensions_are_usable(is_minimized, width, height) {
         return None;
     }
 
@@ -75,7 +81,59 @@ fn window_info(window: &Window) -> Option<CaptureWindowInfo> {
         x: window.x().unwrap_or_default(),
         y: window.y().unwrap_or_default(),
         is_focused: window.is_focused().unwrap_or(false),
+        is_minimized,
     })
+}
+
+#[cfg(target_os = "windows")]
+mod native_window {
+    use std::{ffi::c_void, thread, time::Duration};
+
+    const SW_MINIMIZE: i32 = 6;
+    const SW_RESTORE: i32 = 9;
+
+    #[link(name = "user32")]
+    unsafe extern "system" {
+        fn GetForegroundWindow() -> *mut c_void;
+        fn SetForegroundWindow(window: *mut c_void) -> i32;
+        fn ShowWindow(window: *mut c_void, command: i32) -> i32;
+    }
+
+    pub struct RestoredWindow {
+        window: *mut c_void,
+        previous_focus: *mut c_void,
+    }
+
+    impl RestoredWindow {
+        pub fn new(window_id: u32, was_minimized: bool) -> Option<Self> {
+            if !was_minimized {
+                return None;
+            }
+
+            let window = window_id as usize as *mut c_void;
+            let previous_focus = unsafe { GetForegroundWindow() };
+            unsafe {
+                ShowWindow(window, SW_RESTORE);
+                SetForegroundWindow(window);
+            }
+            thread::sleep(Duration::from_millis(450));
+            Some(Self {
+                window,
+                previous_focus,
+            })
+        }
+    }
+
+    impl Drop for RestoredWindow {
+        fn drop(&mut self) {
+            unsafe {
+                ShowWindow(self.window, SW_MINIMIZE);
+                if !self.previous_focus.is_null() {
+                    SetForegroundWindow(self.previous_focus);
+                }
+            }
+        }
+    }
 }
 
 fn capture_windows() -> Result<Vec<(Window, CaptureWindowInfo)>, String> {
@@ -95,6 +153,15 @@ fn capture_window_image(
     window: &Window,
     info: CaptureWindowInfo,
 ) -> Result<CapturedWindowImage, String> {
+    #[cfg(target_os = "windows")]
+    let _restored_window = native_window::RestoredWindow::new(info.id, info.is_minimized);
+
+    #[cfg(not(target_os = "windows"))]
+    if info.is_minimized {
+        return Err("WINDOW_MINIMIZED".to_string());
+    }
+
+    let info = window_info(window).unwrap_or(info);
     let image = window
         .capture_image()
         .map_err(|error| format!("WINDOW_CAPTURE_FAILED: {error}"))?;
@@ -441,6 +508,24 @@ fn sql_migrations() -> Vec<tauri_plugin_sql::Migration> {
             sql: include_str!("../migrations/0008_trade_recap_structure.sql"),
             kind: tauri_plugin_sql::MigrationKind::Up,
         },
+        tauri_plugin_sql::Migration {
+            version: 9,
+            description: "add_system_accounts_and_educators",
+            sql: include_str!("../migrations/0009_system_accounts.sql"),
+            kind: tauri_plugin_sql::MigrationKind::Up,
+        },
+        tauri_plugin_sql::Migration {
+            version: 10,
+            description: "link_educators_to_strategies",
+            sql: include_str!("../migrations/0010_educator_strategy.sql"),
+            kind: tauri_plugin_sql::MigrationKind::Up,
+        },
+        tauri_plugin_sql::Migration {
+            version: 11,
+            description: "add_backtest_workflow",
+            sql: include_str!("../migrations/0011_backtest_workflow.sql"),
+            kind: tauri_plugin_sql::MigrationKind::Up,
+        },
     ]
 }
 
@@ -472,6 +557,16 @@ pub fn run() {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn minimized_windows_remain_available_for_capture_on_windows() {
+        assert_eq!(
+            capture_window_dimensions_are_usable(true, 160, 28),
+            cfg!(target_os = "windows")
+        );
+        assert!(!capture_window_dimensions_are_usable(false, 160, 28));
+        assert!(capture_window_dimensions_are_usable(false, 1280, 720));
+    }
 
     #[test]
     fn backup_names_cannot_escape_the_selected_folder() {

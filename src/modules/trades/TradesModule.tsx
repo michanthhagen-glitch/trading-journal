@@ -19,7 +19,9 @@ import {
   listAccountSetup,
   listTrades,
   saveEntry,
+  savePreTrade,
   saveRecap,
+  type Educator,
   type EntryData,
   type ExitData,
   type NewTrade,
@@ -33,6 +35,7 @@ import {
 import type { ModuleContext } from "../../app/types";
 import { PreTradeCard } from "./components/PreTradeCard";
 import { PreTradeForm } from "./components/PreTradeForm";
+import { BacktestWorkflow } from "./components/BacktestWorkflow";
 import {
   DraftScreenshotGallery,
   DraftScreenshotImportButton,
@@ -78,6 +81,10 @@ const TRADE_RECAP_TABS: { id: TradeRecapTab; label: string }[] = [
   { id: "lesson", label: "Lesson" },
   { id: "score", label: "Score" },
 ];
+
+function tradeSourceLabel(account: TradingAccount | null) {
+  return account?.accountType === "system" ? "Educator" : "Strategy";
+}
 
 const TRADE_RECAP_GRADES: TradeRecapInput["grade"][] = ["A", "B", "C", "D"];
 
@@ -478,6 +485,7 @@ export function TradesModule({
   );
   const [trades, setTrades] = useState<Trade[]>([]);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
+  const [educators, setEducators] = useState<Educator[]>([]);
   const [riskPlans, setRiskPlans] = useState<RiskManagementPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [workspace, setWorkspace] = useState<{
@@ -495,6 +503,7 @@ export function TradesModule({
       ]);
       setTrades(loadedTrades);
       setStrategies(accountSetup.strategies);
+      setEducators(accountSetup.educators);
       setRiskPlans(accountSetup.riskPlans);
     } finally {
       setLoading(false);
@@ -531,11 +540,36 @@ export function TradesModule({
         : null,
     [trades, workspace],
   );
+  const workspaceStrategy = useMemo(() => {
+    if (!workspaceTrade) return null;
+    if (selectedAccount?.accountType === "system") {
+      const educator = educators.find(
+        (item) => item.name === workspaceTrade.preTrade.strategy,
+      );
+      return educator?.strategyId
+        ? (strategies.find((item) => item.id === educator.strategyId) ?? null)
+        : null;
+    }
+    return (
+      strategies.find(
+        (item) => item.name === workspaceTrade.preTrade.strategy,
+      ) ?? null
+    );
+  }, [educators, selectedAccount?.accountType, strategies, workspaceTrade]);
   const linkedStrategies = useMemo(() => {
     if (!selectedAccount) return [];
     const linkedIds = new Set(selectedAccount.strategyIds);
     return strategies.filter((strategy) => linkedIds.has(strategy.id));
   }, [selectedAccount, strategies]);
+  const linkedEducators = useMemo(() => {
+    if (!selectedAccount) return [];
+    const linkedIds = new Set(selectedAccount.educatorIds);
+    return educators.filter((educator) => linkedIds.has(educator.id));
+  }, [educators, selectedAccount]);
+  const tradeSources =
+    selectedAccount?.accountType === "system"
+      ? linkedEducators
+      : linkedStrategies;
   const selectedRiskPlan = useMemo(
     () =>
       selectedAccount?.riskPlanId
@@ -581,12 +615,18 @@ export function TradesModule({
           disabled={!selectedAccount || loading}
           title={
             selectedAccount
-              ? "Create trade"
+              ? selectedAccount.accountType === "backtesting"
+                ? "Start backtesting"
+                : "Create trade"
               : "Select or create an account first"
           }
         >
           <Plus size={16} aria-hidden="true" />
-          <span>New trade</span>
+          <span>
+            {selectedAccount?.accountType === "backtesting"
+              ? "New backtest"
+              : "New trade"}
+          </span>
         </button>
       </div>
 
@@ -596,7 +636,11 @@ export function TradesModule({
         </div>
       ) : trades.length === 0 ? (
         <div className="panel">
-          <p className="empty-state">No trades yet. Start with New trade.</p>
+          <p className="empty-state">
+            {selectedAccount?.accountType === "backtesting"
+              ? "No backtest trades yet. Start with New backtest."
+              : "No trades yet. Start with New trade."}
+          </p>
         </div>
       ) : activeView === "calendar" ? (
         <TradesCalendarView
@@ -632,6 +676,8 @@ export function TradesModule({
           appPreferences={appPreferences}
           mode={workspace.mode}
           trade={workspaceTrade}
+          tradeSources={tradeSources}
+          strategyTemplate={workspaceStrategy}
           onChanged={reloadAfterTradeChange}
           onClose={() => setWorkspace(null)}
           onDeleted={async () => {
@@ -647,18 +693,31 @@ export function TradesModule({
       ) : null}
 
       {showNewForm && selectedAccount ? (
-        <NewTradeWorkflow
-          account={selectedAccount}
-          accountBalance={selectedAccountBalance}
-          appPreferences={appPreferences}
-          riskPlan={selectedRiskPlan}
-          strategies={linkedStrategies}
-          onClose={() => setShowNewForm(false)}
-          onSaved={async () => {
-            setShowNewForm(false);
-            await reloadAfterTradeChange();
-          }}
-        />
+        selectedAccount.accountType === "backtesting" ? (
+          <BacktestWorkflow
+            account={selectedAccount}
+            appPreferences={appPreferences}
+            strategies={linkedStrategies}
+            onClose={() => setShowNewForm(false)}
+            onTradeSaved={reloadAfterTradeChange}
+          />
+        ) : (
+          <NewTradeWorkflow
+            account={selectedAccount}
+            accountBalance={selectedAccountBalance}
+            appPreferences={appPreferences}
+            educators={educators}
+            riskPlan={selectedRiskPlan}
+            sourceLabel={tradeSourceLabel(selectedAccount)}
+            strategies={strategies}
+            tradeSources={tradeSources}
+            onClose={() => setShowNewForm(false)}
+            onSaved={async () => {
+              setShowNewForm(false);
+              await reloadAfterTradeChange();
+            }}
+          />
+        )
       ) : null}
     </div>
   );
@@ -688,11 +747,13 @@ function TradesListTable({
           <th>Date / Time</th>
           <th>Trade</th>
           <th>Direction</th>
-          <th>Strategy</th>
+          <th>{tradeSourceLabel(selectedAccount)}</th>
           <th>Win/Loss/BE</th>
           <th className="num">P&amp;L</th>
           <th className="num">Growth %</th>
-          <th className="recap-column">Recap</th>
+          {selectedAccount?.accountType === "backtesting" ? null : (
+            <th className="recap-column">Recap</th>
+          )}
         </tr>
       </thead>
       <tbody>
@@ -740,35 +801,37 @@ function TradesListTable({
               <td className={`num pnl ${growthTone}`}>
                 {fmtPercent(balance.growthPercent, appPreferences)}
               </td>
-              <td className="recap-cell">
-                {trade.hasRecap ? (
-                  <button
-                    className="recap-action-button recap-action-done"
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onCreateRecap(trade);
-                    }}
-                    title="Open trade recap"
-                  >
-                    <CheckCircle2 size={13} aria-hidden="true" />
-                    <span>Done</span>
-                  </button>
-                ) : (
-                  <button
-                    className="recap-action-button"
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onCreateRecap(trade);
-                    }}
-                    title="Create trade recap"
-                  >
-                    <AlertTriangle size={13} aria-hidden="true" />
-                    <span>Create</span>
-                  </button>
-                )}
-              </td>
+              {selectedAccount?.accountType === "backtesting" ? null : (
+                <td className="recap-cell">
+                  {trade.hasRecap ? (
+                    <button
+                      className="recap-action-button recap-action-done"
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onCreateRecap(trade);
+                      }}
+                      title="Open trade recap"
+                    >
+                      <CheckCircle2 size={13} aria-hidden="true" />
+                      <span>Done</span>
+                    </button>
+                  ) : (
+                    <button
+                      className="recap-action-button"
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onCreateRecap(trade);
+                      }}
+                      title="Create trade recap"
+                    >
+                      <AlertTriangle size={13} aria-hidden="true" />
+                      <span>Create</span>
+                    </button>
+                  )}
+                </td>
+              )}
             </tr>
           );
         })}
@@ -857,7 +920,10 @@ function TradesCalendarView({
         {days.map((day) => {
           const key = dateKey(day);
           const dayTrades = tradesByDate.get(key) ?? [];
-          const missingRecaps = missingRecapCount(dayTrades);
+          const missingRecaps =
+            selectedAccount?.accountType === "backtesting"
+              ? 0
+              : missingRecapCount(dayTrades);
           const daySummary = dayBalanceSummary(selectedAccount, trades, key);
           const dayTone =
             daySummary.pnl === null
@@ -877,7 +943,7 @@ function TradesCalendarView({
               } ${dayTone}`}
               aria-label={
                 dayTrades.length > 0
-                  ? `${formatDayDialogTitle(key, appPreferences)}, ${dayTrades.length} trades, ${missingRecaps} missing recaps`
+                  ? `${formatDayDialogTitle(key, appPreferences)}, ${dayTrades.length} trades${missingRecaps > 0 ? `, ${missingRecaps} missing recaps` : ""}`
                   : undefined
               }
               key={key}
@@ -1032,6 +1098,8 @@ type TradeWorkspaceDialogProps = {
   appPreferences: AppPreferences;
   mode: TradeWorkspaceMode;
   trade: Trade;
+  tradeSources: Array<{ id: string; name: string }>;
+  strategyTemplate: Strategy | null;
   onChanged: () => Promise<void>;
   onClose: () => void;
   onDeleted: () => void | Promise<void>;
@@ -1064,6 +1132,8 @@ function TradeWorkspaceDialog({
   appPreferences,
   mode,
   trade,
+  tradeSources,
+  strategyTemplate,
   onChanged,
   onClose,
   onDeleted,
@@ -1254,6 +1324,11 @@ function TradeWorkspaceDialog({
             <TradeRecapContextPanel
               appPreferences={appPreferences}
               currency={currency}
+              isSystemAccount={
+                account?.accountType === "system" ||
+                account?.accountType === "backtesting"
+              }
+              sourceLabel={tradeSourceLabel(account)}
               trade={trade}
               tradeName={tradeName}
             />
@@ -1263,6 +1338,8 @@ function TradeWorkspaceDialog({
               appPreferences={appPreferences}
               trade={trade}
               tradeName={tradeName}
+              tradeSources={tradeSources}
+              strategyTemplate={strategyTemplate}
               onChanged={onChanged}
               deleteError={deleteError}
             />
@@ -1656,11 +1733,15 @@ type TradeContextRow = {
 function TradeRecapContextPanel({
   appPreferences,
   currency,
+  isSystemAccount,
+  sourceLabel,
   trade,
   tradeName,
 }: {
   appPreferences: AppPreferences;
   currency: string;
+  isSystemAccount: boolean;
+  sourceLabel: string;
   trade: Trade;
   tradeName: string;
 }) {
@@ -1723,44 +1804,71 @@ function TradeRecapContextPanel({
         />
       </div>
 
-      <TradeContextSection
-        dotClassName="stage-pre"
-        title="Pre-trade"
-        rows={[
-          { label: "Strategy", value: trade.preTrade.strategy || "—" },
-          { label: "Bias", value: trade.preTrade.bias || "—" },
-          {
-            label: "Risk %",
-            value:
-              trade.preTrade.riskPercent != null
-                ? `${trade.preTrade.riskPercent}%`
-                : "—",
-          },
-          {
-            label: "Risk amount",
-            value:
-              trade.preTrade.riskAmount != null
-                ? fmtMoney(trade.preTrade.riskAmount, currency, appPreferences)
-                : "—",
-          },
-          {
-            label: "Feeling",
-            value:
-              trade.preTrade.feeling != null
-                ? `${trade.preTrade.feeling}/10`
-                : "—",
-          },
-          { label: "Screenshots", value: preTradeScreenshots.length },
-        ]}
-        noteLabel="Setup notes"
-        note={trade.preTrade.notes || "No notes yet."}
-        screenshots={preTradeScreenshots}
-      />
+      {isSystemAccount ? null : (
+        <TradeContextSection
+          dotClassName="stage-pre"
+          title="Pre-trade"
+          rows={[
+            { label: sourceLabel, value: trade.preTrade.strategy || "—" },
+            { label: "Key level", value: trade.preTrade.keyLevel || "—" },
+            {
+              label: "Entry condition",
+              value: trade.preTrade.entryCondition || "—",
+            },
+            { label: "Bias", value: trade.preTrade.bias || "—" },
+            {
+              label: "Risk %",
+              value:
+                trade.preTrade.riskPercent != null
+                  ? `${trade.preTrade.riskPercent}%`
+                  : "—",
+            },
+            {
+              label: "Risk amount",
+              value:
+                trade.preTrade.riskAmount != null
+                  ? fmtMoney(
+                      trade.preTrade.riskAmount,
+                      currency,
+                      appPreferences,
+                    )
+                  : "—",
+            },
+            {
+              label: "Feeling",
+              value:
+                trade.preTrade.feeling != null
+                  ? `${trade.preTrade.feeling}/10`
+                  : "—",
+            },
+            { label: "Screenshots", value: preTradeScreenshots.length },
+          ]}
+          noteLabel="Setup notes"
+          note={trade.preTrade.notes || "No notes yet."}
+          screenshots={preTradeScreenshots}
+        />
+      )}
 
       <TradeContextSection
         dotClassName="stage-entry"
         title="Entry"
         rows={[
+          ...(isSystemAccount
+            ? [
+                {
+                  label: sourceLabel,
+                  value: trade.preTrade.strategy || "—",
+                },
+                {
+                  label: "Key level",
+                  value: trade.preTrade.keyLevel || "—",
+                },
+                {
+                  label: "Entry condition",
+                  value: trade.preTrade.entryCondition || "—",
+                },
+              ]
+            : []),
           {
             label: "Time",
             value: formatTimeForDateValue(
@@ -1773,13 +1881,17 @@ function TradeRecapContextPanel({
           { label: "Lot size", value: trade.entry.lotSize ?? "—" },
           { label: "Stop loss", value: fmtPrice(trade.entry.stopLoss) },
           { label: "Take profit", value: fmtPrice(trade.entry.takeProfit) },
-          {
-            label: "Confidence",
-            value:
-              trade.entry.confidence != null
-                ? `${trade.entry.confidence}/10`
-                : "—",
-          },
+          ...(isSystemAccount
+            ? []
+            : [
+                {
+                  label: "Confidence",
+                  value:
+                    trade.entry.confidence != null
+                      ? `${trade.entry.confidence}/10`
+                      : "—",
+                },
+              ]),
           { label: "Screenshots", value: entryScreenshots.length },
         ]}
         noteLabel="Entry notes"
@@ -1802,15 +1914,25 @@ function TradeRecapContextPanel({
           { label: "Exit price", value: fmtPrice(trade.exit.price) },
           { label: "Result", value: resultLabel(trade.exit.result) },
           {
+            label: "Exit condition",
+            value: trade.exit.exitCondition || "—",
+          },
+          {
             label: "P&L",
             value: fmtPnl(trade.pnl, currency, appPreferences),
             tone: pnlToneClass(trade.pnl),
           },
-          {
-            label: "Feeling",
-            value:
-              trade.exit.feeling != null ? `${trade.exit.feeling}/10` : "—",
-          },
+          ...(isSystemAccount
+            ? []
+            : [
+                {
+                  label: "Feeling",
+                  value:
+                    trade.exit.feeling != null
+                      ? `${trade.exit.feeling}/10`
+                      : "—",
+                },
+              ]),
           { label: "Screenshots", value: exitScreenshots.length },
         ]}
         noteLabel="Exit note"
@@ -2129,7 +2251,10 @@ function WeeklyTradesList({
       {weekGroups.map((group) => {
         const isCollapsed = collapsedWeeks[group.key] ?? false;
         const weekPnl = tradePnlTotal(group.trades);
-        const missingRecaps = missingRecapCount(group.trades);
+        const missingRecaps =
+          selectedAccount?.accountType === "backtesting"
+            ? 0
+            : missingRecapCount(group.trades);
 
         return (
           <section className="trade-week-group" key={group.key}>
@@ -2185,7 +2310,10 @@ type NewTradeWorkflowProps = {
   account: TradingAccount;
   accountBalance: number | null;
   appPreferences: AppPreferences;
+  educators: Educator[];
   riskPlan: RiskManagementPlan | null;
+  sourceLabel: string;
+  tradeSources: Array<{ id: string; name: string }>;
   strategies: Strategy[];
   onClose: () => void;
   onSaved: () => void | Promise<void>;
@@ -2196,6 +2324,9 @@ type NewTradeFormState = {
   pair: string;
   direction: "long" | "short";
   strategy: string;
+  keyLevel: string;
+  entryCondition: string;
+  exitCondition: string;
   riskPercent: string;
   riskAmount: string;
   bias: string;
@@ -2226,18 +2357,21 @@ type NewTradeScreenshotState = Record<
 function createDefaultNewTrade({
   accountBalance,
   riskPlan,
-  strategies,
+  tradeSources,
 }: {
   accountBalance: number | null;
   riskPlan: RiskManagementPlan | null;
-  strategies: Strategy[];
+  tradeSources: Array<{ id: string; name: string }>;
 }): NewTradeFormState {
   const riskPercent = formatFormNumber(defaultRiskPercent(riskPlan));
   return {
     date: todayInputValue(),
     pair: "",
     direction: "long",
-    strategy: strategies[0]?.name ?? "",
+    strategy: tradeSources[0]?.name ?? "",
+    keyLevel: "",
+    entryCondition: "",
+    exitCondition: "",
     riskPercent,
     riskAmount: calculateRiskAmount(accountBalance, riskPercent),
     bias: "",
@@ -2275,19 +2409,32 @@ function NewTradeWorkflow({
   account,
   accountBalance,
   appPreferences,
+  educators,
   riskPlan,
+  sourceLabel,
+  tradeSources,
   strategies,
   onClose,
   onSaved,
 }: NewTradeWorkflowProps) {
+  const isSystemAccount = account.accountType === "system";
   const [form, setForm] = useState<NewTradeFormState>(() =>
-    createDefaultNewTrade({ accountBalance, riskPlan, strategies }),
+    createDefaultNewTrade({ accountBalance, riskPlan, tradeSources }),
   );
   const [screenshots, setScreenshots] = useState<NewTradeScreenshotState>(
     createEmptyScreenshotState,
   );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const activeStrategy = useMemo(() => {
+    if (isSystemAccount) {
+      const educator = educators.find((item) => item.name === form.strategy);
+      return educator?.strategyId
+        ? (strategies.find((item) => item.id === educator.strategyId) ?? null)
+        : null;
+    }
+    return strategies.find((item) => item.name === form.strategy) ?? null;
+  }, [educators, form.strategy, isSystemAccount, strategies]);
 
   function update<K extends keyof NewTradeFormState>(
     key: K,
@@ -2343,8 +2490,10 @@ function NewTradeWorkflow({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (strategies.length === 0) {
-      setSaveError("Selected account needs at least one linked strategy.");
+    if (tradeSources.length === 0) {
+      setSaveError(
+        `Selected account needs at least one linked ${sourceLabel.toLowerCase()}.`,
+      );
       return;
     }
     if (!form.pair.trim()) {
@@ -2352,11 +2501,11 @@ function NewTradeWorkflow({
       return;
     }
     if (!form.strategy.trim()) {
-      setSaveError("Strategy is required.");
+      setSaveError(`${sourceLabel} is required.`);
       return;
     }
     const riskPercentValue = parseNumber(form.riskPercent);
-    if (riskPlan) {
+    if (!isSystemAccount && riskPlan) {
       if (riskPercentValue === null) {
         setSaveError("Risk % is required for this risk plan.");
         return;
@@ -2397,11 +2546,13 @@ function NewTradeWorkflow({
       direction: form.direction,
       preTrade: {
         strategy: form.strategy.trim(),
-        riskPercent: parseNumber(form.riskPercent),
-        riskAmount: parseNumber(form.riskAmount),
-        bias: form.bias.trim(),
-        notes: form.setupNotes.trim(),
-        feeling: form.feelingBefore,
+        keyLevel: form.keyLevel,
+        entryCondition: form.entryCondition,
+        riskPercent: isSystemAccount ? null : parseNumber(form.riskPercent),
+        riskAmount: isSystemAccount ? null : parseNumber(form.riskAmount),
+        bias: isSystemAccount ? "" : form.bias.trim(),
+        notes: isSystemAccount ? "" : form.setupNotes.trim(),
+        feeling: isSystemAccount ? null : form.feelingBefore,
       },
       entry: {
         time: form.entryTime || null,
@@ -2410,16 +2561,20 @@ function NewTradeWorkflow({
         stopLoss: parseNumber(form.stopLoss),
         takeProfit: parseNumber(form.takeProfit),
         notes: form.entryNotes.trim(),
-        confidence: hasEntryInput ? form.confidence : null,
+        confidence: isSystemAccount || !hasEntryInput ? null : form.confidence,
       },
       exit: {
         price: parseNumber(form.exitPrice),
         result: form.result,
         note: form.exitNote.trim(),
-        feeling: hasExitInput ? form.feelingAfter : null,
+        feeling: isSystemAccount || !hasExitInput ? null : form.feelingAfter,
         time: form.exitTime || null,
+        exitCondition: form.exitCondition,
       },
       pnl: parseNumber(form.pnl),
+      backtestSessionId: null,
+      backtestTestedAt: null,
+      backtestTargets: [],
     };
 
     setSaving(true);
@@ -2448,7 +2603,11 @@ function NewTradeWorkflow({
       modalClassName="workflow-modal-card"
       onClose={handleClose}
       onSubmit={handleSubmit}
-      subtitle={`${account.name} / ${riskPlanRangeLabel(riskPlan)}`}
+      subtitle={
+        isSystemAccount
+          ? `${account.name} / System Account`
+          : `${account.name} / ${riskPlanRangeLabel(riskPlan)}`
+      }
       title="New trade"
       footer={
         <>
@@ -2471,119 +2630,194 @@ function NewTradeWorkflow({
         </>
       }
     >
-      <div className="trade-workflow-grid">
-        <section className="workflow-card workflow-card-pre">
-          <WorkflowCardHeader
-            title="Pre-trade"
-            subtitle="Plan before the click"
-          />
-          <div className="stage-field-grid">
-            <label className="field">
-              <span>Date</span>
-              <input
-                type="date"
-                value={form.date}
-                onChange={(event) => update("date", event.target.value)}
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Pair</span>
-              <input
-                type="text"
-                placeholder="EURUSD"
-                value={form.pair}
-                onChange={(event) => update("pair", event.target.value)}
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Strategy</span>
-              <select
-                value={form.strategy}
-                onChange={(event) => update("strategy", event.target.value)}
-                disabled={strategies.length === 0}
-              >
-                {strategies.length === 0 ? (
-                  <option value="">No linked strategy</option>
-                ) : (
-                  strategies.map((strategy) => (
-                    <option key={strategy.id} value={strategy.name}>
-                      {strategy.name}
+      <div
+        className={`trade-workflow-grid ${
+          isSystemAccount ? "trade-workflow-grid-system" : ""
+        }`}
+      >
+        {isSystemAccount ? null : (
+          <section className="workflow-card workflow-card-pre">
+            <WorkflowCardHeader
+              title="Pre-trade"
+              subtitle="Plan before the click"
+            />
+            <div className="stage-field-grid">
+              <label className="field">
+                <span>Date</span>
+                <input
+                  type="date"
+                  value={form.date}
+                  onChange={(event) => update("date", event.target.value)}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Pair</span>
+                <input
+                  type="text"
+                  placeholder="EURUSD"
+                  value={form.pair}
+                  onChange={(event) => update("pair", event.target.value)}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>{sourceLabel}</span>
+                <select
+                  value={form.strategy}
+                  onChange={(event) => update("strategy", event.target.value)}
+                  disabled={tradeSources.length === 0}
+                >
+                  {tradeSources.length === 0 ? (
+                    <option value="">
+                      No linked {sourceLabel.toLowerCase()}
                     </option>
-                  ))
-                )}
-              </select>
-            </label>
-            <label className="field">
-              <span>Risk %</span>
-              <input
-                type="number"
-                step="any"
-                min={riskPlanMin(riskPlan) ?? undefined}
-                max={riskPlanMax(riskPlan) ?? undefined}
-                value={form.riskPercent}
-                onChange={(event) => updateRiskPercent(event.target.value)}
+                  ) : (
+                    tradeSources.map((source) => (
+                      <option key={source.id} value={source.name}>
+                        {source.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
+              <label className="field">
+                <span>Risk %</span>
+                <input
+                  type="number"
+                  step="any"
+                  min={riskPlanMin(riskPlan) ?? undefined}
+                  max={riskPlanMax(riskPlan) ?? undefined}
+                  value={form.riskPercent}
+                  onChange={(event) => updateRiskPercent(event.target.value)}
+                />
+                <small>{riskPlanRangeLabel(riskPlan)}</small>
+              </label>
+              <WorkflowTemplateSelect
+                label="Key level"
+                options={activeStrategy?.keyLevels ?? []}
+                value={form.keyLevel}
+                onChange={(value) => update("keyLevel", value)}
               />
-              <small>{riskPlanRangeLabel(riskPlan)}</small>
-            </label>
-            <label className="field">
-              <span>Risk amount</span>
-              <input
-                type="number"
-                step="any"
-                value={form.riskAmount}
-                readOnly
+              <WorkflowTemplateSelect
+                label="Entry condition"
+                options={activeStrategy?.entryConditions ?? []}
+                value={form.entryCondition}
+                onChange={(value) => update("entryCondition", value)}
               />
-              <small>
-                Balance:{" "}
-                {accountBalance === null
-                  ? "not available"
-                  : formatCurrencyValue(
-                      accountBalance,
-                      account.currency,
-                      appPreferences,
-                    )}
-              </small>
-            </label>
-            <label className="field field-wide">
-              <span>Bias</span>
-              <input
-                type="text"
-                value={form.bias}
-                onChange={(event) => update("bias", event.target.value)}
-                placeholder="Long from demand / short from supply"
+              <label className="field">
+                <span>Risk amount</span>
+                <input
+                  type="number"
+                  step="any"
+                  value={form.riskAmount}
+                  readOnly
+                />
+                <small>
+                  Balance:{" "}
+                  {accountBalance === null
+                    ? "not available"
+                    : formatCurrencyValue(
+                        accountBalance,
+                        account.currency,
+                        appPreferences,
+                      )}
+                </small>
+              </label>
+              <label className="field field-wide">
+                <span>Bias</span>
+                <input
+                  type="text"
+                  value={form.bias}
+                  onChange={(event) => update("bias", event.target.value)}
+                  placeholder="Long from demand / short from supply"
+                />
+              </label>
+              <label className="field field-wide workflow-notes-field">
+                <span>Setup notes</span>
+                <textarea
+                  rows={7}
+                  value={form.setupNotes}
+                  onChange={(event) => update("setupNotes", event.target.value)}
+                  placeholder="Why this trade is worth taking"
+                />
+              </label>
+            </div>
+            <div className="workflow-card-footer">
+              <WorkflowScreenshotSlot
+                confirmBeforeDelete={appPreferences.confirmBeforeDelete}
+                stage="pre-trade"
+                screenshots={screenshots["pre-trade"]}
+                onImported={(path) => addDraftScreenshot("pre-trade", path)}
+                onDelete={(id) => removeDraftScreenshot("pre-trade", id)}
               />
-            </label>
-            <label className="field field-wide workflow-notes-field">
-              <span>Setup notes</span>
-              <textarea
-                rows={7}
-                value={form.setupNotes}
-                onChange={(event) => update("setupNotes", event.target.value)}
-                placeholder="Why this trade is worth taking"
+              <ScaleField
+                label="Feeling before trade"
+                value={form.feelingBefore}
+                onChange={(value) => update("feelingBefore", value)}
               />
-            </label>
-          </div>
-          <div className="workflow-card-footer">
-            <WorkflowScreenshotSlot
-              confirmBeforeDelete={appPreferences.confirmBeforeDelete}
-              stage="pre-trade"
-              screenshots={screenshots["pre-trade"]}
-              onImported={(path) => addDraftScreenshot("pre-trade", path)}
-              onDelete={(id) => removeDraftScreenshot("pre-trade", id)}
-            />
-            <ScaleField
-              label="Feeling before trade"
-              value={form.feelingBefore}
-              onChange={(value) => update("feelingBefore", value)}
-            />
-          </div>
-        </section>
+            </div>
+          </section>
+        )}
 
         <section className="workflow-card workflow-card-entry">
           <WorkflowCardHeader title="Entry" subtitle="Execution details" />
           <div className="stage-field-grid">
+            {isSystemAccount ? (
+              <>
+                <label className="field">
+                  <span>Date</span>
+                  <input
+                    type="date"
+                    value={form.date}
+                    onChange={(event) => update("date", event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Pair</span>
+                  <input
+                    type="text"
+                    placeholder="EURUSD"
+                    value={form.pair}
+                    onChange={(event) => update("pair", event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="field field-wide">
+                  <span>{sourceLabel}</span>
+                  <select
+                    value={form.strategy}
+                    onChange={(event) => update("strategy", event.target.value)}
+                    disabled={tradeSources.length === 0}
+                  >
+                    {tradeSources.length === 0 ? (
+                      <option value="">
+                        No linked {sourceLabel.toLowerCase()}
+                      </option>
+                    ) : (
+                      tradeSources.map((source) => (
+                        <option key={source.id} value={source.name}>
+                          {source.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+                <WorkflowTemplateSelect
+                  label="Key level"
+                  options={activeStrategy?.keyLevels ?? []}
+                  value={form.keyLevel}
+                  onChange={(value) => update("keyLevel", value)}
+                />
+                <WorkflowTemplateSelect
+                  label="Entry condition"
+                  options={activeStrategy?.entryConditions ?? []}
+                  value={form.entryCondition}
+                  onChange={(value) => update("entryCondition", value)}
+                />
+              </>
+            ) : null}
             <label className="field">
               <span>Entry time</span>
               <input
@@ -2658,11 +2892,13 @@ function NewTradeWorkflow({
               onImported={(path) => addDraftScreenshot("entry", path)}
               onDelete={(id) => removeDraftScreenshot("entry", id)}
             />
-            <ScaleField
-              label="Confidence"
-              value={form.confidence}
-              onChange={(value) => update("confidence", value)}
-            />
+            {isSystemAccount ? null : (
+              <ScaleField
+                label="Confidence"
+                value={form.confidence}
+                onChange={(value) => update("confidence", value)}
+              />
+            )}
           </div>
         </section>
 
@@ -2718,6 +2954,13 @@ function NewTradeWorkflow({
                 placeholder="How the exit happened"
               />
             </label>
+            <WorkflowTemplateSelect
+              label="Exit condition"
+              options={activeStrategy?.exitConditions ?? []}
+              value={form.exitCondition}
+              onChange={(value) => update("exitCondition", value)}
+              wide
+            />
           </div>
           <div className="workflow-card-footer">
             <WorkflowScreenshotSlot
@@ -2727,11 +2970,13 @@ function NewTradeWorkflow({
               onImported={(path) => addDraftScreenshot("exit", path)}
               onDelete={(id) => removeDraftScreenshot("exit", id)}
             />
-            <ScaleField
-              label="Feeling after trade"
-              value={form.feelingAfter}
-              onChange={(value) => update("feelingAfter", value)}
-            />
+            {isSystemAccount ? null : (
+              <ScaleField
+                label="Feeling after trade"
+                value={form.feelingAfter}
+                onChange={(value) => update("feelingAfter", value)}
+              />
+            )}
           </div>
         </section>
       </div>
@@ -2784,6 +3029,40 @@ function WorkflowCardHeader({ title, subtitle }: WorkflowCardHeaderProps) {
   );
 }
 
+function WorkflowTemplateSelect({
+  label,
+  onChange,
+  options,
+  value,
+  wide = false,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: string[];
+  value: string;
+  wide?: boolean;
+}) {
+  return (
+    <label className={`field ${wide ? "field-wide" : ""}`}>
+      <span>{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={options.length === 0}
+      >
+        <option value="">
+          {options.length === 0 ? `No ${label.toLowerCase()} options` : "None"}
+        </option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 type ScaleFieldProps = {
   label: string;
   value: number;
@@ -2830,6 +3109,8 @@ type TradeDetailProps = {
   deleteError: string | null;
   trade: Trade;
   tradeName: string;
+  tradeSources: Array<{ id: string; name: string }>;
+  strategyTemplate: Strategy | null;
   onChanged: () => Promise<void>;
 };
 
@@ -2839,12 +3120,18 @@ function TradeDetail({
   deleteError,
   trade,
   tradeName,
+  tradeSources,
+  strategyTemplate,
   onChanged,
 }: TradeDetailProps) {
   const [preTradeOpen, setPreTradeOpen] = useState(false);
   const [entryOpen, setEntryOpen] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
   const currency = account?.currency ?? "USD";
+  const isSystemAccount = account?.accountType === "system";
+  const isBacktestingAccount = account?.accountType === "backtesting";
+  const isTwoStageAccount = isSystemAccount || isBacktestingAccount;
+  const sourceLabel = tradeSourceLabel(account);
 
   return (
     <div className="trade-detail">
@@ -2854,16 +3141,23 @@ function TradeDetail({
         </p>
       ) : null}
 
-      <section className="trade-cards">
-        <PreTradeCard
-          appPreferences={appPreferences}
-          currency={currency}
-          trade={trade}
-          onEdit={() => setPreTradeOpen(true)}
-          onChanged={onChanged}
-        />
+      <section
+        className={`trade-cards ${isTwoStageAccount ? "trade-cards-system" : ""}`}
+      >
+        {isTwoStageAccount ? null : (
+          <PreTradeCard
+            appPreferences={appPreferences}
+            currency={currency}
+            sourceLabel={sourceLabel}
+            trade={trade}
+            onEdit={() => setPreTradeOpen(true)}
+            onChanged={onChanged}
+          />
+        )}
         <EntryCard
           appPreferences={appPreferences}
+          isSystemAccount={isTwoStageAccount}
+          sourceLabel={sourceLabel}
           trade={trade}
           onEdit={() => setEntryOpen(true)}
           onChanged={onChanged}
@@ -2871,15 +3165,18 @@ function TradeDetail({
         <ExitCard
           currency={currency}
           appPreferences={appPreferences}
+          isSystemAccount={isTwoStageAccount}
           trade={trade}
           onEdit={() => setExitOpen(true)}
           onChanged={onChanged}
         />
       </section>
 
-      {preTradeOpen ? (
+      {!isTwoStageAccount && preTradeOpen ? (
         <PreTradeForm
           confirmBeforeDelete={appPreferences.confirmBeforeDelete}
+          sourceLabel={tradeSourceLabel(account)}
+          strategyTemplate={strategyTemplate}
           trade={trade}
           tradeName={tradeName}
           onChanged={onChanged}
@@ -2893,8 +3190,12 @@ function TradeDetail({
       {entryOpen ? (
         <EntryForm
           appPreferences={appPreferences}
+          isSystemAccount={isTwoStageAccount}
+          sourceLabel={sourceLabel}
           trade={trade}
           tradeName={tradeName}
+          tradeSources={tradeSources}
+          strategyTemplate={strategyTemplate}
           onChanged={onChanged}
           onClose={() => setEntryOpen(false)}
           onSaved={async () => {
@@ -2906,8 +3207,10 @@ function TradeDetail({
       {exitOpen ? (
         <ExitForm
           appPreferences={appPreferences}
+          isSystemAccount={isTwoStageAccount}
           trade={trade}
           tradeName={tradeName}
+          strategyTemplate={strategyTemplate}
           onChanged={onChanged}
           onClose={() => setExitOpen(false)}
           onSaved={async () => {
@@ -2992,11 +3295,15 @@ function SummaryMetric({
 
 function EntryCard({
   appPreferences,
+  isSystemAccount,
+  sourceLabel,
   trade,
   onEdit,
   onChanged,
 }: {
   appPreferences: AppPreferences;
+  isSystemAccount: boolean;
+  sourceLabel: string;
   trade: Trade;
   onEdit: () => void;
   onChanged: () => void | Promise<void>;
@@ -3029,6 +3336,30 @@ function EntryCard({
       </header>
       <dl className="trade-card-body">
         <div className="trade-card-fields">
+          {isSystemAccount ? (
+            <>
+              <div>
+                <dt>{sourceLabel}</dt>
+                <dd>{trade.preTrade.strategy || "—"}</dd>
+              </div>
+              {trade.backtestTestedAt ? (
+                <div>
+                  <dt>Backtested</dt>
+                  <dd>
+                    {formatDateValue(trade.backtestTestedAt, appPreferences)}
+                  </dd>
+                </div>
+              ) : null}
+              <div>
+                <dt>Key level</dt>
+                <dd>{trade.preTrade.keyLevel || "—"}</dd>
+              </div>
+              <div>
+                <dt>Entry condition</dt>
+                <dd>{trade.preTrade.entryCondition || "—"}</dd>
+              </div>
+            </>
+          ) : null}
           <div>
             <dt>Entry time</dt>
             <dd>
@@ -3075,7 +3406,7 @@ function EntryCard({
             />
           ) : null}
         </div>
-        {entry.confidence != null ? (
+        {!isSystemAccount && entry.confidence != null ? (
           <ScaleDisplay label="Confidence" value={entry.confidence} />
         ) : null}
       </div>
@@ -3086,12 +3417,14 @@ function EntryCard({
 function ExitCard({
   currency,
   appPreferences,
+  isSystemAccount,
   trade,
   onEdit,
   onChanged,
 }: {
   currency: string;
   appPreferences: AppPreferences;
+  isSystemAccount: boolean;
   trade: Trade;
   onEdit: () => void;
   onChanged: () => void | Promise<void>;
@@ -3153,7 +3486,24 @@ function ExitCard({
               {fmtPnl(trade.pnl, currency, appPreferences)}
             </dd>
           </div>
+          <div>
+            <dt>Exit condition</dt>
+            <dd>{exit.exitCondition || "—"}</dd>
+          </div>
         </div>
+        {trade.backtestTargets.length > 0 ? (
+          <div className="trade-card-note">
+            <dt>Target results</dt>
+            <dd className="backtest-saved-targets">
+              {trade.backtestTargets.map((target, index) => (
+                <span key={`${index}-${target.takeProfit}`}>
+                  TP {index + 1}: {fmtPrice(target.takeProfit)} /{" "}
+                  {resultLabel(target.result)}
+                </span>
+              ))}
+            </dd>
+          </div>
+        ) : null}
         <div className="trade-card-note">
           <dt>Exit note</dt>
           <dd>{exit.note || "No notes yet."}</dd>
@@ -3169,7 +3519,7 @@ function ExitCard({
             />
           ) : null}
         </div>
-        {exit.feeling != null ? (
+        {!isSystemAccount && exit.feeling != null ? (
           <ScaleDisplay label="Feeling after trade" value={exit.feeling} />
         ) : null}
       </div>
@@ -3191,8 +3541,12 @@ function ScaleDisplay({ label, value }: { label: string; value: number }) {
 
 type EntryFormProps = {
   appPreferences: AppPreferences;
+  isSystemAccount: boolean;
+  sourceLabel: string;
   trade: Trade;
   tradeName: string;
+  tradeSources: Array<{ id: string; name: string }>;
+  strategyTemplate: Strategy | null;
   onChanged: () => void | Promise<void>;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
@@ -3200,13 +3554,20 @@ type EntryFormProps = {
 
 function EntryForm({
   appPreferences,
+  isSystemAccount,
+  sourceLabel,
   trade,
   tradeName,
+  tradeSources,
+  strategyTemplate,
   onChanged,
   onClose,
   onSaved,
 }: EntryFormProps) {
   const [form, setForm] = useState({
+    strategy: trade.preTrade.strategy,
+    keyLevel: trade.preTrade.keyLevel,
+    entryCondition: trade.preTrade.entryCondition,
     direction: trade.direction,
     time: trade.entry.time ?? currentTimeInputValue(),
     price: trade.entry.price?.toString() ?? "",
@@ -3234,12 +3595,28 @@ function EntryForm({
       stopLoss: parseNumber(form.stopLoss),
       takeProfit: parseNumber(form.takeProfit),
       notes: form.notes.trim(),
-      confidence: form.confidence,
+      confidence: isSystemAccount ? null : form.confidence,
     };
 
     setSaving(true);
     try {
-      await saveEntry(trade.id, entry, form.direction);
+      await Promise.all([
+        saveEntry(trade.id, entry, form.direction),
+        ...(isSystemAccount
+          ? [
+              savePreTrade(trade.id, {
+                strategy: form.strategy.trim(),
+                keyLevel: form.keyLevel,
+                entryCondition: form.entryCondition,
+                riskPercent: null,
+                riskAmount: null,
+                bias: "",
+                notes: "",
+                feeling: null,
+              }),
+            ]
+          : []),
+      ]);
       await onSaved();
     } finally {
       setSaving(false);
@@ -3282,6 +3659,43 @@ function EntryForm({
           />
         </section>
         <div className="form-grid">
+          {isSystemAccount ? (
+            <>
+              <label className="field">
+                <span>{sourceLabel}</span>
+                <select
+                  value={form.strategy}
+                  onChange={(event) => update("strategy", event.target.value)}
+                  disabled={tradeSources.length === 0}
+                  required
+                >
+                  {tradeSources.length === 0 ? (
+                    <option value="">
+                      No linked {sourceLabel.toLowerCase()}
+                    </option>
+                  ) : (
+                    tradeSources.map((source) => (
+                      <option key={source.id} value={source.name}>
+                        {source.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
+              <WorkflowTemplateSelect
+                label="Key level"
+                options={strategyTemplate?.keyLevels ?? []}
+                value={form.keyLevel}
+                onChange={(value) => update("keyLevel", value)}
+              />
+              <WorkflowTemplateSelect
+                label="Entry condition"
+                options={strategyTemplate?.entryConditions ?? []}
+                value={form.entryCondition}
+                onChange={(value) => update("entryCondition", value)}
+              />
+            </>
+          ) : null}
           <label className="field">
             <span>Entry time</span>
             <input
@@ -3346,11 +3760,13 @@ function EntryForm({
               onChange={(event) => update("notes", event.target.value)}
             />
           </label>
-          <ScaleField
-            label="Confidence"
-            value={form.confidence}
-            onChange={(value) => update("confidence", value)}
-          />
+          {isSystemAccount ? null : (
+            <ScaleField
+              label="Confidence"
+              value={form.confidence}
+              onChange={(value) => update("confidence", value)}
+            />
+          )}
         </div>
       </div>
     </ModalShell>
@@ -3359,8 +3775,10 @@ function EntryForm({
 
 type ExitFormProps = {
   appPreferences: AppPreferences;
+  isSystemAccount: boolean;
   trade: Trade;
   tradeName: string;
+  strategyTemplate: Strategy | null;
   onChanged: () => void | Promise<void>;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
@@ -3368,8 +3786,10 @@ type ExitFormProps = {
 
 function ExitForm({
   appPreferences,
+  isSystemAccount,
   trade,
   tradeName,
+  strategyTemplate,
   onChanged,
   onClose,
   onSaved,
@@ -3381,6 +3801,7 @@ function ExitForm({
     time: trade.exit.time ?? "",
     note: trade.exit.note,
     feeling: trade.exit.feeling ?? 5,
+    exitCondition: trade.exit.exitCondition,
   });
   const [saving, setSaving] = useState(false);
 
@@ -3397,8 +3818,9 @@ function ExitForm({
       price: parseNumber(form.price),
       result: form.result,
       note: form.note.trim(),
-      feeling: form.feeling,
+      feeling: isSystemAccount ? null : form.feeling,
       time: form.time || null,
+      exitCondition: form.exitCondition,
     };
 
     setSaving(true);
@@ -3494,11 +3916,20 @@ function ExitForm({
               onChange={(event) => update("note", event.target.value)}
             />
           </label>
-          <ScaleField
-            label="Feeling after trade"
-            value={form.feeling}
-            onChange={(value) => update("feeling", value)}
+          <WorkflowTemplateSelect
+            label="Exit condition"
+            options={strategyTemplate?.exitConditions ?? []}
+            value={form.exitCondition}
+            onChange={(value) => update("exitCondition", value)}
+            wide
           />
+          {isSystemAccount ? null : (
+            <ScaleField
+              label="Feeling after trade"
+              value={form.feeling}
+              onChange={(value) => update("feeling", value)}
+            />
+          )}
         </div>
       </div>
     </ModalShell>

@@ -5,16 +5,19 @@ import {
   ShieldCheck,
   Target,
   Trash2,
+  Users,
   Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  deleteEducator,
   deleteRiskManagementPlan,
   deleteStrategy,
   deleteTradingAccount,
   listAccountSetup,
   listTrades,
   type AccountType,
+  type Educator,
   type RiskManagementPlan,
   type Strategy,
   type TradingAccount,
@@ -32,11 +35,12 @@ import {
 } from "../../shared/appPreferences";
 import { EditAccountSetupDialog } from "./EditAccountSetupDialog";
 
-type AccountTab = "accounts" | "strategies" | "risk";
+type AccountTab = "accounts" | "strategies" | "educators" | "risk";
 
 const ACCOUNT_TABS: { id: AccountTab; label: string; icon: JSX.Element }[] = [
   { id: "accounts", label: "Accounts", icon: <Wallet size={16} /> },
   { id: "strategies", label: "Strategy", icon: <Target size={16} /> },
+  { id: "educators", label: "Educators", icon: <Users size={16} /> },
   {
     id: "risk",
     label: "Risk Management",
@@ -48,6 +52,7 @@ const ACCOUNT_TYPES: { id: AccountType; label: string }[] = [
   { id: "live", label: "Live" },
   { id: "demo", label: "Demo" },
   { id: "backtesting", label: "Backtesting" },
+  { id: "system", label: "System Account" },
 ];
 
 function accountTypeLabel(type: AccountType) {
@@ -114,12 +119,16 @@ export function AccountModule({
   const [activeTab, setActiveTab] = useState<AccountTab>("accounts");
   const [accounts, setAccounts] = useState<TradingAccount[]>([]);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
+  const [educators, setEducators] = useState<Educator[]>([]);
   const [riskPlans, setRiskPlans] = useState<RiskManagementPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
     null,
   );
   const [selectedStrategyId, setSelectedStrategyId] = useState<string | null>(
+    null,
+  );
+  const [selectedEducatorId, setSelectedEducatorId] = useState<string | null>(
     null,
   );
   const [selectedRiskPlanId, setSelectedRiskPlanId] = useState<string | null>(
@@ -139,6 +148,7 @@ export function AccountModule({
       const data = await listAccountSetup();
       setAccounts(data.accounts);
       setStrategies(data.strategies);
+      setEducators(data.educators);
       setRiskPlans(data.riskPlans);
     } finally {
       setLoading(false);
@@ -157,6 +167,7 @@ export function AccountModule({
       setActiveTab(detail.kind);
       if (detail.kind === "accounts") openAccount(detail.id);
       if (detail.kind === "strategies") openStrategy(detail.id);
+      if (detail.kind === "educators") openEducator(detail.id);
       if (detail.kind === "risk") openRiskPlan(detail.id);
     }
     window.addEventListener(
@@ -179,6 +190,11 @@ export function AccountModule({
       strategies.find((strategy) => strategy.id === selectedStrategyId) ?? null,
     [strategies, selectedStrategyId],
   );
+  const selectedEducator = useMemo(
+    () =>
+      educators.find((educator) => educator.id === selectedEducatorId) ?? null,
+    [educators, selectedEducatorId],
+  );
   const selectedRiskPlan = useMemo(
     () => riskPlans.find((plan) => plan.id === selectedRiskPlanId) ?? null,
     [riskPlans, selectedRiskPlanId],
@@ -187,18 +203,28 @@ export function AccountModule({
   function openAccount(accountId: string) {
     setSelectedAccountId(accountId);
     setSelectedStrategyId(null);
+    setSelectedEducatorId(null);
     setSelectedRiskPlanId(null);
   }
 
   function openStrategy(strategyId: string) {
     setSelectedAccountId(null);
     setSelectedStrategyId(strategyId);
+    setSelectedEducatorId(null);
+    setSelectedRiskPlanId(null);
+  }
+
+  function openEducator(educatorId: string) {
+    setSelectedAccountId(null);
+    setSelectedStrategyId(null);
+    setSelectedEducatorId(educatorId);
     setSelectedRiskPlanId(null);
   }
 
   function openRiskPlan(riskPlanId: string) {
     setSelectedAccountId(null);
     setSelectedStrategyId(null);
+    setSelectedEducatorId(null);
     setSelectedRiskPlanId(riskPlanId);
   }
 
@@ -215,7 +241,9 @@ export function AccountModule({
         ? selectedAccount?.name
         : kind === "strategies"
           ? selectedStrategy?.name
-          : selectedRiskPlan?.name;
+          : kind === "educators"
+            ? selectedEducator?.name
+            : selectedRiskPlan?.name;
     if (!label) return;
 
     const warning =
@@ -242,6 +270,10 @@ export function AccountModule({
         await deleteStrategy(selectedStrategy.id);
         setSelectedStrategyId(null);
       }
+      if (kind === "educators" && selectedEducator) {
+        await deleteEducator(selectedEducator.id);
+        setSelectedEducatorId(null);
+      }
       if (kind === "risk" && selectedRiskPlan) {
         await deleteRiskManagementPlan(selectedRiskPlan.id);
         setSelectedRiskPlanId(null);
@@ -263,6 +295,7 @@ export function AccountModule({
           actionError={actionError}
           appPreferences={appPreferences}
           strategies={strategies}
+          educators={educators}
           riskPlans={riskPlans}
           onBack={() => setSelectedAccountId(null)}
           onDelete={() => handleDelete("accounts")}
@@ -273,6 +306,7 @@ export function AccountModule({
             kind="accounts"
             account={selectedAccount}
             strategies={strategies}
+            educators={educators}
             riskPlans={riskPlans}
             onClose={() => setEditModal(null)}
             onSaved={handleEdited}
@@ -297,6 +331,33 @@ export function AccountModule({
             kind="strategies"
             strategy={selectedStrategy}
             strategies={strategies}
+            educators={educators}
+            riskPlans={riskPlans}
+            onClose={() => setEditModal(null)}
+            onSaved={handleEdited}
+          />
+        ) : null}
+      </>
+    );
+  }
+
+  if (selectedEducator) {
+    return (
+      <>
+        <EducatorDetailView
+          educator={selectedEducator}
+          strategies={strategies}
+          actionError={actionError}
+          onBack={() => setSelectedEducatorId(null)}
+          onDelete={() => handleDelete("educators")}
+          onEdit={() => setEditModal("educators")}
+        />
+        {editModal === "educators" ? (
+          <EditAccountSetupDialog
+            kind="educators"
+            educator={selectedEducator}
+            strategies={strategies}
+            educators={educators}
             riskPlans={riskPlans}
             onClose={() => setEditModal(null)}
             onSaved={handleEdited}
@@ -321,6 +382,7 @@ export function AccountModule({
             kind="risk"
             riskPlan={selectedRiskPlan}
             strategies={strategies}
+            educators={educators}
             riskPlans={riskPlans}
             onClose={() => setEditModal(null)}
             onSaved={handleEdited}
@@ -355,6 +417,7 @@ export function AccountModule({
           accounts={accounts}
           appPreferences={appPreferences}
           strategies={strategies}
+          educators={educators}
           riskPlans={riskPlans}
           loading={loading}
           onOpenAccount={openAccount}
@@ -374,6 +437,31 @@ export function AccountModule({
             title: strategy.name,
             subtitle: strategy.strategy || "No strategy details yet.",
           }))}
+        />
+      ) : null}
+      {activeTab === "educators" ? (
+        <SimpleList
+          title="Educators"
+          emptyText="No educators yet."
+          loading={loading}
+          openHint="Double-click an educator to open details."
+          onOpenItem={openEducator}
+          onCreate={() => setCreateModal("educators")}
+          items={educators.map((educator) => {
+            const strategyName = educator.strategyId
+              ? strategies.find(
+                  (strategy) => strategy.id === educator.strategyId,
+                )?.name
+              : null;
+            return {
+              id: educator.id,
+              title: educator.name,
+              subtitle: [
+                educator.community || "Independent educator",
+                strategyName ? `Strategy: ${strategyName}` : "No strategy",
+              ].join(" · "),
+            };
+          })}
         />
       ) : null}
       {activeTab === "risk" ? (
@@ -397,6 +485,7 @@ export function AccountModule({
         <CreateAccountSetupDialog
           kind={createModal}
           strategies={strategies}
+          educators={educators}
           riskPlans={riskPlans}
           onClose={() => setCreateModal(null)}
           onCreated={async () => {
@@ -414,6 +503,7 @@ function AccountsList({
   accounts,
   appPreferences,
   strategies,
+  educators,
   riskPlans,
   loading,
   onOpenAccount,
@@ -422,6 +512,7 @@ function AccountsList({
   accounts: TradingAccount[];
   appPreferences: AppPreferences;
   strategies: Strategy[];
+  educators: Educator[];
   riskPlans: RiskManagementPlan[];
   loading: boolean;
   onOpenAccount: (accountId: string) => void;
@@ -430,6 +521,10 @@ function AccountsList({
   const strategyMap = useMemo(
     () => new Map(strategies.map((strategy) => [strategy.id, strategy])),
     [strategies],
+  );
+  const educatorMap = useMemo(
+    () => new Map(educators.map((educator) => [educator.id, educator])),
+    [educators],
   );
   const riskMap = useMemo(
     () => new Map(riskPlans.map((plan) => [plan.id, plan])),
@@ -464,7 +559,7 @@ function AccountsList({
                 <th>Account</th>
                 <th>Type</th>
                 <th>Commission</th>
-                <th>Strategies</th>
+                <th>Trading source</th>
                 <th>Risk plan</th>
                 <th className="num">Balance</th>
               </tr>
@@ -494,10 +589,15 @@ function AccountsList({
                     /lot
                   </td>
                   <td>
-                    {account.strategyIds
-                      .map((id) => strategyMap.get(id)?.name)
-                      .filter(Boolean)
-                      .join(", ") || "-"}
+                    {account.accountType === "system"
+                      ? account.educatorIds
+                          .map((id) => educatorMap.get(id)?.name)
+                          .filter(Boolean)
+                          .join(", ") || "-"
+                      : account.strategyIds
+                          .map((id) => strategyMap.get(id)?.name)
+                          .filter(Boolean)
+                          .join(", ") || "-"}
                   </td>
                   <td>
                     {account.riskPlanId
@@ -691,6 +791,92 @@ function StrategyDetailView({
           <h3>Notes</h3>
           <p>{strategy.notes || "No notes yet."}</p>
         </article>
+
+        <article className="account-detail-panel account-detail-panel-wide">
+          <h3>Journal selectors</h3>
+          <dl>
+            <div>
+              <dt>Key levels</dt>
+              <dd>{strategy.keyLevels.join(", ") || "-"}</dd>
+            </div>
+            <div>
+              <dt>Entry conditions</dt>
+              <dd>{strategy.entryConditions.join(", ") || "-"}</dd>
+            </div>
+            <div>
+              <dt>Exit conditions</dt>
+              <dd>{strategy.exitConditions.join(", ") || "-"}</dd>
+            </div>
+          </dl>
+        </article>
+      </section>
+    </div>
+  );
+}
+
+function EducatorDetailView({
+  educator,
+  strategies,
+  actionError,
+  onBack,
+  onEdit,
+  onDelete,
+}: {
+  educator: Educator;
+  strategies: Strategy[];
+  actionError: string | null;
+  onBack: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const strategy = educator.strategyId
+    ? strategies.find((item) => item.id === educator.strategyId)
+    : null;
+
+  return (
+    <div className="account-module">
+      <header className="account-detail-header">
+        <button
+          className="icon-button back-button"
+          type="button"
+          onClick={onBack}
+          aria-label="Back to educators"
+        >
+          <ArrowLeft size={18} aria-hidden="true" />
+        </button>
+        <div>
+          <h2>{educator.name}</h2>
+          <p className="page-subtitle">Educator and community details.</p>
+        </div>
+        <DetailActions onEdit={onEdit} onDelete={onDelete} />
+      </header>
+
+      {actionError ? (
+        <p className="account-action-error">{actionError}</p>
+      ) : null}
+
+      <section className="account-detail-grid">
+        <article className="account-detail-panel">
+          <h3>Educator</h3>
+          <dl>
+            <div>
+              <dt>Name</dt>
+              <dd>{educator.name}</dd>
+            </div>
+            <div>
+              <dt>Community</dt>
+              <dd>{educator.community || "Independent"}</dd>
+            </div>
+            <div>
+              <dt>Strategy</dt>
+              <dd>{strategy?.name || "No linked strategy"}</dd>
+            </div>
+          </dl>
+        </article>
+        <article className="account-detail-panel">
+          <h3>Notes</h3>
+          <p>{educator.notes || "No notes yet."}</p>
+        </article>
       </section>
     </div>
   );
@@ -822,6 +1008,7 @@ function AccountDetailView({
   actionError,
   appPreferences,
   strategies,
+  educators,
   riskPlans,
   onBack,
   onEdit,
@@ -831,6 +1018,7 @@ function AccountDetailView({
   actionError: string | null;
   appPreferences: AppPreferences;
   strategies: Strategy[];
+  educators: Educator[];
   riskPlans: RiskManagementPlan[];
   onBack: () => void;
   onEdit: () => void;
@@ -839,12 +1027,18 @@ function AccountDetailView({
   const strategyMap = new Map(
     strategies.map((strategy) => [strategy.id, strategy]),
   );
+  const educatorMap = new Map(
+    educators.map((educator) => [educator.id, educator]),
+  );
   const riskPlan = account.riskPlanId
     ? (riskPlans.find((plan) => plan.id === account.riskPlanId) ?? null)
     : null;
   const linkedStrategies = account.strategyIds
     .map((id) => strategyMap.get(id))
     .filter((strategy): strategy is Strategy => Boolean(strategy));
+  const linkedEducators = account.educatorIds
+    .map((id) => educatorMap.get(id))
+    .filter((educator): educator is Educator => Boolean(educator));
 
   return (
     <div className="account-module">
@@ -860,7 +1054,9 @@ function AccountDetailView({
         <div>
           <h2>{account.name}</h2>
           <p className="page-subtitle">
-            {accountTypeLabel(account.accountType)} account details.
+            {account.accountType === "system"
+              ? "System Account details."
+              : `${accountTypeLabel(account.accountType)} account details.`}
           </p>
         </div>
         <DetailActions onEdit={onEdit} onDelete={onDelete} />
@@ -906,30 +1102,58 @@ function AccountDetailView({
           </dl>
         </article>
 
-        <article className="account-detail-panel">
-          <h3>Strategies</h3>
-          {linkedStrategies.length === 0 ? (
-            <p>No strategies connected.</p>
-          ) : (
-            <div className="account-detail-list">
-              {linkedStrategies.map((strategy) => (
-                <div key={strategy.id}>
-                  <strong>{strategy.name}</strong>
-                  <span>{strategy.strategy || "No strategy details yet."}</span>
-                  {strategy.entryRules ? (
-                    <span>Entry: {strategy.entryRules}</span>
-                  ) : null}
-                  {strategy.slTpRules ? (
-                    <span>SL/TP: {strategy.slTpRules}</span>
-                  ) : null}
-                  {strategy.invalidationRules ? (
-                    <span>Invalidation: {strategy.invalidationRules}</span>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
+        {account.accountType === "system" ? (
+          <article className="account-detail-panel">
+            <h3>Educators</h3>
+            {linkedEducators.length === 0 ? (
+              <p>No educators connected.</p>
+            ) : (
+              <div className="account-detail-list">
+                {linkedEducators.map((educator) => (
+                  <div key={educator.id}>
+                    <strong>{educator.name}</strong>
+                    <span>{educator.community || "Independent educator"}</span>
+                    <span>
+                      Strategy:{" "}
+                      {educator.strategyId
+                        ? strategyMap.get(educator.strategyId)?.name ||
+                          "Unknown strategy"
+                        : "Not linked"}
+                    </span>
+                    {educator.notes ? <span>{educator.notes}</span> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </article>
+        ) : (
+          <article className="account-detail-panel">
+            <h3>Strategies</h3>
+            {linkedStrategies.length === 0 ? (
+              <p>No strategies connected.</p>
+            ) : (
+              <div className="account-detail-list">
+                {linkedStrategies.map((strategy) => (
+                  <div key={strategy.id}>
+                    <strong>{strategy.name}</strong>
+                    <span>
+                      {strategy.strategy || "No strategy details yet."}
+                    </span>
+                    {strategy.entryRules ? (
+                      <span>Entry: {strategy.entryRules}</span>
+                    ) : null}
+                    {strategy.slTpRules ? (
+                      <span>SL/TP: {strategy.slTpRules}</span>
+                    ) : null}
+                    {strategy.invalidationRules ? (
+                      <span>Invalidation: {strategy.invalidationRules}</span>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </article>
+        )}
 
         <article className="account-detail-panel">
           <h3>Risk management</h3>

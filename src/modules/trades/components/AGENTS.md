@@ -8,6 +8,7 @@ Owns module-local trade UI components used by `TradesModule.tsx`.
 
 - `PreTradeCard.tsx`: saved pre-trade summary and screenshot gallery.
 - `PreTradeForm.tsx`: pre-trade editor and screenshot draft handling.
+- `BacktestWorkflow.tsx`: two-step Backtest Session setup and rapid logger with flexible TP/result rows.
 - `ScreenshotTools.tsx`: screenshot import buttons, draft gallery, saved gallery, and screenshot preview modal.
 
 ## Local Contracts
@@ -17,6 +18,8 @@ Owns module-local trade UI components used by `TradesModule.tsx`.
 - ScreenshotTools handles both browser `File` drops and Tauri native file-drop paths.
 - Popups use the shared `ModalShell`.
 - Screenshot stages stay aligned with trade workflow stages.
+- Pre-trade source labels follow the selected account: Strategy for normal accounts and Educator for System Accounts.
+- Backtesting maps before screenshots to `pre-trade` and after screenshots to `exit` so existing screenshot storage and galleries remain reusable.
 
 ## Work Guidance
 
