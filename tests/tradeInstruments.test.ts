@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  calculateRiskRewardRatio,
   calculateTradeTarget,
   calculateRiskRewardTargets,
   findInstrumentGroup,
@@ -181,5 +182,22 @@ describe("trade instruments", () => {
       { ratio: 1, price: 20975 },
       { ratio: 2, price: 20950 },
     ]);
+  });
+
+  it("calculates a target's risk-reward ratio", () => {
+    expect(
+      calculateRiskRewardRatio({
+        entryPrice: 1.1,
+        stopLoss: 1.098,
+        takeProfit: 1.106,
+      }),
+    ).toBeCloseTo(3);
+    expect(
+      calculateRiskRewardRatio({
+        entryPrice: 1.1,
+        stopLoss: 1.1,
+        takeProfit: 1.106,
+      }),
+    ).toBeNull();
   });
 });

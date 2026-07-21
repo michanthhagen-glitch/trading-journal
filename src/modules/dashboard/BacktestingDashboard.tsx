@@ -1,5 +1,6 @@
 import { BarChart3, FlaskConical, Target } from "lucide-react";
 import type { BacktestTarget, Trade } from "../../shared/db/database";
+import { calculateRiskRewardRatio } from "../../shared/tradeInstruments";
 
 type BacktestOutcome = {
   result: BacktestTarget["result"];
@@ -14,13 +15,11 @@ type PerformanceRow = {
 };
 
 function targetRr(trade: Trade, target: BacktestTarget) {
-  const entry = trade.entry.price;
-  const stopLoss = trade.entry.stopLoss;
-  const takeProfit = target.takeProfit;
-  if (entry === null || stopLoss === null || takeProfit === null) return null;
-  const risk = Math.abs(entry - stopLoss);
-  if (risk === 0) return null;
-  return Math.abs(takeProfit - entry) / risk;
+  return calculateRiskRewardRatio({
+    entryPrice: trade.entry.price,
+    stopLoss: trade.entry.stopLoss,
+    takeProfit: target.takeProfit,
+  });
 }
 
 function targetsForTrade(trade: Trade): BacktestTarget[] {

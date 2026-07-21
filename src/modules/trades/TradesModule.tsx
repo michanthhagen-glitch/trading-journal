@@ -68,10 +68,15 @@ import {
 import { TRADE_RECAP_MISTAKE_GROUPS } from "./tradeRecapMistakes";
 import { TRADE_RECAP_POSITIVE_GROUPS } from "./tradeRecapPositives";
 import {
-  calculateRiskRewardTargets,
   calculateTradeTarget,
   tradeTargetInputFromPrice,
 } from "../../shared/tradeInstruments";
+import {
+  mergeLinkedStrategies,
+  parseTradeNumber as parseNumber,
+  resolveTargetPlan,
+  strategyTargetInputs,
+} from "./strategyWorkflow";
 
 type TradesView = "calendar" | "list";
 type TradeWorkspaceMode = "trade" | "recap";
@@ -91,51 +96,6 @@ const TRADE_RECAP_TABS: { id: TradeRecapTab; label: string }[] = [
 
 function tradeSourceLabel(account: TradingAccount | null) {
   return account?.accountType === "system" ? "Educator" : "Strategy";
-}
-
-function linkedStrategyTemplate(
-  strategyIds: string[],
-  strategies: Strategy[],
-): Strategy | null {
-  const linkedIds = new Set(strategyIds);
-  const linkedStrategies = strategies.filter((strategy) =>
-    linkedIds.has(strategy.id),
-  );
-  const first = linkedStrategies[0];
-  if (!first) return null;
-  if (linkedStrategies.length === 1) return first;
-
-  const uniqueValues = (pick: (strategy: Strategy) => string[]) =>
-    Array.from(new Set(linkedStrategies.flatMap(pick)));
-  const targetPlanKey = (strategy: Strategy) =>
-    JSON.stringify({
-      targetMode: strategy.targetMode,
-      targetUnit: strategy.targetUnit,
-      fixedStopLoss: strategy.fixedStopLoss,
-      fixedTakeProfits: strategy.fixedTakeProfits,
-      riskRewardGoal: strategy.riskRewardGoal,
-    });
-  const sharesTargetPlan = linkedStrategies.every(
-    (strategy) => targetPlanKey(strategy) === targetPlanKey(first),
-  );
-
-  return {
-    ...first,
-    id: linkedStrategies.map((strategy) => strategy.id).join("+"),
-    name: linkedStrategies.map((strategy) => strategy.name).join(", "),
-    currencyPairs: uniqueValues((strategy) => strategy.currencyPairs),
-    keyLevels: uniqueValues((strategy) => strategy.keyLevels),
-    entryConditions: uniqueValues((strategy) => strategy.entryConditions),
-    exitConditions: uniqueValues((strategy) => strategy.exitConditions),
-    ...(sharesTargetPlan
-      ? {}
-      : {
-          targetMode: "custom" as const,
-          fixedStopLoss: null,
-          fixedTakeProfits: [],
-          riskRewardGoal: null,
-        }),
-  };
 }
 
 const TRADE_RECAP_GRADES: TradeRecapInput["grade"][] = ["A", "B", "C", "D"];
@@ -428,10 +388,6 @@ function actualRiskReward(trade: Trade): number | null {
   return move / risk;
 }
 
-function parseNumber(value: string): number | null {
-  return value.trim() ? Number(value) : null;
-}
-
 function formatFormNumber(value: number | null) {
   if (value === null || !Number.isFinite(value)) return "";
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
@@ -614,7 +570,7 @@ export function TradesModule({
         (item) => item.name === workspaceTrade.preTrade.strategy,
       );
       return educator
-        ? linkedStrategyTemplate(educator.strategyIds, strategies)
+        ? mergeLinkedStrategies(educator.strategyIds, strategies)
         : null;
     }
     return (
@@ -2503,7 +2459,7 @@ function NewTradeWorkflow({
     if (isSystemAccount) {
       const educator = educators.find((item) => item.name === form.strategy);
       return educator
-        ? linkedStrategyTemplate(educator.strategyIds, strategies)
+        ? mergeLinkedStrategies(educator.strategyIds, strategies)
         : null;
     }
     return strategies.find((item) => item.name === form.strategy) ?? null;
@@ -2511,67 +2467,30 @@ function NewTradeWorkflow({
 
   useEffect(() => {
     const pairs = activeStrategy?.currencyPairs ?? [];
+    const targetInputs = strategyTargetInputs(activeStrategy);
     setForm((current) => ({
       ...current,
       pair: pairs.includes(current.pair) ? current.pair : (pairs[0] ?? ""),
-      stopLoss:
-        activeStrategy?.targetMode === "fixed"
-          ? String(activeStrategy.fixedStopLoss ?? "")
-          : "",
-      takeProfits:
-        activeStrategy?.targetMode === "fixed" &&
-        activeStrategy.fixedTakeProfits.length > 0
-          ? activeStrategy.fixedTakeProfits.map(String)
-          : [""],
+      stopLoss: targetInputs.stopLoss,
+      takeProfits: targetInputs.takeProfits,
     }));
   }, [activeStrategy]);
 
-  const targetMode = activeStrategy?.targetMode ?? "custom";
-  const targetUnit =
-    targetMode === "fixed"
-      ? (activeStrategy?.targetUnit ?? appPreferences.tradeTargetUnit)
-      : appPreferences.tradeTargetUnit;
-  const stopLossCalculation = form.stopLoss.trim()
-    ? calculateTradeTarget({
-        instrument: form.pair,
-        entryPrice: form.entryPrice,
-        entryPriceInput: form.entryPrice,
-        direction: form.direction,
-        kind: "stop-loss",
-        unit: targetUnit,
-        input: form.stopLoss,
-      })
-    : null;
-  const riskRewardTargets =
-    targetMode === "risk-reward"
-      ? calculateRiskRewardTargets({
-          instrument: form.pair,
-          entryPrice: form.entryPrice,
-          entryPriceInput: form.entryPrice,
-          direction: form.direction,
-          stopLoss: stopLossCalculation?.price ?? null,
-          goal: activeStrategy?.riskRewardGoal ?? null,
-        })
-      : [];
-  const workflowTakeProfitInputs =
-    targetMode === "risk-reward"
-      ? riskRewardTargets.map((target) =>
-          tradeTargetInputFromPrice({
-            instrument: form.pair,
-            entryPrice: form.entryPrice,
-            entryPriceInput: form.entryPrice,
-            targetPrice: target.price,
-            unit: targetUnit,
-          }),
-        )
-      : form.takeProfits;
-  const displayedTakeProfitInputs =
-    targetMode === "risk-reward"
-      ? Array.from(
-          { length: activeStrategy?.riskRewardGoal ?? 0 },
-          (_, index) => workflowTakeProfitInputs[index] ?? "",
-        )
-      : workflowTakeProfitInputs;
+  const targetPlan = resolveTargetPlan({
+    strategy: activeStrategy,
+    preferredUnit: appPreferences.tradeTargetUnit,
+    instrument: form.pair,
+    entryPrice: form.entryPrice,
+    direction: form.direction,
+    stopLossInput: form.stopLoss,
+    takeProfitInputs: form.takeProfits,
+  });
+  const targetMode = targetPlan.mode;
+  const targetUnit = targetPlan.unit;
+  const stopLossCalculation = targetPlan.stopLoss;
+  const displayedTakeProfitInputs = targetPlan.takeProfits.map(
+    (target) => target.input,
+  );
 
   function update<K extends keyof NewTradeFormState>(
     key: K,
@@ -2650,41 +2569,29 @@ function NewTradeWorkflow({
       setSaveError(`${sourceLabel} is required.`);
       return;
     }
-    const enteredTakeProfitInputs = workflowTakeProfitInputs.filter((value) =>
-      value.trim(),
+    const enteredTakeProfits = targetPlan.takeProfits.filter(
+      (target) => targetMode === "risk-reward" || target.input.trim(),
     );
-    const takeProfitCalculations =
-      targetMode === "risk-reward"
-        ? riskRewardTargets.map((target) => ({ price: target.price }))
-        : enteredTakeProfitInputs.map((input) =>
-            calculateTradeTarget({
-              instrument: form.pair,
-              entryPrice: form.entryPrice,
-              entryPriceInput: form.entryPrice,
-              direction: form.direction,
-              kind: "take-profit",
-              unit: targetUnit,
-              input,
-            }),
-          );
     if (
       (form.stopLoss.trim() && !stopLossCalculation) ||
-      takeProfitCalculations.some((calculation) => !calculation)
+      (targetMode !== "risk-reward" &&
+        enteredTakeProfits.some((target) => target.price === null))
     ) {
       setSaveError("Enter a valid entry price to calculate SL and TP.");
       return;
     }
     if (
       targetMode === "risk-reward" &&
-      (!stopLossCalculation || riskRewardTargets.length === 0)
+      (!stopLossCalculation ||
+        enteredTakeProfits.some((target) => target.price === null))
     ) {
       setSaveError(
         "Enter the entry price and stop loss to calculate RR targets.",
       );
       return;
     }
-    const takeProfitPrices = takeProfitCalculations.flatMap((calculation) =>
-      calculation ? [calculation.price] : [],
+    const takeProfitPrices = enteredTakeProfits.flatMap((target) =>
+      target.price === null ? [] : [target.price],
     );
     const riskPercentValue = parseNumber(form.riskPercent);
     if (!isSystemAccount && riskPlan) {
@@ -2710,7 +2617,7 @@ function NewTradeWorkflow({
       form.entryPrice ||
       form.lotSize ||
       form.stopLoss ||
-      workflowTakeProfitInputs.some((value) => value.trim()) ||
+      displayedTakeProfitInputs.some((value) => value.trim()) ||
       form.entryNotes.trim(),
     );
     const hasExitInput = Boolean(

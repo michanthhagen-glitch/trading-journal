@@ -7,6 +7,7 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 ## Ownership
 
 - `TradesModule.tsx`: trade table, selected trade detail, standard three-card workflow, simplified System Account workflow, and saved-stage editors.
+- `strategyWorkflow.ts`: pure educator-strategy merging and Fixed/RR/Custom target-plan calculations shared by trade entry and Backtesting.
 - `components/BacktestWorkflow.tsx`: Backtest Session setup and rapid multi-target trade logger.
 - `tradeRecapMistakes.ts`: categorized starter catalog for trade recap mistake tags.
 - `tradeRecapPositives.ts`: categorized starter catalog for trade recap positive tags.
@@ -37,6 +38,7 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - Backtesting trades do not raise missing-recap or open-trade reminders.
 - Strategy key-level, entry-condition, and exit-condition choices are available in normal, System Account, and Backtesting trade workflows.
 - Strategy target plans apply across normal, System Account, and Backtesting workflows: Fixed values are locked, Risk/Reward creates every TP from 1R through the goal, and Custom allows manual multiple TPs.
+- Keep shared target-plan defaults, price conversion, and RR calculations in `strategyWorkflow.ts` so normal trade entry and Backtesting cannot drift apart.
 - Saved normal and System Account trades persist all planned take-profit prices while the legacy single TP remains the final/main target.
 - New trade risk % is checked against the selected account's risk plan without editing the plan.
 - Saved trade cards expose screenshot import for `pre-trade`, `entry`, and `exit`.

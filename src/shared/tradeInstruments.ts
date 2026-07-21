@@ -544,6 +544,24 @@ export function calculateRiskRewardTargets({
   });
 }
 
+export function calculateRiskRewardRatio({
+  entryPrice,
+  stopLoss,
+  takeProfit,
+}: {
+  entryPrice: string | number | null;
+  stopLoss: string | number | null;
+  takeProfit: string | number | null;
+}) {
+  const entry = finiteNumber(entryPrice);
+  const stop = finiteNumber(stopLoss);
+  const target = finiteNumber(takeProfit);
+  if (entry === null || stop === null || target === null) return null;
+
+  const risk = Math.abs(entry - stop);
+  return risk === 0 ? null : Math.abs(target - entry) / risk;
+}
+
 export function formatTradeTargetPrice(
   calculation: TradeTargetCalculation | null,
 ) {

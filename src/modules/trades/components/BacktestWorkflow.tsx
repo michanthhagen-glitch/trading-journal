@@ -13,10 +13,10 @@ import {
 } from "../../../shared/db/database";
 import { deleteScreenshotFile } from "../../../shared/db/storage";
 import {
-  calculateRiskRewardTargets,
-  calculateTradeTarget,
-  tradeTargetInputFromPrice,
-} from "../../../shared/tradeInstruments";
+  parseTradeNumber,
+  resolveTargetPlan,
+  strategyTargetInputs,
+} from "../strategyWorkflow";
 import {
   DraftScreenshotGallery,
   DraftScreenshotImportButton,
@@ -64,60 +64,27 @@ function sessionId() {
   return `BT-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function parseNumber(value: string) {
-  if (!value.trim()) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function createLoggerState(
   tradeDate = todayInputValue(),
   strategy: Strategy | null = null,
 ): LoggerState {
-  const targets =
-    strategy?.targetMode === "fixed"
-      ? strategy.fixedTakeProfits.map((takeProfit) => ({
-          id: targetId(),
-          takeProfit: String(takeProfit),
-          result: "" as TradeResult,
-        }))
-      : Array.from(
-          {
-            length:
-              strategy?.targetMode === "risk-reward"
-                ? (strategy.riskRewardGoal ?? 1)
-                : 1,
-          },
-          () => ({ id: targetId(), takeProfit: "", result: "" as TradeResult }),
-        );
+  const targetInputs = strategyTargetInputs(strategy);
+  const targets = targetInputs.takeProfits.map((takeProfit) => ({
+    id: targetId(),
+    takeProfit,
+    result: "" as TradeResult,
+  }));
   return {
     tradeDate,
     time: "",
     direction: "long",
     entry: "",
-    stopLoss:
-      strategy?.targetMode === "fixed"
-        ? String(strategy.fixedStopLoss ?? "")
-        : "",
+    stopLoss: targetInputs.stopLoss,
     keyLevel: "",
     entryCondition: "",
     exitCondition: "",
     targets,
   };
-}
-
-function targetRr(
-  entry: string,
-  stopLoss: number | null,
-  takeProfit: number | null,
-) {
-  const entryValue = parseNumber(entry);
-  if (entryValue === null || stopLoss === null || takeProfit === null) {
-    return null;
-  }
-  const risk = Math.abs(entryValue - stopLoss);
-  if (risk === 0) return null;
-  return Math.abs(takeProfit - entryValue) / risk;
 }
 
 export function BacktestWorkflow({
@@ -164,43 +131,21 @@ export function BacktestWorkflow({
     setLogger((current) => createLoggerState(current.tradeDate, strategy));
   }, [strategy]);
 
-  const targetMode = strategy?.targetMode ?? "custom";
-  const targetUnit =
-    targetMode === "fixed"
-      ? (strategy?.targetUnit ?? appPreferences.tradeTargetUnit)
-      : appPreferences.tradeTargetUnit;
-  const stopLossCalculation = calculateTradeTarget({
+  const targetPlan = resolveTargetPlan({
+    strategy,
+    preferredUnit: appPreferences.tradeTargetUnit,
     instrument: pair,
     entryPrice: logger.entry,
-    entryPriceInput: logger.entry,
     direction: logger.direction,
-    kind: "stop-loss",
-    unit: targetUnit,
-    input: logger.stopLoss,
+    stopLossInput: logger.stopLoss,
+    takeProfitInputs: logger.targets.map((target) => target.takeProfit),
   });
-  const riskRewardTargets =
-    targetMode === "risk-reward"
-      ? calculateRiskRewardTargets({
-          instrument: pair,
-          entryPrice: logger.entry,
-          entryPriceInput: logger.entry,
-          direction: logger.direction,
-          stopLoss: stopLossCalculation?.price ?? null,
-          goal: strategy?.riskRewardGoal ?? null,
-        })
-      : [];
+  const targetMode = targetPlan.mode;
+  const targetUnit = targetPlan.unit;
+  const stopLossCalculation = targetPlan.stopLoss;
   const displayedTargets = logger.targets.map((target, index) => ({
     ...target,
-    takeProfit:
-      targetMode === "risk-reward"
-        ? tradeTargetInputFromPrice({
-            instrument: pair,
-            entryPrice: logger.entry,
-            entryPriceInput: logger.entry,
-            targetPrice: riskRewardTargets[index]?.price ?? null,
-            unit: targetUnit,
-          })
-        : target.takeProfit,
+    takeProfit: targetPlan.takeProfits[index]?.input ?? "",
   }));
 
   function update<K extends keyof LoggerState>(key: K, value: LoggerState[K]) {
@@ -282,20 +227,9 @@ export function BacktestWorkflow({
       return;
     }
 
-    const entry = parseNumber(logger.entry);
+    const entry = parseTradeNumber(logger.entry);
     const targets: BacktestTarget[] = displayedTargets.map((target, index) => ({
-      takeProfit:
-        targetMode === "risk-reward"
-          ? (riskRewardTargets[index]?.price ?? null)
-          : (calculateTradeTarget({
-              instrument: pair,
-              entryPrice: logger.entry,
-              entryPriceInput: logger.entry,
-              direction: logger.direction,
-              kind: "take-profit",
-              unit: targetUnit,
-              input: target.takeProfit,
-            })?.price ?? null),
+      takeProfit: targetPlan.takeProfits[index]?.price ?? null,
       result: target.result,
     }));
     if (!logger.tradeDate || !logger.time) {
@@ -571,20 +505,8 @@ export function BacktestWorkflow({
             </header>
             <div className="backtest-target-list">
               {displayedTargets.map((target, index) => {
-                const stopLoss = stopLossCalculation?.price ?? null;
-                const takeProfit =
-                  targetMode === "risk-reward"
-                    ? (riskRewardTargets[index]?.price ?? null)
-                    : (calculateTradeTarget({
-                        instrument: pair,
-                        entryPrice: logger.entry,
-                        entryPriceInput: logger.entry,
-                        direction: logger.direction,
-                        kind: "take-profit",
-                        unit: targetUnit,
-                        input: target.takeProfit,
-                      })?.price ?? null);
-                const rr = targetRr(logger.entry, stopLoss, takeProfit);
+                const rr =
+                  targetPlan.takeProfits[index]?.riskRewardRatio ?? null;
                 return (
                   <div className="backtest-target-row" key={target.id}>
                     <TradeTargetField

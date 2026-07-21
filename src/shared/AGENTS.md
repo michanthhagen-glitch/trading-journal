@@ -25,7 +25,7 @@ Owns cross-module helpers and data access used by more than one module.
 - Prefer small, explicit helper functions over broad service objects.
 - Keep browser fallback behavior aligned with desktop behavior.
 - Trade names are derived display labels, not stored or editable fields.
-- Risk/Reward helpers create each whole-number R target from the saved entry and stop-loss prices.
+- Risk/Reward helpers create each whole-number R target and calculate target ratios from saved prices.
 
 ## Verification
 
