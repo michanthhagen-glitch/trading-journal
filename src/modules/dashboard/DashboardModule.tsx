@@ -309,7 +309,7 @@ function directionLabel(trade: Trade) {
 }
 
 function pairLabel(trade: Trade) {
-  return trade.pair.trim() || "No pair";
+  return trade.pair.trim() || "No instrument";
 }
 
 function strategyLabel(trade: Trade) {
@@ -2702,12 +2702,12 @@ export function DashboardModule({
               }
             />
             <RateStatsCard
-              title="Currency pair"
+              title="Instrument"
               leaders={dashboard.total.rateGroups.pair}
               onOpen={() =>
                 setDetail({
                   rows: dashboard.total.rateGroups.pair.rows,
-                  title: "Currency pair statistics",
+                  title: "Instrument statistics",
                   type: "rate",
                 })
               }

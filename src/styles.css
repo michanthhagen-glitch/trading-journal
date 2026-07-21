@@ -6035,6 +6035,46 @@ button {
   min-width: 76px;
 }
 
+.instrument-library-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(240px, 1.5fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.instrument-library-control {
+  display: grid;
+  gap: 6px;
+}
+
+.instrument-library-control > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.instrument-selection-groups {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel-elev);
+}
+
+.instrument-selection-groups section {
+  display: grid;
+  gap: 5px;
+}
+
+.instrument-selection-groups section > small {
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 .strategy-option-chips {
   display: flex;
   flex-wrap: wrap;
@@ -6429,6 +6469,11 @@ button {
   line-height: 1.4;
 }
 
+.trade-target-summary {
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
 .field input,
 .field select,
 .field textarea {
@@ -6510,6 +6555,11 @@ button {
   }
 
   .stage-field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .instrument-library-row,
+  .strategy-option-add-row {
     grid-template-columns: 1fr;
   }
 }

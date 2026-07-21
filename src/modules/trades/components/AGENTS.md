@@ -9,6 +9,7 @@ Owns module-local trade UI components used by `TradesModule.tsx`.
 - `PreTradeCard.tsx`: saved pre-trade summary and screenshot gallery.
 - `PreTradeForm.tsx`: pre-trade editor and screenshot draft handling.
 - `BacktestWorkflow.tsx`: two-step Backtest Session setup and rapid logger with flexible TP/result rows.
+- `StrategyInstrumentSelect.tsx`: grouped Strategy instrument dropdown used by trade workflows.
 - `ScreenshotTools.tsx`: screenshot import buttons, draft gallery, saved gallery, and screenshot preview modal.
 
 ## Local Contracts

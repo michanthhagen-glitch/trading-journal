@@ -448,17 +448,21 @@ export function AccountModule({
           onOpenItem={openEducator}
           onCreate={() => setCreateModal("educators")}
           items={educators.map((educator) => {
-            const strategyName = educator.strategyId
-              ? strategies.find(
-                  (strategy) => strategy.id === educator.strategyId,
-                )?.name
-              : null;
+            const strategyNames = educator.strategyIds
+              .map(
+                (strategyId) =>
+                  strategies.find((strategy) => strategy.id === strategyId)
+                    ?.name,
+              )
+              .filter((name): name is string => Boolean(name));
             return {
               id: educator.id,
               title: educator.name,
               subtitle: [
                 educator.community || "Independent educator",
-                strategyName ? `Strategy: ${strategyName}` : "No strategy",
+                strategyNames.length > 0
+                  ? `Strategies: ${strategyNames.join(", ")}`
+                  : "No strategies",
               ].join(" · "),
             };
           })}
@@ -796,6 +800,10 @@ function StrategyDetailView({
           <h3>Journal selectors</h3>
           <dl>
             <div>
+              <dt>Instruments</dt>
+              <dd>{strategy.currencyPairs.join(", ") || "-"}</dd>
+            </div>
+            <div>
               <dt>Key levels</dt>
               <dd>{strategy.keyLevels.join(", ") || "-"}</dd>
             </div>
@@ -829,9 +837,11 @@ function EducatorDetailView({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const strategy = educator.strategyId
-    ? strategies.find((item) => item.id === educator.strategyId)
-    : null;
+  const linkedStrategies = educator.strategyIds
+    .map((strategyId) =>
+      strategies.find((strategy) => strategy.id === strategyId),
+    )
+    .filter((strategy): strategy is Strategy => Boolean(strategy));
 
   return (
     <div className="account-module">
@@ -868,8 +878,12 @@ function EducatorDetailView({
               <dd>{educator.community || "Independent"}</dd>
             </div>
             <div>
-              <dt>Strategy</dt>
-              <dd>{strategy?.name || "No linked strategy"}</dd>
+              <dt>Strategies</dt>
+              <dd>
+                {linkedStrategies.length > 0
+                  ? linkedStrategies.map((strategy) => strategy.name).join(", ")
+                  : "No linked strategies"}
+              </dd>
             </div>
           </dl>
         </article>
@@ -1114,10 +1128,15 @@ function AccountDetailView({
                     <strong>{educator.name}</strong>
                     <span>{educator.community || "Independent educator"}</span>
                     <span>
-                      Strategy:{" "}
-                      {educator.strategyId
-                        ? strategyMap.get(educator.strategyId)?.name ||
-                          "Unknown strategy"
+                      Strategies:{" "}
+                      {educator.strategyIds.length > 0
+                        ? educator.strategyIds
+                            .map(
+                              (strategyId) =>
+                                strategyMap.get(strategyId)?.name ||
+                                "Unknown strategy",
+                            )
+                            .join(", ")
                         : "Not linked"}
                     </span>
                     {educator.notes ? <span>{educator.notes}</span> : null}

@@ -29,7 +29,7 @@ The app aims to keep this process quick and focused:
 Open **Account** and create:
 
 - A live, demo, or backtesting account.
-- One or more strategies with clear entry, stop-loss, take-profit, and invalidation rules.
+- One or more strategies with grouped trading instruments, entry rules, stop-loss, take-profit, and invalidation rules.
 - A risk plan with trade, daily, and weekly limits and goals.
 
 The selected account and its current plan remain visible in the sidebar while you trade.
@@ -38,7 +38,7 @@ The selected account and its current plan remain visible in the sidebar while yo
 
 Open **Trades**, select **New trade**, and record the setup:
 
-- Instrument or pair.
+- Trading instrument.
 - Strategy and planned risk.
 - Market bias and setup notes.
 - How confident or prepared you feel.
@@ -52,7 +52,7 @@ When you enter the trade, add:
 
 - Direction, entry time, and entry price.
 - Position size.
-- Stop loss and take profit.
+- Stop loss and take profit as a price, pips, points, or ticks. MethodMark calculates the other units and saves the actual target price.
 - Entry notes and screenshot.
 
 ### 4. Complete it at exit
@@ -69,12 +69,14 @@ Complete the trade recap soon after the trade. Record:
 - What to do next time.
 - A simple trade score.
 
-Use **Recaps** at the end of the day, week, or month to review the larger pattern. Use **Dashboard** to study performance, balance, win rates, sessions, times, pairs, directions, and strategies.
+Use **Recaps** at the end of the day, week, or month to review the larger pattern. Use **Dashboard** to study performance, balance, win rates, sessions, times, instruments, directions, and strategies.
 
 ## Main features
 
 - Live, demo, and backtesting accounts.
 - Reusable strategies and risk-management plans.
+- Strategy-based instrument selectors across normal, System, and Backtesting trades, grouped into Forex Majors, Forex Minors, Forex Exotics, Metals, Indices, Energy, and Crypto.
+- Automatic price, pip, point, and tick conversion for stop losses and take profits.
 - Pre-trade, entry, exit, and recap workflow.
 - Chart screenshots from TradingView, another window, clipboard, or file import.
 - Calendar and weekly trade lists.

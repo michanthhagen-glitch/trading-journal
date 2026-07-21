@@ -22,7 +22,7 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 - Trade workflow fields include reusable key-level and entry/exit-condition selections alongside the existing planning, entry, and exit data.
 - Backtesting trades also store a session id, date of backtesting, and flexible TP/result scenarios.
 - Strategy setup fields include strategy text, rules, and reusable key-level, entry-condition, and exit-condition option lists.
-- Educator setup fields include educator name, community, notes, and an optional linked strategy.
+- Educator setup fields include educator name, community, notes, and optional linked strategies.
 - Risk management setup fields include per-trade/day/week risk ranges, trade-loss limits, and daily/weekly goal ranges.
 - Commission is required and may be zero; every risk-plan value is required and must be greater than zero.
 - Account, strategy, and risk-plan editing and deletion go through typed database APIs. Linked strategies and risk plans cannot be deleted until unlinked.

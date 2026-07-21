@@ -13,6 +13,7 @@ Owns Vitest tests for app behavior and project contracts.
 - `strategyQueries.test.ts`: SQLite strategy reload coverage for reusable journaling choices.
 - `tradeNames.test.ts`: automatic per-day trade display naming.
 - `tradingPlan.test.ts`: sidebar trading plan milestones and rule counters.
+- `tradeInstruments.test.ts`: instrument normalization, grouping, and price/pip/point/tick calculations.
 
 ## Local Contracts
 

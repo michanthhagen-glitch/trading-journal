@@ -1,7 +1,9 @@
 import { type FormEvent, type ReactNode, useState } from "react";
 import { ModalShell } from "../../../../components/ModalShell";
 import { StrategyOptionListField } from "../../StrategyOptionListField";
+import { StrategyInstrumentField } from "../../StrategyInstrumentField";
 import { strategyOptionsWithDraft } from "../../strategyOptions";
+import { instrumentsWithDraft } from "../../../../shared/tradeInstruments";
 import {
   createEducator,
   createRiskManagementPlan,
@@ -325,9 +327,17 @@ function CreateEducatorDialog({
   const [name, setName] = useState("");
   const [community, setCommunity] = useState("");
   const [notes, setNotes] = useState("");
-  const [strategyId, setStrategyId] = useState("");
+  const [strategyIds, setStrategyIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function toggleStrategy(strategyId: string, checked: boolean) {
+    setStrategyIds((current) =>
+      checked
+        ? Array.from(new Set([...current, strategyId]))
+        : current.filter((id) => id !== strategyId),
+    );
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -338,7 +348,7 @@ function CreateEducatorDialog({
         name,
         community,
         notes,
-        strategyId: strategyId || null,
+        strategyIds,
       });
       await onCreated();
     } catch (createError) {
@@ -384,20 +394,25 @@ function CreateEducatorDialog({
             placeholder="Community or platform name"
           />
         </label>
-        <label className="field field-wide">
-          <span>Strategy</span>
-          <select
-            value={strategyId}
-            onChange={(event) => setStrategyId(event.target.value)}
-          >
-            <option value="">No linked strategy</option>
-            {strategies.map((strategy) => (
-              <option key={strategy.id} value={strategy.id}>
-                {strategy.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <fieldset className="account-strategy-picker">
+          <legend>Strategies</legend>
+          {strategies.length === 0 ? (
+            <p>Create a strategy first.</p>
+          ) : (
+            strategies.map((strategy) => (
+              <label key={strategy.id}>
+                <input
+                  type="checkbox"
+                  checked={strategyIds.includes(strategy.id)}
+                  onChange={(event) =>
+                    toggleStrategy(strategy.id, event.target.checked)
+                  }
+                />
+                <span>{strategy.name}</span>
+              </label>
+            ))
+          )}
+        </fieldset>
         <label className="field field-wide">
           <span>Notes</span>
           <textarea
@@ -423,12 +438,14 @@ function CreateStrategyDialog({
   const [entryRules, setEntryRules] = useState("");
   const [slTpRules, setSlTpRules] = useState("");
   const [invalidationRules, setInvalidationRules] = useState("");
+  const [currencyPairs, setCurrencyPairs] = useState<string[]>([]);
   const [keyLevels, setKeyLevels] = useState<string[]>([]);
   const [entryConditions, setEntryConditions] = useState<string[]>([]);
   const [exitConditions, setExitConditions] = useState<string[]>([]);
   const [keyLevelDraft, setKeyLevelDraft] = useState("");
   const [entryConditionDraft, setEntryConditionDraft] = useState("");
   const [exitConditionDraft, setExitConditionDraft] = useState("");
+  const [currencyPairDraft, setCurrencyPairDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -444,6 +461,7 @@ function CreateStrategyDialog({
         entryRules,
         slTpRules,
         invalidationRules,
+        currencyPairs: instrumentsWithDraft(currencyPairs, currencyPairDraft),
         keyLevels: strategyOptionsWithDraft(keyLevels, keyLevelDraft),
         entryConditions: strategyOptionsWithDraft(
           entryConditions,
@@ -526,6 +544,13 @@ function CreateStrategyDialog({
             placeholder="When this setup is no longer valid"
           />
         </label>
+
+        <StrategyInstrumentField
+          values={currencyPairs}
+          onChange={setCurrencyPairs}
+          draft={currencyPairDraft}
+          onDraftChange={setCurrencyPairDraft}
+        />
 
         <StrategyOptionListField
           label="Key levels"

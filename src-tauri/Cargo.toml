@@ -1,6 +1,6 @@
 [package]
 name = "trading-journal"
-version = "0.1.5"
+version = "0.1.6"
 description = "MethodMark desktop trading journal"
 authors = ["Mykey"]
 edition = "2021"

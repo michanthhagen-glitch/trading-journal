@@ -14,6 +14,7 @@ Owns preferences and data-management UI.
 - Settings uses a module-local sidebar; put broad groups like General, Data, or Appearance there.
 - The settings sidebar and active settings content own the workspace directly; avoid extra active-section title headers.
 - General app preferences are saved in local browser storage through `src/shared/appPreferences.ts`.
+- The global SL and TP input preference supports Price, Points, Pips, or Ticks while saved targets remain prices.
 - Data import/export belongs here unless a more specific module owns the workflow.
 - Data backup/export must include both the SQLite database and screenshot files so restored trades do not lose chart images.
 - Backup and restore are desktop-only, use a user-selected folder, and reload the app after a successful restore.

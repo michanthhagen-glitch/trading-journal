@@ -13,6 +13,7 @@ describe("strategy account setup query", () => {
         entry_rules TEXT NOT NULL,
         sl_tp_rules TEXT NOT NULL,
         invalidation_rules TEXT NOT NULL,
+        currency_pairs TEXT NOT NULL,
         key_levels TEXT NOT NULL,
         entry_conditions TEXT NOT NULL,
         exit_conditions TEXT NOT NULL,
@@ -21,6 +22,7 @@ describe("strategy account setup query", () => {
       );
       INSERT INTO strategies VALUES (
         'STR-1', 'Continuation', '', '', '', '',
+        '["EURUSD","GBPJPY"]',
         '["00","50"]', '["Doji"]', '["Target reached"]', '',
         '2026-07-20T20:00:00Z'
       );
@@ -32,6 +34,7 @@ describe("strategy account setup query", () => {
     >;
 
     expect(row).toMatchObject({
+      currency_pairs: '["EURUSD","GBPJPY"]',
       key_levels: '["00","50"]',
       entry_conditions: '["Doji"]',
       exit_conditions: '["Target reached"]',

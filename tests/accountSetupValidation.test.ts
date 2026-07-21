@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   validateEducatorSetup,
   validateRiskPlanSetup,
+  validateStrategySetup,
   validateTradingAccountSetup,
   type RiskPlanSetupInput,
 } from "../src/shared/db/accountSetupValidation";
@@ -27,13 +28,37 @@ const validRiskPlan: RiskPlanSetupInput = {
 };
 
 describe("account setup validation", () => {
+  it("accepts Forex, index, metal, energy, crypto, and broker symbols", () => {
+    expect(() =>
+      validateStrategySetup({
+        name: "Continuation",
+        strategy: "",
+        entryRules: "",
+        slTpRules: "",
+        invalidationRules: "",
+        currencyPairs: [
+          "EURUSD",
+          "GBPJPY",
+          "NAS100",
+          "XAUUSD",
+          "UKOIL",
+          "BTCUSD",
+          "NAS100.CASH",
+        ],
+        keyLevels: [],
+        entryConditions: [],
+        exitConditions: [],
+      }),
+    ).not.toThrow();
+  });
+
   it("requires an educator name", () => {
     expect(() =>
       validateEducatorSetup({
         name: "",
         community: "Alpha",
         notes: "",
-        strategyId: null,
+        strategyIds: [],
       }),
     ).toThrow("Educator name is required");
   });

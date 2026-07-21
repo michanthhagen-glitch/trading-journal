@@ -20,6 +20,10 @@ const preferences: AppPreferences = {
 };
 
 describe("app preferences", () => {
+  it("defaults protective targets to price input", () => {
+    expect(DEFAULT_APP_PREFERENCES.tradeTargetUnit).toBe("price");
+  });
+
   it("formats dates with the selected date format", () => {
     expect(formatDateValue("2026-07-05", preferences)).toBe("05-07-2026");
   });

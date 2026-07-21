@@ -1,7 +1,9 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { ModalShell } from "../../components/ModalShell";
 import { StrategyOptionListField } from "./StrategyOptionListField";
+import { StrategyInstrumentField } from "./StrategyInstrumentField";
 import { strategyOptionsWithDraft } from "./strategyOptions";
+import { instrumentsWithDraft } from "../../shared/tradeInstruments";
 import {
   updateEducator,
   updateRiskManagementPlan,
@@ -242,9 +244,17 @@ function EditEducatorDialog({
   const [name, setName] = useState(educator.name);
   const [community, setCommunity] = useState(educator.community);
   const [notes, setNotes] = useState(educator.notes);
-  const [strategyId, setStrategyId] = useState(educator.strategyId ?? "");
+  const [strategyIds, setStrategyIds] = useState(educator.strategyIds);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function toggleStrategy(strategyId: string, checked: boolean) {
+    setStrategyIds((current) =>
+      checked
+        ? Array.from(new Set([...current, strategyId]))
+        : current.filter((id) => id !== strategyId),
+    );
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -255,7 +265,7 @@ function EditEducatorDialog({
         name,
         community,
         notes,
-        strategyId: strategyId || null,
+        strategyIds,
       });
       await onSaved();
     } catch (saveError) {
@@ -296,20 +306,25 @@ function EditEducatorDialog({
           onChange={setCommunity}
           required={false}
         />
-        <label className="field field-wide">
-          <span>Strategy</span>
-          <select
-            value={strategyId}
-            onChange={(event) => setStrategyId(event.target.value)}
-          >
-            <option value="">No linked strategy</option>
-            {strategies.map((strategy) => (
-              <option key={strategy.id} value={strategy.id}>
-                {strategy.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <fieldset className="account-strategy-picker">
+          <legend>Strategies</legend>
+          {strategies.length === 0 ? (
+            <p>Create a strategy first.</p>
+          ) : (
+            strategies.map((strategy) => (
+              <label key={strategy.id}>
+                <input
+                  type="checkbox"
+                  checked={strategyIds.includes(strategy.id)}
+                  onChange={(event) =>
+                    toggleStrategy(strategy.id, event.target.checked)
+                  }
+                />
+                <span>{strategy.name}</span>
+              </label>
+            ))
+          )}
+        </fieldset>
         <TextArea label="Notes" value={notes} onChange={setNotes} />
       </form>
     </EditorShell>
@@ -328,6 +343,7 @@ function EditStrategyDialog({
   const [invalidationRules, setInvalidationRules] = useState(
     strategy.invalidationRules,
   );
+  const [currencyPairs, setCurrencyPairs] = useState(strategy.currencyPairs);
   const [keyLevels, setKeyLevels] = useState(strategy.keyLevels);
   const [entryConditions, setEntryConditions] = useState(
     strategy.entryConditions,
@@ -336,6 +352,7 @@ function EditStrategyDialog({
   const [keyLevelDraft, setKeyLevelDraft] = useState("");
   const [entryConditionDraft, setEntryConditionDraft] = useState("");
   const [exitConditionDraft, setExitConditionDraft] = useState("");
+  const [currencyPairDraft, setCurrencyPairDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -350,6 +367,7 @@ function EditStrategyDialog({
         entryRules,
         slTpRules,
         invalidationRules,
+        currencyPairs: instrumentsWithDraft(currencyPairs, currencyPairDraft),
         keyLevels: strategyOptionsWithDraft(keyLevels, keyLevelDraft),
         entryConditions: strategyOptionsWithDraft(
           entryConditions,
@@ -411,6 +429,12 @@ function EditStrategyDialog({
           label="Invalidation rules"
           value={invalidationRules}
           onChange={setInvalidationRules}
+        />
+        <StrategyInstrumentField
+          values={currencyPairs}
+          onChange={setCurrencyPairs}
+          draft={currencyPairDraft}
+          onDraftChange={setCurrencyPairDraft}
         />
         <StrategyOptionListField
           label="Key levels"

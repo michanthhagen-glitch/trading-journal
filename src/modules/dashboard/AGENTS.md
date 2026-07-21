@@ -11,7 +11,7 @@ Owns the compact account control room: total/month/week summaries, risk/goal rea
 ## Local Contracts
 
 - Dashboard metrics read selected-account trades through shared data helpers.
-- Trade ranking labels use shared automatic trade names; pair remains an instrument grouping, not the trade name.
+- Trade ranking labels use shared automatic trade names; the instrument remains a statistics grouping, not the trade name.
 - Balance and growth are derived from the selected account starting balance plus closed/open trade P&L.
 - The top dashboard area should show Total, Current Month, and Current Week as compact side-by-side summary cards when width allows.
 - Top summary cards may use roughly 35% of the visible workspace height when the extra room improves readability.
@@ -22,13 +22,13 @@ Owns the compact account control room: total/month/week summaries, risk/goal rea
 - Dashboard detail content belongs in tabs below the summary bands.
 - Lower dashboard detail uses a responsive desktop layout: daily-balance line graph on the left at about one-third width, top winning/losing trade/day/week/month rankings on the right at about two-thirds width.
 - The default dashboard should keep the visible top gap above the summary cards and bottom gap below the lower workspace even.
-- The Statistics tab groups all closed trades by day, session, time of day, direction, currency pair, and strategy or educator; six cards should sit as three columns by two rows on desktop.
+- The Statistics tab groups all closed trades by day, session, time of day, direction, instrument, and strategy or educator; six cards should sit as three columns by two rows on desktop.
 - Statistics cards compare best/worst win rate where useful; Direction compares Long and Short directly, while Strategy can stay as a simple top-result card to avoid cramped names.
 - Statistics detail popups use Table and Chart tabs; Day detail must always show Monday through Sunday, including days with zero trades.
 - Direction detail must always show Long and Short rows.
 - Session detail must always show Tokyo, Tokyo-London, London, London/New York, New York, and New York-Tokyo buckets.
 - Time detail must always show 15-minute buckets from `00:00-00:15` through `23:45-00:00`.
-- Currency pair detail grows automatically from pairs used on trades.
+- Instrument detail grows automatically from instruments used on trades.
 - Strategy detail must include every created strategy, with unused strategies shown as zero-trade rows.
 - System Account source statistics are labeled Educator and include every created educator.
 - Backtesting accounts replace balance-period summaries with testing metrics: sample size, sessions, win rate, total R, average RR, and maximum loss streak.

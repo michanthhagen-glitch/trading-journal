@@ -17,6 +17,7 @@ import {
   CURRENCY_DISPLAY_OPTIONS,
   DATE_FORMAT_OPTIONS,
   NUMBER_FORMAT_OPTIONS,
+  TRADE_TARGET_UNIT_OPTIONS,
   TIME_FORMAT_OPTIONS,
   TIMEZONE_OPTIONS,
   WEEK_START_OPTIONS,
@@ -28,6 +29,7 @@ import {
   type NumberFormatPreference,
   type TimeFormatPreference,
   type TimezonePreference,
+  type TradeTargetUnitPreference,
   type WeekStartPreference,
 } from "../../shared/appPreferences";
 
@@ -67,6 +69,10 @@ export function SettingsModule({
 
   function updateCurrencyDisplay(currencyDisplay: CurrencyDisplayPreference) {
     onAppPreferencesChanged({ ...appPreferences, currencyDisplay });
+  }
+
+  function updateTradeTargetUnit(tradeTargetUnit: TradeTargetUnitPreference) {
+    onAppPreferencesChanged({ ...appPreferences, tradeTargetUnit });
   }
 
   function updateConfirmBeforeDelete(confirmBeforeDelete: boolean) {
@@ -311,6 +317,27 @@ export function SettingsModule({
                         </option>
                       ))}
                     </select>
+                  </label>
+
+                  <label className="field">
+                    <span>SL and TP input</span>
+                    <select
+                      value={appPreferences.tradeTargetUnit}
+                      onChange={(event) =>
+                        updateTradeTargetUnit(
+                          event.target.value as TradeTargetUnitPreference,
+                        )
+                      }
+                    >
+                      {TRADE_TARGET_UNIT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <small>
+                      Entry and exit stay as prices. SL and TP show every unit.
+                    </small>
                   </label>
 
                   <label className="settings-check-field">

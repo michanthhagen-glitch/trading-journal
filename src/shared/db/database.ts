@@ -3,6 +3,7 @@
 // layout work stays fast without opening the desktop shell.
 
 import Database from "@tauri-apps/plugin-sql";
+import { normalizeInstrumentSymbol } from "../tradeInstruments";
 import { LIST_ACCOUNT_SETUP_STRATEGIES_SQL } from "./strategyQueries";
 import {
   validateEducatorSetup,
@@ -140,6 +141,7 @@ export type Strategy = {
   entryRules: string;
   slTpRules: string;
   invalidationRules: string;
+  currencyPairs: string[];
   keyLevels: string[];
   entryConditions: string[];
   exitConditions: string[];
@@ -152,7 +154,7 @@ export type Educator = {
   name: string;
   community: string;
   notes: string;
-  strategyId: string | null;
+  strategyIds: string[];
   created_at: string;
 };
 
@@ -200,6 +202,7 @@ type StrategyRow = {
   entry_rules: string;
   sl_tp_rules: string;
   invalidation_rules: string;
+  currency_pairs: string;
   key_levels: string;
   entry_conditions: string;
   exit_conditions: string;
@@ -259,6 +262,11 @@ type AccountStrategyRow = {
 type AccountEducatorRow = {
   account_id: string;
   educator_id: string;
+};
+
+type EducatorStrategyRow = {
+  educator_id: string;
+  strategy_id: string;
 };
 
 export type ScreenshotRow = {
@@ -660,6 +668,7 @@ const SEED_STRATEGIES: Strategy[] = [
     entryRules: "Wait for setup confirmation before entry.",
     slTpRules: "Place stop past invalidation and target at least 2R.",
     invalidationRules: "Skip when structure no longer supports the idea.",
+    currencyPairs: ["EURUSD", "GBPUSD", "USDJPY"],
     keyLevels: ["Previous day high", "Previous day low"],
     entryConditions: ["Structure break", "Retest confirmation"],
     exitConditions: ["Target reached", "Structure invalidated"],
@@ -771,6 +780,7 @@ function rowToStrategy(row: StrategyRow): Strategy {
     entryRules: row.entry_rules,
     slTpRules: row.sl_tp_rules,
     invalidationRules: row.invalidation_rules,
+    currencyPairs: stringArrayFromJson(row.currency_pairs ?? "[]"),
     keyLevels: stringArrayFromJson(row.key_levels ?? "[]"),
     entryConditions: stringArrayFromJson(row.entry_conditions ?? "[]"),
     exitConditions: stringArrayFromJson(row.exit_conditions ?? "[]"),
@@ -779,13 +789,22 @@ function rowToStrategy(row: StrategyRow): Strategy {
   };
 }
 
-function rowToEducator(row: EducatorRow): Educator {
+function rowToEducator(
+  row: EducatorRow,
+  linkedStrategyIds: string[],
+): Educator {
+  const strategyIds = Array.from(
+    new Set([
+      ...linkedStrategyIds,
+      ...(row.strategy_id ? [row.strategy_id] : []),
+    ]),
+  );
   return {
     id: row.id,
     name: row.name,
     community: row.community,
     notes: row.notes,
-    strategyId: row.strategy_id,
+    strategyIds,
     created_at: row.created_at,
   };
 }
@@ -870,6 +889,9 @@ export async function listAccountSetup(): Promise<{
   const educatorLinks = (await db.select(
     "SELECT account_id, educator_id FROM account_educators",
   )) as AccountEducatorRow[];
+  const educatorStrategyLinks = (await db.select(
+    "SELECT educator_id, strategy_id FROM educator_strategies",
+  )) as EducatorStrategyRow[];
 
   const strategiesByAccount = new Map<string, string[]>();
   for (const link of links) {
@@ -883,6 +905,12 @@ export async function listAccountSetup(): Promise<{
     ids.push(link.educator_id);
     educatorsByAccount.set(link.account_id, ids);
   }
+  const strategiesByEducator = new Map<string, string[]>();
+  for (const link of educatorStrategyLinks) {
+    const ids = strategiesByEducator.get(link.educator_id) ?? [];
+    ids.push(link.strategy_id);
+    strategiesByEducator.set(link.educator_id, ids);
+  }
 
   return {
     accounts: accountRows.map((row) =>
@@ -893,7 +921,9 @@ export async function listAccountSetup(): Promise<{
       ),
     ),
     strategies: strategyRows.map(rowToStrategy),
-    educators: educatorRows.map(rowToEducator),
+    educators: educatorRows.map((row) =>
+      rowToEducator(row, strategiesByEducator.get(row.id) ?? []),
+    ),
     riskPlans: riskRows.map(rowToRiskPlan),
   };
 }
@@ -911,6 +941,11 @@ export async function createStrategy(
     entryRules: input.entryRules.trim(),
     slTpRules: input.slTpRules.trim(),
     invalidationRules: input.invalidationRules.trim(),
+    currencyPairs: Array.from(
+      new Set(
+        input.currencyPairs.map(normalizeInstrumentSymbol).filter(Boolean),
+      ),
+    ),
     keyLevels: input.keyLevels.map((value) => value.trim()).filter(Boolean),
     entryConditions: input.entryConditions
       .map((value) => value.trim())
@@ -931,8 +966,8 @@ export async function createStrategy(
   await db.execute(
     `INSERT INTO strategies
        (id, name, strategy, entry_rules, sl_tp_rules, invalidation_rules,
-        key_levels, entry_conditions, exit_conditions, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        currency_pairs, key_levels, entry_conditions, exit_conditions, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       row.id,
       row.name,
@@ -940,6 +975,7 @@ export async function createStrategy(
       row.entryRules,
       row.slTpRules,
       row.invalidationRules,
+      JSON.stringify(row.currencyPairs),
       JSON.stringify(row.keyLevels),
       JSON.stringify(row.entryConditions),
       JSON.stringify(row.exitConditions),
@@ -958,7 +994,7 @@ export async function createEducator(
     name: input.name.trim(),
     community: input.community.trim(),
     notes: input.notes.trim(),
-    strategyId: input.strategyId || null,
+    strategyIds: Array.from(new Set(input.strategyIds.filter(Boolean))),
     created_at: new Date().toISOString(),
   };
 
@@ -971,8 +1007,14 @@ export async function createEducator(
   await db.execute(
     `INSERT INTO educators (id, name, community, notes, strategy_id)
      VALUES ($1, $2, $3, $4, $5)`,
-    [row.id, row.name, row.community, row.notes, row.strategyId],
+    [row.id, row.name, row.community, row.notes, row.strategyIds[0] ?? null],
   );
+  for (const strategyId of row.strategyIds) {
+    await db.execute(
+      "INSERT INTO educator_strategies (educator_id, strategy_id) VALUES ($1, $2)",
+      [row.id, strategyId],
+    );
+  }
   return row;
 }
 
@@ -1147,6 +1189,11 @@ export async function updateStrategy(
     entryRules: input.entryRules.trim(),
     slTpRules: input.slTpRules.trim(),
     invalidationRules: input.invalidationRules.trim(),
+    currencyPairs: Array.from(
+      new Set(
+        input.currencyPairs.map(normalizeInstrumentSymbol).filter(Boolean),
+      ),
+    ),
     keyLevels: input.keyLevels.map((value) => value.trim()).filter(Boolean),
     entryConditions: input.entryConditions
       .map((value) => value.trim())
@@ -1172,18 +1219,20 @@ export async function updateStrategy(
             entry_rules = $3,
             sl_tp_rules = $4,
             invalidation_rules = $5,
-            key_levels = $6,
-            entry_conditions = $7,
-            exit_conditions = $8,
-            notes = $9,
+            currency_pairs = $6,
+            key_levels = $7,
+            entry_conditions = $8,
+            exit_conditions = $9,
+            notes = $10,
             updated_at = datetime('now')
-      WHERE id = $10`,
+      WHERE id = $11`,
     [
       row.name,
       row.strategy,
       row.entryRules,
       row.slTpRules,
       row.invalidationRules,
+      JSON.stringify(row.currencyPairs),
       JSON.stringify(row.keyLevels),
       JSON.stringify(row.entryConditions),
       JSON.stringify(row.exitConditions),
@@ -1205,6 +1254,14 @@ export async function deleteStrategy(id: string): Promise<void> {
         `Remove this strategy from ${linkedAccount.name} before deleting it.`,
       );
     }
+    const linkedEducator = Array.from(memoryEducators.values()).find(
+      (educator) => educator.strategyIds.includes(id),
+    );
+    if (linkedEducator) {
+      throw new Error(
+        `Remove this strategy from ${linkedEducator.name} before deleting it.`,
+      );
+    }
     memoryStrategies.delete(id);
     return;
   }
@@ -1223,6 +1280,19 @@ export async function deleteStrategy(id: string): Promise<void> {
       `Remove this strategy from ${links[0].name} before deleting it.`,
     );
   }
+  const educatorLinks = (await db.select(
+    `SELECT e.name
+       FROM educator_strategies link
+       JOIN educators e ON e.id = link.educator_id
+      WHERE link.strategy_id = $1
+      LIMIT 1`,
+    [id],
+  )) as { name: string }[];
+  if (educatorLinks[0]) {
+    throw new Error(
+      `Remove this strategy from ${educatorLinks[0].name} before deleting it.`,
+    );
+  }
   await db.execute("DELETE FROM strategies WHERE id = $1", [id]);
 }
 
@@ -1237,7 +1307,7 @@ export async function updateEducator(
     name: input.name.trim(),
     community: input.community.trim(),
     notes: input.notes.trim(),
-    strategyId: input.strategyId || null,
+    strategyIds: Array.from(new Set(input.strategyIds.filter(Boolean))),
     created_at: current?.created_at ?? new Date().toISOString(),
   };
 
@@ -1256,9 +1326,18 @@ export async function updateEducator(
             strategy_id = $4,
             updated_at = datetime('now')
       WHERE id = $5`,
-    [row.name, row.community, row.notes, row.strategyId, id],
+    [row.name, row.community, row.notes, row.strategyIds[0] ?? null, id],
   );
   if (result.rowsAffected === 0) throw new Error("Educator was not found.");
+  await db.execute("DELETE FROM educator_strategies WHERE educator_id = $1", [
+    id,
+  ]);
+  for (const strategyId of row.strategyIds) {
+    await db.execute(
+      "INSERT INTO educator_strategies (educator_id, strategy_id) VALUES ($1, $2)",
+      [id, strategyId],
+    );
+  }
   return row;
 }
 

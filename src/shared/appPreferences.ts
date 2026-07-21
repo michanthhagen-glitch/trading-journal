@@ -1,3 +1,5 @@
+import type { TradeTargetUnit } from "./tradeInstruments";
+
 export type DateFormatPreference =
   | "dd-mm-yyyy"
   | "dd-mon-yyyy"
@@ -9,6 +11,7 @@ export type TimezonePreference = "local" | "utc";
 export type WeekStartPreference = "monday" | "sunday";
 export type NumberFormatPreference = "comma-dot" | "dot-comma";
 export type CurrencyDisplayPreference = "symbol" | "code";
+export type TradeTargetUnitPreference = TradeTargetUnit;
 
 export type AppPreferences = {
   dateFormat: DateFormatPreference;
@@ -17,6 +20,7 @@ export type AppPreferences = {
   weekStartDay: WeekStartPreference;
   numberFormat: NumberFormatPreference;
   currencyDisplay: CurrencyDisplayPreference;
+  tradeTargetUnit: TradeTargetUnitPreference;
   confirmBeforeDelete: boolean;
 };
 
@@ -70,6 +74,16 @@ export const CURRENCY_DISPLAY_OPTIONS: {
   { label: "100.00 USD", value: "code" },
 ];
 
+export const TRADE_TARGET_UNIT_OPTIONS: {
+  label: string;
+  value: TradeTargetUnitPreference;
+}[] = [
+  { label: "Price", value: "price" },
+  { label: "Points", value: "points" },
+  { label: "Pips", value: "pips" },
+  { label: "Ticks", value: "ticks" },
+];
+
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   dateFormat: "yyyy-mm-dd",
   timeFormat: "24h",
@@ -77,6 +91,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   weekStartDay: "monday",
   numberFormat: "comma-dot",
   currencyDisplay: "symbol",
+  tradeTargetUnit: "price",
   confirmBeforeDelete: true,
 };
 
@@ -145,6 +160,12 @@ function isCurrencyDisplayPreference(
   return CURRENCY_DISPLAY_OPTIONS.some((option) => option.value === value);
 }
 
+function isTradeTargetUnitPreference(
+  value: unknown,
+): value is TradeTargetUnitPreference {
+  return TRADE_TARGET_UNIT_OPTIONS.some((option) => option.value === value);
+}
+
 function normalizePreferences(value: unknown): AppPreferences {
   if (!value || typeof value !== "object") {
     return DEFAULT_APP_PREFERENCES;
@@ -170,6 +191,9 @@ function normalizePreferences(value: unknown): AppPreferences {
     currencyDisplay: isCurrencyDisplayPreference(candidate.currencyDisplay)
       ? candidate.currencyDisplay
       : DEFAULT_APP_PREFERENCES.currencyDisplay,
+    tradeTargetUnit: isTradeTargetUnitPreference(candidate.tradeTargetUnit)
+      ? candidate.tradeTargetUnit
+      : DEFAULT_APP_PREFERENCES.tradeTargetUnit,
     confirmBeforeDelete:
       typeof candidate.confirmBeforeDelete === "boolean"
         ? candidate.confirmBeforeDelete

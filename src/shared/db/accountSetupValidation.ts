@@ -1,3 +1,5 @@
+import { isInstrumentSymbol } from "../tradeInstruments";
+
 export type AccountTypeValue = "live" | "demo" | "backtesting" | "system";
 
 export type StrategySetupInput = {
@@ -6,6 +8,7 @@ export type StrategySetupInput = {
   entryRules: string;
   slTpRules: string;
   invalidationRules: string;
+  currencyPairs: string[];
   keyLevels: string[];
   entryConditions: string[];
   exitConditions: string[];
@@ -15,7 +18,7 @@ export type EducatorSetupInput = {
   name: string;
   community: string;
   notes: string;
-  strategyId: string | null;
+  strategyIds: string[];
 };
 
 export type RiskPlanSetupInput = {
@@ -85,6 +88,11 @@ function validateTripleRange(
 
 export function validateStrategySetup(input: StrategySetupInput) {
   if (!input.name.trim()) throw new Error("Strategy name is required.");
+  if (input.currencyPairs.some((symbol) => !isInstrumentSymbol(symbol))) {
+    throw new Error(
+      "Instrument symbols must use 3 to 20 letters or numbers, for example EURUSD or NAS100.",
+    );
+  }
 }
 
 export function validateEducatorSetup(input: EducatorSetupInput) {

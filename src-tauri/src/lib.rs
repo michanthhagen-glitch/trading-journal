@@ -526,6 +526,18 @@ fn sql_migrations() -> Vec<tauri_plugin_sql::Migration> {
             sql: include_str!("../migrations/0011_backtest_workflow.sql"),
             kind: tauri_plugin_sql::MigrationKind::Up,
         },
+        tauri_plugin_sql::Migration {
+            version: 12,
+            description: "add_strategy_currency_pairs",
+            sql: include_str!("../migrations/0012_strategy_currency_pairs.sql"),
+            kind: tauri_plugin_sql::MigrationKind::Up,
+        },
+        tauri_plugin_sql::Migration {
+            version: 13,
+            description: "link_educators_to_multiple_strategies",
+            sql: include_str!("../migrations/0013_educator_strategies.sql"),
+            kind: tauri_plugin_sql::MigrationKind::Up,
+        },
     ]
 }
 

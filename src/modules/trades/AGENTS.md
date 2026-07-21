@@ -25,12 +25,14 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - New trade workflow can collect draft screenshots and attaches them after the trade is saved.
 - New trades save under the selected sidebar account.
 - Trade save/delete/exit changes notify the shell so sidebar account plan numbers refresh.
-- Trade display names are automatic per selected account and day: `Trade 1`, `Trade 2`, etc.; the instrument/pair is not the trade name.
+- Trade display names are automatic per selected account and day: `Trade 1`, `Trade 2`, etc.; the instrument is not the trade name.
 - New trade strategy choices come only from the selected account's linked strategies.
 - New System Account trades use linked educators in the same saved trade-source field and label it Educator.
-- System Account trades use an Entry + Exit workflow only. Date, pair, and educator belong to the Entry card; pre-trade planning, risk fields, confidence, and feelings are omitted.
+- System Account trades use an Entry + Exit workflow only. Date, instrument, and educator belong to the Entry card; pre-trade planning, risk fields, confidence, and feelings are omitted.
 - System Account screenshots and notes stay attached to their Entry or Exit stage, and saved trade details and recap context omit the Pre-trade card.
-- Backtesting starts a session with strategy, pair, and date of backtesting, then keeps those values while rapidly saving trades.
+- Backtesting starts a session with strategy, instrument, and date of backtesting, then keeps those values while rapidly saving trades.
+- Normal and Backtesting instrument selectors use the instruments saved on the linked Strategy and group them by market.
+- System Account instrument and condition selectors combine the options from all Strategies linked to the selected educator.
 - Backtesting trade logging includes historical date/time, buy/sell, entry, SL, flexible TP/result rows, calculated RR, strategy selectors, and before/after screenshots.
 - Backtesting trades do not raise missing-recap or open-trade reminders.
 - Strategy key-level, entry-condition, and exit-condition choices are available in normal, System Account, and Backtesting trade workflows.

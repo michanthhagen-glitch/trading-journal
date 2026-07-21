@@ -14,8 +14,9 @@ Owns modal creation flows for accounts, strategies, educators, and risk manageme
 - Risk plan creation keeps Risk and Goal tabs visible inside the modal.
 - Account creation must respect account type rules from the Account module.
 - System Account creation shows educator selection instead of strategy selection.
-- Educator creation can link the educator to one existing strategy.
+- Educator creation can link the educator to multiple existing strategies.
 - Strategy creation supports add/remove lists for key levels, entry conditions, and exit conditions.
+- Strategy creation selects trading instruments from the grouped library and can add custom broker symbols.
 - Dialog save handlers call the typed shared DB helpers passed from the account flow.
 
 ## Work Guidance

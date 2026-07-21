@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ModalShell } from "../../../components/ModalShell";
 import type { AppPreferences } from "../../../shared/appPreferences";
 import {
@@ -12,11 +12,14 @@ import {
   type TradingAccount,
 } from "../../../shared/db/database";
 import { deleteScreenshotFile } from "../../../shared/db/storage";
+import { calculateTradeTarget } from "../../../shared/tradeInstruments";
 import {
   DraftScreenshotGallery,
   DraftScreenshotImportButton,
   type DraftScreenshot,
 } from "./ScreenshotTools";
+import { TradeTargetField } from "./TradeTargetField";
+import { StrategyInstrumentSelect } from "./StrategyInstrumentSelect";
 
 type TargetDraft = {
   id: string;
@@ -77,16 +80,18 @@ function createLoggerState(tradeDate = todayInputValue()): LoggerState {
   };
 }
 
-function targetRr(entry: string, stopLoss: string, takeProfit: string) {
+function targetRr(
+  entry: string,
+  stopLoss: number | null,
+  takeProfit: number | null,
+) {
   const entryValue = parseNumber(entry);
-  const stopValue = parseNumber(stopLoss);
-  const targetValue = parseNumber(takeProfit);
-  if (entryValue === null || stopValue === null || targetValue === null) {
+  if (entryValue === null || stopLoss === null || takeProfit === null) {
     return null;
   }
-  const risk = Math.abs(entryValue - stopValue);
+  const risk = Math.abs(entryValue - stopLoss);
   if (risk === 0) return null;
-  return Math.abs(targetValue - entryValue) / risk;
+  return Math.abs(takeProfit - entryValue) / risk;
 }
 
 export function BacktestWorkflow({
@@ -104,7 +109,7 @@ export function BacktestWorkflow({
 }) {
   const [phase, setPhase] = useState<"setup" | "logging">("setup");
   const [strategyId, setStrategyId] = useState(strategies[0]?.id ?? "");
-  const [pair, setPair] = useState("");
+  const [pair, setPair] = useState(strategies[0]?.currencyPairs[0] ?? "");
   const [testedAt, setTestedAt] = useState(todayInputValue());
   const [activeSessionId] = useState(sessionId);
   const [logger, setLogger] = useState<LoggerState>(createLoggerState);
@@ -122,6 +127,13 @@ export function BacktestWorkflow({
     () => strategies.find((item) => item.id === strategyId) ?? null,
     [strategies, strategyId],
   );
+
+  useEffect(() => {
+    const pairs = strategy?.currencyPairs ?? [];
+    setPair((current) =>
+      pairs.includes(current) ? current : (pairs[0] ?? ""),
+    );
+  }, [strategy]);
 
   function update<K extends keyof LoggerState>(key: K, value: LoggerState[K]) {
     setLogger((current) => ({ ...current, [key]: value }));
@@ -191,7 +203,7 @@ export function BacktestWorkflow({
         return;
       }
       if (!pair.trim()) {
-        setError("Pair is required.");
+        setError("Instrument is required.");
         return;
       }
       if (!testedAt) {
@@ -203,16 +215,33 @@ export function BacktestWorkflow({
     }
 
     const entry = parseNumber(logger.entry);
-    const stopLoss = parseNumber(logger.stopLoss);
+    const stopLossCalculation = calculateTradeTarget({
+      instrument: pair,
+      entryPrice: logger.entry,
+      entryPriceInput: logger.entry,
+      direction: logger.direction,
+      kind: "stop-loss",
+      unit: appPreferences.tradeTargetUnit,
+      input: logger.stopLoss,
+    });
     const targets: BacktestTarget[] = logger.targets.map((target) => ({
-      takeProfit: parseNumber(target.takeProfit),
+      takeProfit:
+        calculateTradeTarget({
+          instrument: pair,
+          entryPrice: logger.entry,
+          entryPriceInput: logger.entry,
+          direction: logger.direction,
+          kind: "take-profit",
+          unit: appPreferences.tradeTargetUnit,
+          input: target.takeProfit,
+        })?.price ?? null,
       result: target.result,
     }));
     if (!logger.tradeDate || !logger.time) {
       setError("Trade date and time are required.");
       return;
     }
-    if (entry === null || stopLoss === null) {
+    if (entry === null || stopLossCalculation === null) {
       setError("Entry and stop loss are required.");
       return;
     }
@@ -241,7 +270,7 @@ export function BacktestWorkflow({
         time: logger.time,
         price: entry,
         lotSize: null,
-        stopLoss,
+        stopLoss: stopLossCalculation.price,
         takeProfit: firstTarget?.takeProfit ?? null,
         notes: "",
         confidence: null,
@@ -345,11 +374,12 @@ export function BacktestWorkflow({
             </select>
           </label>
           <label className="field">
-            <span>Pair</span>
-            <input
+            <span>Instrument</span>
+            <StrategyInstrumentSelect
               value={pair}
-              onChange={(event) => setPair(event.target.value)}
-              placeholder="EURUSD"
+              onChange={setPair}
+              instruments={strategy?.currencyPairs ?? []}
+              emptyLabel="No instruments added to this strategy"
               required
             />
           </label>
@@ -414,16 +444,17 @@ export function BacktestWorkflow({
                   required
                 />
               </label>
-              <label className="field">
-                <span>Stop loss</span>
-                <input
-                  type="number"
-                  step="any"
-                  value={logger.stopLoss}
-                  onChange={(event) => update("stopLoss", event.target.value)}
-                  required
-                />
-              </label>
+              <TradeTargetField
+                label="Stop loss"
+                kind="stop-loss"
+                instrument={pair}
+                entryPrice={logger.entry}
+                direction={logger.direction}
+                unit={appPreferences.tradeTargetUnit}
+                value={logger.stopLoss}
+                onChange={(value) => update("stopLoss", value)}
+                required
+              />
               <TemplateSelect
                 label="Key level"
                 options={strategy?.keyLevels ?? []}
@@ -467,27 +498,42 @@ export function BacktestWorkflow({
             </header>
             <div className="backtest-target-list">
               {logger.targets.map((target, index) => {
-                const rr = targetRr(
-                  logger.entry,
-                  logger.stopLoss,
-                  target.takeProfit,
-                );
+                const stopLoss =
+                  calculateTradeTarget({
+                    instrument: pair,
+                    entryPrice: logger.entry,
+                    entryPriceInput: logger.entry,
+                    direction: logger.direction,
+                    kind: "stop-loss",
+                    unit: appPreferences.tradeTargetUnit,
+                    input: logger.stopLoss,
+                  })?.price ?? null;
+                const takeProfit =
+                  calculateTradeTarget({
+                    instrument: pair,
+                    entryPrice: logger.entry,
+                    entryPriceInput: logger.entry,
+                    direction: logger.direction,
+                    kind: "take-profit",
+                    unit: appPreferences.tradeTargetUnit,
+                    input: target.takeProfit,
+                  })?.price ?? null;
+                const rr = targetRr(logger.entry, stopLoss, takeProfit);
                 return (
                   <div className="backtest-target-row" key={target.id}>
-                    <label className="field">
-                      <span>TP {index + 1}</span>
-                      <input
-                        type="number"
-                        step="any"
-                        value={target.takeProfit}
-                        onChange={(event) =>
-                          updateTarget(target.id, {
-                            takeProfit: event.target.value,
-                          })
-                        }
-                        required
-                      />
-                    </label>
+                    <TradeTargetField
+                      label={`TP ${index + 1}`}
+                      kind="take-profit"
+                      instrument={pair}
+                      entryPrice={logger.entry}
+                      direction={logger.direction}
+                      unit={appPreferences.tradeTargetUnit}
+                      value={target.takeProfit}
+                      onChange={(value) =>
+                        updateTarget(target.id, { takeProfit: value })
+                      }
+                      required
+                    />
                     <div className="backtest-rr-value">
                       <span>RR</span>
                       <strong>{rr === null ? "—" : `${rr.toFixed(2)}R`}</strong>

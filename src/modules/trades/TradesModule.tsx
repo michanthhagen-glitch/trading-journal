@@ -36,6 +36,8 @@ import type { ModuleContext } from "../../app/types";
 import { PreTradeCard } from "./components/PreTradeCard";
 import { PreTradeForm } from "./components/PreTradeForm";
 import { BacktestWorkflow } from "./components/BacktestWorkflow";
+import { TradeTargetField } from "./components/TradeTargetField";
+import { StrategyInstrumentSelect } from "./components/StrategyInstrumentSelect";
 import {
   DraftScreenshotGallery,
   DraftScreenshotImportButton,
@@ -65,6 +67,10 @@ import {
 } from "../../shared/tradeNames";
 import { TRADE_RECAP_MISTAKE_GROUPS } from "./tradeRecapMistakes";
 import { TRADE_RECAP_POSITIVE_GROUPS } from "./tradeRecapPositives";
+import {
+  calculateTradeTarget,
+  tradeTargetInputFromPrice,
+} from "../../shared/tradeInstruments";
 
 type TradesView = "calendar" | "list";
 type TradeWorkspaceMode = "trade" | "recap";
@@ -84,6 +90,32 @@ const TRADE_RECAP_TABS: { id: TradeRecapTab; label: string }[] = [
 
 function tradeSourceLabel(account: TradingAccount | null) {
   return account?.accountType === "system" ? "Educator" : "Strategy";
+}
+
+function linkedStrategyTemplate(
+  strategyIds: string[],
+  strategies: Strategy[],
+): Strategy | null {
+  const linkedIds = new Set(strategyIds);
+  const linkedStrategies = strategies.filter((strategy) =>
+    linkedIds.has(strategy.id),
+  );
+  const first = linkedStrategies[0];
+  if (!first) return null;
+  if (linkedStrategies.length === 1) return first;
+
+  const uniqueValues = (pick: (strategy: Strategy) => string[]) =>
+    Array.from(new Set(linkedStrategies.flatMap(pick)));
+
+  return {
+    ...first,
+    id: linkedStrategies.map((strategy) => strategy.id).join("+"),
+    name: linkedStrategies.map((strategy) => strategy.name).join(", "),
+    currencyPairs: uniqueValues((strategy) => strategy.currencyPairs),
+    keyLevels: uniqueValues((strategy) => strategy.keyLevels),
+    entryConditions: uniqueValues((strategy) => strategy.entryConditions),
+    exitConditions: uniqueValues((strategy) => strategy.exitConditions),
+  };
 }
 
 const TRADE_RECAP_GRADES: TradeRecapInput["grade"][] = ["A", "B", "C", "D"];
@@ -546,8 +578,8 @@ export function TradesModule({
       const educator = educators.find(
         (item) => item.name === workspaceTrade.preTrade.strategy,
       );
-      return educator?.strategyId
-        ? (strategies.find((item) => item.id === educator.strategyId) ?? null)
+      return educator
+        ? linkedStrategyTemplate(educator.strategyIds, strategies)
         : null;
     }
     return (
@@ -2429,12 +2461,20 @@ function NewTradeWorkflow({
   const activeStrategy = useMemo(() => {
     if (isSystemAccount) {
       const educator = educators.find((item) => item.name === form.strategy);
-      return educator?.strategyId
-        ? (strategies.find((item) => item.id === educator.strategyId) ?? null)
+      return educator
+        ? linkedStrategyTemplate(educator.strategyIds, strategies)
         : null;
     }
     return strategies.find((item) => item.name === form.strategy) ?? null;
   }, [educators, form.strategy, isSystemAccount, strategies]);
+
+  useEffect(() => {
+    const pairs = activeStrategy?.currencyPairs ?? [];
+    setForm((current) => ({
+      ...current,
+      pair: pairs.includes(current.pair) ? current.pair : (pairs[0] ?? ""),
+    }));
+  }, [activeStrategy]);
 
   function update<K extends keyof NewTradeFormState>(
     key: K,
@@ -2497,11 +2537,40 @@ function NewTradeWorkflow({
       return;
     }
     if (!form.pair.trim()) {
-      setSaveError("Pair is required.");
+      setSaveError("Instrument is required.");
       return;
     }
     if (!form.strategy.trim()) {
       setSaveError(`${sourceLabel} is required.`);
+      return;
+    }
+    const stopLossCalculation = form.stopLoss.trim()
+      ? calculateTradeTarget({
+          instrument: form.pair,
+          entryPrice: form.entryPrice,
+          entryPriceInput: form.entryPrice,
+          direction: form.direction,
+          kind: "stop-loss",
+          unit: appPreferences.tradeTargetUnit,
+          input: form.stopLoss,
+        })
+      : null;
+    const takeProfitCalculation = form.takeProfit.trim()
+      ? calculateTradeTarget({
+          instrument: form.pair,
+          entryPrice: form.entryPrice,
+          entryPriceInput: form.entryPrice,
+          direction: form.direction,
+          kind: "take-profit",
+          unit: appPreferences.tradeTargetUnit,
+          input: form.takeProfit,
+        })
+      : null;
+    if (
+      (form.stopLoss.trim() && !stopLossCalculation) ||
+      (form.takeProfit.trim() && !takeProfitCalculation)
+    ) {
+      setSaveError("Enter a valid entry price to calculate SL and TP.");
       return;
     }
     const riskPercentValue = parseNumber(form.riskPercent);
@@ -2558,8 +2627,8 @@ function NewTradeWorkflow({
         time: form.entryTime || null,
         price: parseNumber(form.entryPrice),
         lotSize: parseNumber(form.lotSize),
-        stopLoss: parseNumber(form.stopLoss),
-        takeProfit: parseNumber(form.takeProfit),
+        stopLoss: stopLossCalculation?.price ?? null,
+        takeProfit: takeProfitCalculation?.price ?? null,
         notes: form.entryNotes.trim(),
         confidence: isSystemAccount || !hasEntryInput ? null : form.confidence,
       },
@@ -2652,12 +2721,12 @@ function NewTradeWorkflow({
                 />
               </label>
               <label className="field">
-                <span>Pair</span>
-                <input
-                  type="text"
-                  placeholder="EURUSD"
+                <span>Instrument</span>
+                <StrategyInstrumentSelect
                   value={form.pair}
-                  onChange={(event) => update("pair", event.target.value)}
+                  onChange={(value) => update("pair", value)}
+                  instruments={activeStrategy?.currencyPairs ?? []}
+                  emptyLabel="No instruments added to this strategy"
                   required
                 />
               </label>
@@ -2665,7 +2734,12 @@ function NewTradeWorkflow({
                 <span>{sourceLabel}</span>
                 <select
                   value={form.strategy}
-                  onChange={(event) => update("strategy", event.target.value)}
+                  onChange={(event) => {
+                    update("strategy", event.target.value);
+                    update("keyLevel", "");
+                    update("entryCondition", "");
+                    update("exitCondition", "");
+                  }}
                   disabled={tradeSources.length === 0}
                 >
                   {tradeSources.length === 0 ? (
@@ -2775,12 +2849,12 @@ function NewTradeWorkflow({
                   />
                 </label>
                 <label className="field">
-                  <span>Pair</span>
-                  <input
-                    type="text"
-                    placeholder="EURUSD"
+                  <span>Instrument</span>
+                  <StrategyInstrumentSelect
                     value={form.pair}
-                    onChange={(event) => update("pair", event.target.value)}
+                    onChange={(value) => update("pair", value)}
+                    instruments={activeStrategy?.currencyPairs ?? []}
+                    emptyLabel="No instruments added to linked strategy"
                     required
                   />
                 </label>
@@ -2788,7 +2862,12 @@ function NewTradeWorkflow({
                   <span>{sourceLabel}</span>
                   <select
                     value={form.strategy}
-                    onChange={(event) => update("strategy", event.target.value)}
+                    onChange={(event) => {
+                      update("strategy", event.target.value);
+                      update("keyLevel", "");
+                      update("entryCondition", "");
+                      update("exitCondition", "");
+                    }}
                     disabled={tradeSources.length === 0}
                   >
                     {tradeSources.length === 0 ? (
@@ -2856,24 +2935,26 @@ function NewTradeWorkflow({
                 onChange={(event) => update("lotSize", event.target.value)}
               />
             </label>
-            <label className="field">
-              <span>Stop loss</span>
-              <input
-                type="number"
-                step="any"
-                value={form.stopLoss}
-                onChange={(event) => update("stopLoss", event.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span>Take profit</span>
-              <input
-                type="number"
-                step="any"
-                value={form.takeProfit}
-                onChange={(event) => update("takeProfit", event.target.value)}
-              />
-            </label>
+            <TradeTargetField
+              label="Stop loss"
+              kind="stop-loss"
+              instrument={form.pair}
+              entryPrice={form.entryPrice}
+              direction={form.direction}
+              unit={appPreferences.tradeTargetUnit}
+              value={form.stopLoss}
+              onChange={(value) => update("stopLoss", value)}
+            />
+            <TradeTargetField
+              label="Take profit"
+              kind="take-profit"
+              instrument={form.pair}
+              entryPrice={form.entryPrice}
+              direction={form.direction}
+              unit={appPreferences.tradeTargetUnit}
+              value={form.takeProfit}
+              onChange={(value) => update("takeProfit", value)}
+            />
             <label className="field field-wide workflow-notes-field">
               <span>Entry notes</span>
               <textarea
@@ -3564,20 +3645,36 @@ function EntryForm({
   onClose,
   onSaved,
 }: EntryFormProps) {
-  const [form, setForm] = useState({
-    strategy: trade.preTrade.strategy,
-    keyLevel: trade.preTrade.keyLevel,
-    entryCondition: trade.preTrade.entryCondition,
-    direction: trade.direction,
-    time: trade.entry.time ?? currentTimeInputValue(),
-    price: trade.entry.price?.toString() ?? "",
-    lotSize: trade.entry.lotSize?.toString() ?? "",
-    stopLoss: trade.entry.stopLoss?.toString() ?? "",
-    takeProfit: trade.entry.takeProfit?.toString() ?? "",
-    notes: trade.entry.notes,
-    confidence: trade.entry.confidence ?? 5,
+  const [form, setForm] = useState(() => {
+    const price = trade.entry.price?.toString() ?? "";
+    return {
+      strategy: trade.preTrade.strategy,
+      keyLevel: trade.preTrade.keyLevel,
+      entryCondition: trade.preTrade.entryCondition,
+      direction: trade.direction,
+      time: trade.entry.time ?? currentTimeInputValue(),
+      price,
+      lotSize: trade.entry.lotSize?.toString() ?? "",
+      stopLoss: tradeTargetInputFromPrice({
+        instrument: trade.pair,
+        entryPrice: price,
+        entryPriceInput: price,
+        targetPrice: trade.entry.stopLoss,
+        unit: appPreferences.tradeTargetUnit,
+      }),
+      takeProfit: tradeTargetInputFromPrice({
+        instrument: trade.pair,
+        entryPrice: price,
+        entryPriceInput: price,
+        targetPrice: trade.entry.takeProfit,
+        unit: appPreferences.tradeTargetUnit,
+      }),
+      notes: trade.entry.notes,
+      confidence: trade.entry.confidence ?? 5,
+    };
   });
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   function update<K extends keyof typeof form>(
     key: K,
@@ -3588,12 +3685,42 @@ function EntryForm({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    const stopLossCalculation = form.stopLoss.trim()
+      ? calculateTradeTarget({
+          instrument: trade.pair,
+          entryPrice: form.price,
+          entryPriceInput: form.price,
+          direction: form.direction,
+          kind: "stop-loss",
+          unit: appPreferences.tradeTargetUnit,
+          input: form.stopLoss,
+        })
+      : null;
+    const takeProfitCalculation = form.takeProfit.trim()
+      ? calculateTradeTarget({
+          instrument: trade.pair,
+          entryPrice: form.price,
+          entryPriceInput: form.price,
+          direction: form.direction,
+          kind: "take-profit",
+          unit: appPreferences.tradeTargetUnit,
+          input: form.takeProfit,
+        })
+      : null;
+    if (
+      (form.stopLoss.trim() && !stopLossCalculation) ||
+      (form.takeProfit.trim() && !takeProfitCalculation)
+    ) {
+      setSaveError("Enter a valid entry price to calculate SL and TP.");
+      return;
+    }
+    setSaveError(null);
     const entry: EntryData = {
       time: form.time || null,
       price: parseNumber(form.price),
       lotSize: parseNumber(form.lotSize),
-      stopLoss: parseNumber(form.stopLoss),
-      takeProfit: parseNumber(form.takeProfit),
+      stopLoss: stopLossCalculation?.price ?? null,
+      takeProfit: takeProfitCalculation?.price ?? null,
       notes: form.notes.trim(),
       confidence: isSystemAccount ? null : form.confidence,
     };
@@ -3631,6 +3758,11 @@ function EntryForm({
       title={`Entry - ${tradeName}`}
       footer={
         <>
+          {saveError ? (
+            <p className="modal-save-error" role="alert">
+              {saveError}
+            </p>
+          ) : null}
           <button
             type="button"
             className="ghost-button"
@@ -3734,24 +3866,26 @@ function EntryForm({
               onChange={(event) => update("lotSize", event.target.value)}
             />
           </label>
-          <label className="field">
-            <span>Stop loss</span>
-            <input
-              type="number"
-              step="any"
-              value={form.stopLoss}
-              onChange={(event) => update("stopLoss", event.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>Take profit</span>
-            <input
-              type="number"
-              step="any"
-              value={form.takeProfit}
-              onChange={(event) => update("takeProfit", event.target.value)}
-            />
-          </label>
+          <TradeTargetField
+            label="Stop loss"
+            kind="stop-loss"
+            instrument={trade.pair}
+            entryPrice={form.price}
+            direction={form.direction}
+            unit={appPreferences.tradeTargetUnit}
+            value={form.stopLoss}
+            onChange={(value) => update("stopLoss", value)}
+          />
+          <TradeTargetField
+            label="Take profit"
+            kind="take-profit"
+            instrument={trade.pair}
+            entryPrice={form.price}
+            direction={form.direction}
+            unit={appPreferences.tradeTargetUnit}
+            value={form.takeProfit}
+            onChange={(value) => update("takeProfit", value)}
+          />
           <label className="field field-wide">
             <span>Entry notes</span>
             <textarea
