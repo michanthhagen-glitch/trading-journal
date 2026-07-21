@@ -19,6 +19,7 @@ Owns SQLite schema migration files for the desktop database.
 - `0011_backtest_workflow.sql`: reusable strategy selectors plus Backtesting session, condition, and multi-target trade fields.
 - `0012_strategy_currency_pairs.sql`: grouped trading instruments stored on Strategies.
 - `0013_educator_strategies.sql`: multi-strategy links for educators.
+- `0014_strategy_target_plans.sql`: Strategy target behavior and multiple planned take profits.
 
 ## Local Contracts
 

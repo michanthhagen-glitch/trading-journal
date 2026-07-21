@@ -35,6 +35,7 @@ function trade(input: {
       lotSize: null,
       stopLoss: null,
       takeProfit: null,
+      takeProfits: [],
       notes: "",
       confidence: null,
     },

@@ -14,8 +14,10 @@ import {
   type EducatorSetupInput,
   type RiskPlanSetupInput,
   type StrategySetupInput,
+  type StrategyTargetMode,
   type TradingAccountSetupInput,
 } from "./accountSetupValidation";
+import type { TradeTargetUnit } from "../tradeInstruments";
 
 const DB_URL =
   import.meta.env.VITE_TRADING_JOURNAL_DB_URL ?? "sqlite:trading-journal.db";
@@ -62,6 +64,7 @@ export type TradeRow = {
   backtest_session_id: string | null;
   backtest_tested_at: string | null;
   backtest_targets: string;
+  take_profit_targets: string;
   created_at: string;
   updated_at: string;
 };
@@ -131,6 +134,7 @@ export type {
   EducatorSetupInput,
   RiskPlanSetupInput,
   StrategySetupInput,
+  StrategyTargetMode,
   TradingAccountSetupInput,
 };
 
@@ -145,6 +149,11 @@ export type Strategy = {
   keyLevels: string[];
   entryConditions: string[];
   exitConditions: string[];
+  targetMode: StrategyTargetMode;
+  targetUnit: TradeTargetUnit;
+  fixedStopLoss: number | null;
+  fixedTakeProfits: number[];
+  riskRewardGoal: number | null;
   notes: string;
   created_at: string;
 };
@@ -206,6 +215,11 @@ type StrategyRow = {
   key_levels: string;
   entry_conditions: string;
   exit_conditions: string;
+  target_plan_mode: string;
+  target_unit: string;
+  fixed_stop_loss: number | null;
+  fixed_take_profits: string;
+  risk_reward_goal: number | null;
   notes: string;
   created_at: string;
 };
@@ -295,6 +309,7 @@ export type EntryData = {
   lotSize: number | null;
   stopLoss: number | null;
   takeProfit: number | null;
+  takeProfits: number[];
   notes: string;
   confidence: number | null;
 };
@@ -371,6 +386,31 @@ function stringArrayFromJson(value: string): string[] {
   return [];
 }
 
+function numberArrayFromJson(value: string): number[] {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is number =>
+        typeof item === "number" && Number.isFinite(item),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function normalizedStrategyTargetMode(value: string): StrategyTargetMode {
+  if (value === "fixed" || value === "risk-reward") return value;
+  return "custom";
+}
+
+function normalizedTradeTargetUnit(value: string): TradeTargetUnit {
+  if (value === "points" || value === "pips" || value === "ticks") {
+    return value;
+  }
+  return "price";
+}
+
 function backtestTargetsFromJson(value: string): BacktestTarget[] {
   try {
     const parsed: unknown = JSON.parse(value);
@@ -443,6 +483,14 @@ function rowToTrade(
       lotSize: row.entry_size,
       stopLoss: row.stop_loss,
       takeProfit: row.take_profit,
+      takeProfits: (() => {
+        const targets = numberArrayFromJson(row.take_profit_targets ?? "[]");
+        return targets.length > 0
+          ? targets
+          : row.take_profit === null
+            ? []
+            : [row.take_profit];
+      })(),
       notes: row.entry_notes ?? "",
       confidence: row.entry_confidence,
     },
@@ -472,6 +520,7 @@ function hasEntryData(entry: EntryData): boolean {
     entry.lotSize !== null ||
     entry.stopLoss !== null ||
     entry.takeProfit !== null ||
+    entry.takeProfits.length > 0 ||
     entry.confidence !== null,
   );
 }
@@ -536,6 +585,7 @@ const SEED_TRADES: Trade[] = [
       lotSize: 0.5,
       stopLoss: 1.0798,
       takeProfit: 1.0872,
+      takeProfits: [1.0872],
       notes: "Clean retest with strong candle close.",
       confidence: 8,
     },
@@ -595,6 +645,7 @@ const SEED_TRADES: Trade[] = [
       lotSize: 0.2,
       stopLoss: 2395,
       takeProfit: 2350,
+      takeProfits: [2350],
       notes: "Entered after 5m lower high.",
       confidence: 6,
     },
@@ -637,6 +688,7 @@ const SEED_TRADES: Trade[] = [
       lotSize: 1,
       stopLoss: 19762,
       takeProfit: 19920,
+      takeProfits: [19920],
       notes: "FOMO entry into resistance.",
       confidence: 4,
     },
@@ -672,6 +724,11 @@ const SEED_STRATEGIES: Strategy[] = [
     keyLevels: ["Previous day high", "Previous day low"],
     entryConditions: ["Structure break", "Retest confirmation"],
     exitConditions: ["Target reached", "Structure invalidated"],
+    targetMode: "custom",
+    targetUnit: "price",
+    fixedStopLoss: null,
+    fixedTakeProfits: [],
+    riskRewardGoal: null,
     notes: "Default planning strategy for early workflow testing.",
     created_at: "2026-07-03T00:00:00Z",
   },
@@ -784,6 +841,11 @@ function rowToStrategy(row: StrategyRow): Strategy {
     keyLevels: stringArrayFromJson(row.key_levels ?? "[]"),
     entryConditions: stringArrayFromJson(row.entry_conditions ?? "[]"),
     exitConditions: stringArrayFromJson(row.exit_conditions ?? "[]"),
+    targetMode: normalizedStrategyTargetMode(row.target_plan_mode ?? "custom"),
+    targetUnit: normalizedTradeTargetUnit(row.target_unit ?? "price"),
+    fixedStopLoss: row.fixed_stop_loss,
+    fixedTakeProfits: numberArrayFromJson(row.fixed_take_profits ?? "[]"),
+    riskRewardGoal: row.risk_reward_goal,
     notes: row.notes,
     created_at: row.created_at,
   };
@@ -953,6 +1015,13 @@ export async function createStrategy(
     exitConditions: input.exitConditions
       .map((value) => value.trim())
       .filter(Boolean),
+    targetMode: input.targetMode,
+    targetUnit: input.targetUnit,
+    fixedStopLoss: input.targetMode === "fixed" ? input.fixedStopLoss : null,
+    fixedTakeProfits:
+      input.targetMode === "fixed" ? input.fixedTakeProfits : [],
+    riskRewardGoal:
+      input.targetMode === "risk-reward" ? input.riskRewardGoal : null,
     notes: input.strategy.trim(),
     created_at: new Date().toISOString(),
   };
@@ -966,8 +1035,10 @@ export async function createStrategy(
   await db.execute(
     `INSERT INTO strategies
        (id, name, strategy, entry_rules, sl_tp_rules, invalidation_rules,
-        currency_pairs, key_levels, entry_conditions, exit_conditions, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+         currency_pairs, key_levels, entry_conditions, exit_conditions,
+         target_plan_mode, target_unit, fixed_stop_loss, fixed_take_profits,
+         risk_reward_goal, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
     [
       row.id,
       row.name,
@@ -979,6 +1050,11 @@ export async function createStrategy(
       JSON.stringify(row.keyLevels),
       JSON.stringify(row.entryConditions),
       JSON.stringify(row.exitConditions),
+      row.targetMode,
+      row.targetUnit,
+      row.fixedStopLoss,
+      JSON.stringify(row.fixedTakeProfits),
+      row.riskRewardGoal,
       row.notes,
     ],
   );
@@ -1201,6 +1277,13 @@ export async function updateStrategy(
     exitConditions: input.exitConditions
       .map((value) => value.trim())
       .filter(Boolean),
+    targetMode: input.targetMode,
+    targetUnit: input.targetUnit,
+    fixedStopLoss: input.targetMode === "fixed" ? input.fixedStopLoss : null,
+    fixedTakeProfits:
+      input.targetMode === "fixed" ? input.fixedTakeProfits : [],
+    riskRewardGoal:
+      input.targetMode === "risk-reward" ? input.riskRewardGoal : null,
     notes: input.strategy.trim(),
     created_at: current?.created_at ?? new Date().toISOString(),
   };
@@ -1221,11 +1304,16 @@ export async function updateStrategy(
             invalidation_rules = $5,
             currency_pairs = $6,
             key_levels = $7,
-            entry_conditions = $8,
-            exit_conditions = $9,
-            notes = $10,
-            updated_at = datetime('now')
-      WHERE id = $11`,
+             entry_conditions = $8,
+             exit_conditions = $9,
+             target_plan_mode = $10,
+             target_unit = $11,
+             fixed_stop_loss = $12,
+             fixed_take_profits = $13,
+             risk_reward_goal = $14,
+             notes = $15,
+             updated_at = datetime('now')
+       WHERE id = $16`,
     [
       row.name,
       row.strategy,
@@ -1236,6 +1324,11 @@ export async function updateStrategy(
       JSON.stringify(row.keyLevels),
       JSON.stringify(row.entryConditions),
       JSON.stringify(row.exitConditions),
+      row.targetMode,
+      row.targetUnit,
+      row.fixedStopLoss,
+      JSON.stringify(row.fixedTakeProfits),
+      row.riskRewardGoal,
       row.notes,
       id,
     ],
@@ -1681,7 +1774,8 @@ export async function insertTrade(input: NewTrade): Promise<Trade> {
       entry_notes, entry_confidence,
       exit_price, exit_time, exit_reason, exit_result, exit_feeling,
       pnl, key_level, entry_condition, exit_condition,
-      backtest_session_id, backtest_tested_at, backtest_targets
+       backtest_session_id, backtest_tested_at, backtest_targets,
+       take_profit_targets
     ) VALUES (
       $1,$2,$3,$4,$5,$6,
       $7,$8,$9,
@@ -1691,7 +1785,7 @@ export async function insertTrade(input: NewTrade): Promise<Trade> {
       $23,$24,
       $25,$26,$27,$28,$29,
       $30,$31,$32,$33,
-      $34,$35,$36
+       $34,$35,$36,$37
     )`,
     [
       trade.id,
@@ -1730,6 +1824,7 @@ export async function insertTrade(input: NewTrade): Promise<Trade> {
       trade.backtestSessionId,
       trade.backtestTestedAt,
       JSON.stringify(trade.backtestTargets),
+      JSON.stringify(trade.entry.takeProfits),
     ],
   );
   return trade;
@@ -1799,11 +1894,12 @@ export async function saveEntry(
        entry_size = $4,
        stop_loss = $5,
        take_profit = $6,
-       entry_notes = $7,
-       entry_confidence = $8,
+       take_profit_targets = $7,
+       entry_notes = $8,
+       entry_confidence = $9,
        status = CASE WHEN status = 'pre-trade' THEN 'open' ELSE status END,
        updated_at = datetime('now')
-     WHERE id = $9`,
+     WHERE id = $10`,
     [
       direction,
       entry.time,
@@ -1811,6 +1907,7 @@ export async function saveEntry(
       entry.lotSize,
       entry.stopLoss,
       entry.takeProfit,
+      JSON.stringify(entry.takeProfits),
       entry.notes,
       entry.confidence,
       tradeId,

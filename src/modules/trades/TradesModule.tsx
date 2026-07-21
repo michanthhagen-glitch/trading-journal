@@ -68,6 +68,7 @@ import {
 import { TRADE_RECAP_MISTAKE_GROUPS } from "./tradeRecapMistakes";
 import { TRADE_RECAP_POSITIVE_GROUPS } from "./tradeRecapPositives";
 import {
+  calculateRiskRewardTargets,
   calculateTradeTarget,
   tradeTargetInputFromPrice,
 } from "../../shared/tradeInstruments";
@@ -106,6 +107,17 @@ function linkedStrategyTemplate(
 
   const uniqueValues = (pick: (strategy: Strategy) => string[]) =>
     Array.from(new Set(linkedStrategies.flatMap(pick)));
+  const targetPlanKey = (strategy: Strategy) =>
+    JSON.stringify({
+      targetMode: strategy.targetMode,
+      targetUnit: strategy.targetUnit,
+      fixedStopLoss: strategy.fixedStopLoss,
+      fixedTakeProfits: strategy.fixedTakeProfits,
+      riskRewardGoal: strategy.riskRewardGoal,
+    });
+  const sharesTargetPlan = linkedStrategies.every(
+    (strategy) => targetPlanKey(strategy) === targetPlanKey(first),
+  );
 
   return {
     ...first,
@@ -115,6 +127,14 @@ function linkedStrategyTemplate(
     keyLevels: uniqueValues((strategy) => strategy.keyLevels),
     entryConditions: uniqueValues((strategy) => strategy.entryConditions),
     exitConditions: uniqueValues((strategy) => strategy.exitConditions),
+    ...(sharesTargetPlan
+      ? {}
+      : {
+          targetMode: "custom" as const,
+          fixedStopLoss: null,
+          fixedTakeProfits: [],
+          riskRewardGoal: null,
+        }),
   };
 }
 
@@ -371,13 +391,28 @@ function missingRecapCount(trades: Trade[]) {
 }
 
 function plannedRiskReward(trade: Trade): number | null {
-  const { price, stopLoss, takeProfit } = trade.entry;
+  const { price, stopLoss } = trade.entry;
+  const takeProfit = primaryTakeProfit(trade.entry);
   if (price === null || stopLoss === null || takeProfit === null) return null;
 
   const risk = Math.abs(price - stopLoss);
   const reward = Math.abs(takeProfit - price);
   if (risk <= 0 || reward < 0) return null;
   return reward / risk;
+}
+
+function primaryTakeProfit(entry: EntryData) {
+  return entry.takeProfits.length > 0
+    ? entry.takeProfits[entry.takeProfits.length - 1]
+    : entry.takeProfit;
+}
+
+function displayTakeProfits(entry: EntryData) {
+  return entry.takeProfits.length > 0
+    ? entry.takeProfits
+    : entry.takeProfit === null
+      ? []
+      : [entry.takeProfit];
 }
 
 function actualRiskReward(trade: Trade): number | null {
@@ -1912,7 +1947,13 @@ function TradeRecapContextPanel({
           { label: "Entry price", value: fmtPrice(trade.entry.price) },
           { label: "Lot size", value: trade.entry.lotSize ?? "—" },
           { label: "Stop loss", value: fmtPrice(trade.entry.stopLoss) },
-          { label: "Take profit", value: fmtPrice(trade.entry.takeProfit) },
+          {
+            label: "Take profits",
+            value:
+              displayTakeProfits(trade.entry)
+                .map((target, index) => `TP ${index + 1}: ${fmtPrice(target)}`)
+                .join(" · ") || "—",
+          },
           ...(isSystemAccount
             ? []
             : [
@@ -2368,7 +2409,7 @@ type NewTradeFormState = {
   entryPrice: string;
   lotSize: string;
   stopLoss: string;
-  takeProfit: string;
+  takeProfits: string[];
   entryNotes: string;
   confidence: number;
   exitPrice: string;
@@ -2413,7 +2454,7 @@ function createDefaultNewTrade({
     entryPrice: "",
     lotSize: "",
     stopLoss: "",
-    takeProfit: "",
+    takeProfits: [""],
     entryNotes: "",
     confidence: 5,
     exitPrice: "",
@@ -2473,8 +2514,64 @@ function NewTradeWorkflow({
     setForm((current) => ({
       ...current,
       pair: pairs.includes(current.pair) ? current.pair : (pairs[0] ?? ""),
+      stopLoss:
+        activeStrategy?.targetMode === "fixed"
+          ? String(activeStrategy.fixedStopLoss ?? "")
+          : "",
+      takeProfits:
+        activeStrategy?.targetMode === "fixed" &&
+        activeStrategy.fixedTakeProfits.length > 0
+          ? activeStrategy.fixedTakeProfits.map(String)
+          : [""],
     }));
   }, [activeStrategy]);
+
+  const targetMode = activeStrategy?.targetMode ?? "custom";
+  const targetUnit =
+    targetMode === "fixed"
+      ? (activeStrategy?.targetUnit ?? appPreferences.tradeTargetUnit)
+      : appPreferences.tradeTargetUnit;
+  const stopLossCalculation = form.stopLoss.trim()
+    ? calculateTradeTarget({
+        instrument: form.pair,
+        entryPrice: form.entryPrice,
+        entryPriceInput: form.entryPrice,
+        direction: form.direction,
+        kind: "stop-loss",
+        unit: targetUnit,
+        input: form.stopLoss,
+      })
+    : null;
+  const riskRewardTargets =
+    targetMode === "risk-reward"
+      ? calculateRiskRewardTargets({
+          instrument: form.pair,
+          entryPrice: form.entryPrice,
+          entryPriceInput: form.entryPrice,
+          direction: form.direction,
+          stopLoss: stopLossCalculation?.price ?? null,
+          goal: activeStrategy?.riskRewardGoal ?? null,
+        })
+      : [];
+  const workflowTakeProfitInputs =
+    targetMode === "risk-reward"
+      ? riskRewardTargets.map((target) =>
+          tradeTargetInputFromPrice({
+            instrument: form.pair,
+            entryPrice: form.entryPrice,
+            entryPriceInput: form.entryPrice,
+            targetPrice: target.price,
+            unit: targetUnit,
+          }),
+        )
+      : form.takeProfits;
+  const displayedTakeProfitInputs =
+    targetMode === "risk-reward"
+      ? Array.from(
+          { length: activeStrategy?.riskRewardGoal ?? 0 },
+          (_, index) => workflowTakeProfitInputs[index] ?? "",
+        )
+      : workflowTakeProfitInputs;
 
   function update<K extends keyof NewTradeFormState>(
     key: K,
@@ -2489,6 +2586,15 @@ function NewTradeWorkflow({
       riskPercent: value,
       riskAmount: calculateRiskAmount(accountBalance, value),
     }));
+  }
+
+  function updateTakeProfit(index: number, value: string) {
+    update(
+      "takeProfits",
+      form.takeProfits.map((target, targetIndex) =>
+        targetIndex === index ? value : target,
+      ),
+    );
   }
 
   function addDraftScreenshot(stage: NewTradeScreenshotStage, path: string) {
@@ -2544,35 +2650,42 @@ function NewTradeWorkflow({
       setSaveError(`${sourceLabel} is required.`);
       return;
     }
-    const stopLossCalculation = form.stopLoss.trim()
-      ? calculateTradeTarget({
-          instrument: form.pair,
-          entryPrice: form.entryPrice,
-          entryPriceInput: form.entryPrice,
-          direction: form.direction,
-          kind: "stop-loss",
-          unit: appPreferences.tradeTargetUnit,
-          input: form.stopLoss,
-        })
-      : null;
-    const takeProfitCalculation = form.takeProfit.trim()
-      ? calculateTradeTarget({
-          instrument: form.pair,
-          entryPrice: form.entryPrice,
-          entryPriceInput: form.entryPrice,
-          direction: form.direction,
-          kind: "take-profit",
-          unit: appPreferences.tradeTargetUnit,
-          input: form.takeProfit,
-        })
-      : null;
+    const enteredTakeProfitInputs = workflowTakeProfitInputs.filter((value) =>
+      value.trim(),
+    );
+    const takeProfitCalculations =
+      targetMode === "risk-reward"
+        ? riskRewardTargets.map((target) => ({ price: target.price }))
+        : enteredTakeProfitInputs.map((input) =>
+            calculateTradeTarget({
+              instrument: form.pair,
+              entryPrice: form.entryPrice,
+              entryPriceInput: form.entryPrice,
+              direction: form.direction,
+              kind: "take-profit",
+              unit: targetUnit,
+              input,
+            }),
+          );
     if (
       (form.stopLoss.trim() && !stopLossCalculation) ||
-      (form.takeProfit.trim() && !takeProfitCalculation)
+      takeProfitCalculations.some((calculation) => !calculation)
     ) {
       setSaveError("Enter a valid entry price to calculate SL and TP.");
       return;
     }
+    if (
+      targetMode === "risk-reward" &&
+      (!stopLossCalculation || riskRewardTargets.length === 0)
+    ) {
+      setSaveError(
+        "Enter the entry price and stop loss to calculate RR targets.",
+      );
+      return;
+    }
+    const takeProfitPrices = takeProfitCalculations.flatMap((calculation) =>
+      calculation ? [calculation.price] : [],
+    );
     const riskPercentValue = parseNumber(form.riskPercent);
     if (!isSystemAccount && riskPlan) {
       if (riskPercentValue === null) {
@@ -2597,7 +2710,7 @@ function NewTradeWorkflow({
       form.entryPrice ||
       form.lotSize ||
       form.stopLoss ||
-      form.takeProfit ||
+      workflowTakeProfitInputs.some((value) => value.trim()) ||
       form.entryNotes.trim(),
     );
     const hasExitInput = Boolean(
@@ -2628,7 +2741,11 @@ function NewTradeWorkflow({
         price: parseNumber(form.entryPrice),
         lotSize: parseNumber(form.lotSize),
         stopLoss: stopLossCalculation?.price ?? null,
-        takeProfit: takeProfitCalculation?.price ?? null,
+        takeProfit:
+          takeProfitPrices.length > 0
+            ? takeProfitPrices[takeProfitPrices.length - 1]
+            : null,
+        takeProfits: takeProfitPrices,
         notes: form.entryNotes.trim(),
         confidence: isSystemAccount || !hasEntryInput ? null : form.confidence,
       },
@@ -2941,20 +3058,71 @@ function NewTradeWorkflow({
               instrument={form.pair}
               entryPrice={form.entryPrice}
               direction={form.direction}
-              unit={appPreferences.tradeTargetUnit}
+              unit={targetUnit}
               value={form.stopLoss}
               onChange={(value) => update("stopLoss", value)}
+              readOnly={targetMode === "fixed"}
             />
-            <TradeTargetField
-              label="Take profit"
-              kind="take-profit"
-              instrument={form.pair}
-              entryPrice={form.entryPrice}
-              direction={form.direction}
-              unit={appPreferences.tradeTargetUnit}
-              value={form.takeProfit}
-              onChange={(value) => update("takeProfit", value)}
-            />
+            <div className="workflow-tp-plan field-wide">
+              <header>
+                <div>
+                  <span>Take profits</span>
+                  <small>
+                    {targetMode === "fixed"
+                      ? "Fixed by the selected strategy"
+                      : targetMode === "risk-reward"
+                        ? `Calculated from SL through 1:${activeStrategy?.riskRewardGoal ?? 1}`
+                        : "Custom values for this trade"}
+                  </small>
+                </div>
+                {targetMode === "custom" ? (
+                  <button
+                    className="secondary-button workflow-add-tp"
+                    type="button"
+                    onClick={() =>
+                      update("takeProfits", [...form.takeProfits, ""])
+                    }
+                  >
+                    <Plus size={14} aria-hidden="true" />
+                    Add TP
+                  </button>
+                ) : null}
+              </header>
+              <div className="workflow-tp-list">
+                {displayedTakeProfitInputs.map((target, index) => (
+                  <div className="workflow-tp-row" key={index}>
+                    <TradeTargetField
+                      label={`TP ${index + 1}${targetMode === "risk-reward" ? ` · ${index + 1}R` : ""}`}
+                      kind="take-profit"
+                      instrument={form.pair}
+                      entryPrice={form.entryPrice}
+                      direction={form.direction}
+                      unit={targetUnit}
+                      value={target}
+                      onChange={(value) => updateTakeProfit(index, value)}
+                      readOnly={targetMode !== "custom"}
+                    />
+                    {targetMode === "custom" && form.takeProfits.length > 1 ? (
+                      <button
+                        className="icon-button workflow-remove-tp"
+                        type="button"
+                        aria-label={`Remove TP ${index + 1}`}
+                        onClick={() =>
+                          update(
+                            "takeProfits",
+                            form.takeProfits.filter(
+                              (_value, targetIndex) => targetIndex !== index,
+                            ),
+                          )
+                        }
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
             <label className="field field-wide workflow-notes-field">
               <span>Entry notes</span>
               <textarea
@@ -3398,6 +3566,7 @@ function EntryCard({
     entry.lotSize !== null ||
     entry.stopLoss !== null ||
     entry.takeProfit !== null ||
+    entry.takeProfits.length > 0 ||
     entry.confidence !== null;
 
   return (
@@ -3468,8 +3637,16 @@ function EntryCard({
             <dd>{fmtPrice(entry.stopLoss)}</dd>
           </div>
           <div>
-            <dt>Take profit</dt>
-            <dd>{fmtPrice(entry.takeProfit)}</dd>
+            <dt>Take profits</dt>
+            <dd>
+              {displayTakeProfits(entry).length > 0
+                ? displayTakeProfits(entry)
+                    .map(
+                      (target, index) => `TP ${index + 1}: ${fmtPrice(target)}`,
+                    )
+                    .join(" · ")
+                : "—"}
+            </dd>
           </div>
         </div>
         <div className="trade-card-note">
@@ -3662,13 +3839,18 @@ function EntryForm({
         targetPrice: trade.entry.stopLoss,
         unit: appPreferences.tradeTargetUnit,
       }),
-      takeProfit: tradeTargetInputFromPrice({
-        instrument: trade.pair,
-        entryPrice: price,
-        entryPriceInput: price,
-        targetPrice: trade.entry.takeProfit,
-        unit: appPreferences.tradeTargetUnit,
-      }),
+      takeProfits: (() => {
+        const targets = displayTakeProfits(trade.entry);
+        return (targets.length > 0 ? targets : [null]).map((targetPrice) =>
+          tradeTargetInputFromPrice({
+            instrument: trade.pair,
+            entryPrice: price,
+            entryPriceInput: price,
+            targetPrice,
+            unit: appPreferences.tradeTargetUnit,
+          }),
+        );
+      })(),
       notes: trade.entry.notes,
       confidence: trade.entry.confidence ?? 5,
     };
@@ -3696,31 +3878,40 @@ function EntryForm({
           input: form.stopLoss,
         })
       : null;
-    const takeProfitCalculation = form.takeProfit.trim()
-      ? calculateTradeTarget({
+    const takeProfitCalculations = form.takeProfits
+      .filter((value) => value.trim())
+      .map((input) =>
+        calculateTradeTarget({
           instrument: trade.pair,
           entryPrice: form.price,
           entryPriceInput: form.price,
           direction: form.direction,
           kind: "take-profit",
           unit: appPreferences.tradeTargetUnit,
-          input: form.takeProfit,
-        })
-      : null;
+          input,
+        }),
+      );
     if (
       (form.stopLoss.trim() && !stopLossCalculation) ||
-      (form.takeProfit.trim() && !takeProfitCalculation)
+      takeProfitCalculations.some((calculation) => !calculation)
     ) {
       setSaveError("Enter a valid entry price to calculate SL and TP.");
       return;
     }
     setSaveError(null);
+    const takeProfitPrices = takeProfitCalculations.flatMap((calculation) =>
+      calculation ? [calculation.price] : [],
+    );
     const entry: EntryData = {
       time: form.time || null,
       price: parseNumber(form.price),
       lotSize: parseNumber(form.lotSize),
       stopLoss: stopLossCalculation?.price ?? null,
-      takeProfit: takeProfitCalculation?.price ?? null,
+      takeProfit:
+        takeProfitPrices.length > 0
+          ? takeProfitPrices[takeProfitPrices.length - 1]
+          : null,
+      takeProfits: takeProfitPrices,
       notes: form.notes.trim(),
       confidence: isSystemAccount ? null : form.confidence,
     };
@@ -3876,16 +4067,62 @@ function EntryForm({
             value={form.stopLoss}
             onChange={(value) => update("stopLoss", value)}
           />
-          <TradeTargetField
-            label="Take profit"
-            kind="take-profit"
-            instrument={trade.pair}
-            entryPrice={form.price}
-            direction={form.direction}
-            unit={appPreferences.tradeTargetUnit}
-            value={form.takeProfit}
-            onChange={(value) => update("takeProfit", value)}
-          />
+          <div className="workflow-tp-plan field-wide">
+            <header>
+              <div>
+                <span>Take profits</span>
+                <small>Edit the saved targets for this trade</small>
+              </div>
+              <button
+                className="secondary-button workflow-add-tp"
+                type="button"
+                onClick={() => update("takeProfits", [...form.takeProfits, ""])}
+              >
+                <Plus size={14} aria-hidden="true" />
+                Add TP
+              </button>
+            </header>
+            <div className="workflow-tp-list">
+              {form.takeProfits.map((target, index) => (
+                <div className="workflow-tp-row" key={index}>
+                  <TradeTargetField
+                    label={`TP ${index + 1}`}
+                    kind="take-profit"
+                    instrument={trade.pair}
+                    entryPrice={form.price}
+                    direction={form.direction}
+                    unit={appPreferences.tradeTargetUnit}
+                    value={target}
+                    onChange={(value) =>
+                      update(
+                        "takeProfits",
+                        form.takeProfits.map((current, targetIndex) =>
+                          targetIndex === index ? value : current,
+                        ),
+                      )
+                    }
+                  />
+                  {form.takeProfits.length > 1 ? (
+                    <button
+                      className="icon-button workflow-remove-tp"
+                      type="button"
+                      aria-label={`Remove TP ${index + 1}`}
+                      onClick={() =>
+                        update(
+                          "takeProfits",
+                          form.takeProfits.filter(
+                            (_value, targetIndex) => targetIndex !== index,
+                          ),
+                        )
+                      }
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
           <label className="field field-wide">
             <span>Entry notes</span>
             <textarea

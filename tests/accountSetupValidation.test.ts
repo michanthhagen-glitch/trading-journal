@@ -48,8 +48,61 @@ describe("account setup validation", () => {
         keyLevels: [],
         entryConditions: [],
         exitConditions: [],
+        targetMode: "custom",
+        targetUnit: "price",
+        fixedStopLoss: null,
+        fixedTakeProfits: [],
+        riskRewardGoal: null,
       }),
     ).not.toThrow();
+  });
+
+  it("requires complete fixed strategy targets", () => {
+    const fixedStrategy = {
+      name: "Fixed targets",
+      strategy: "",
+      entryRules: "",
+      slTpRules: "",
+      invalidationRules: "",
+      currencyPairs: ["EURUSD"],
+      keyLevels: [],
+      entryConditions: [],
+      exitConditions: [],
+      targetMode: "fixed" as const,
+      targetUnit: "pips" as const,
+      fixedStopLoss: 20,
+      fixedTakeProfits: [10, 20, 30],
+      riskRewardGoal: null,
+    };
+
+    expect(() => validateStrategySetup(fixedStrategy)).not.toThrow();
+    expect(() =>
+      validateStrategySetup({ ...fixedStrategy, fixedTakeProfits: [] }),
+    ).toThrow("Add at least one fixed take profit");
+  });
+
+  it("requires a whole-number RR goal", () => {
+    const rrStrategy = {
+      name: "Three R",
+      strategy: "",
+      entryRules: "",
+      slTpRules: "",
+      invalidationRules: "",
+      currencyPairs: ["EURUSD"],
+      keyLevels: [],
+      entryConditions: [],
+      exitConditions: [],
+      targetMode: "risk-reward" as const,
+      targetUnit: "pips" as const,
+      fixedStopLoss: null,
+      fixedTakeProfits: [],
+      riskRewardGoal: 3,
+    };
+
+    expect(() => validateStrategySetup(rrStrategy)).not.toThrow();
+    expect(() =>
+      validateStrategySetup({ ...rrStrategy, riskRewardGoal: 2.5 }),
+    ).toThrow("whole number");
   });
 
   it("requires an educator name", () => {

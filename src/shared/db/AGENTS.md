@@ -22,6 +22,8 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 - Trade workflow fields include reusable key-level and entry/exit-condition selections alongside the existing planning, entry, and exit data.
 - Backtesting trades also store a session id, date of backtesting, and flexible TP/result scenarios.
 - Strategy setup fields include strategy text, rules, and reusable key-level, entry-condition, and exit-condition option lists.
+- Strategy setup also stores Fixed, Risk/Reward, or Custom target behavior, the fixed-value unit, one fixed SL, multiple fixed TPs, or the main R goal.
+- Normal and System Account entries persist multiple TP prices; `take_profit` remains the final/main target for compatibility.
 - Educator setup fields include educator name, community, notes, and optional linked strategies.
 - Risk management setup fields include per-trade/day/week risk ranges, trade-loss limits, and daily/weekly goal ranges.
 - Commission is required and may be zero; every risk-plan value is required and must be greater than zero.

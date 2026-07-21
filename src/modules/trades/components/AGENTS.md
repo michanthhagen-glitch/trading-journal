@@ -21,6 +21,7 @@ Owns module-local trade UI components used by `TradesModule.tsx`.
 - Screenshot stages stay aligned with trade workflow stages.
 - Pre-trade source labels follow the selected account: Strategy for normal accounts and Educator for System Accounts.
 - Backtesting maps before screenshots to `pre-trade` and after screenshots to `exit` so existing screenshot storage and galleries remain reusable.
+- Backtesting target rows follow the selected Strategy target plan while keeping a separate result for every TP.
 
 ## Work Guidance
 

@@ -2,6 +2,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { ModalShell } from "../../components/ModalShell";
 import { StrategyOptionListField } from "./StrategyOptionListField";
 import { StrategyInstrumentField } from "./StrategyInstrumentField";
+import { StrategyTargetPlanField } from "./StrategyTargetPlanField";
 import { strategyOptionsWithDraft } from "./strategyOptions";
 import { instrumentsWithDraft } from "../../shared/tradeInstruments";
 import {
@@ -13,8 +14,10 @@ import {
   type Educator,
   type RiskManagementPlan,
   type Strategy,
+  type StrategyTargetMode,
   type TradingAccount,
 } from "../../shared/db/database";
+import type { AppPreferences } from "../../shared/appPreferences";
 
 const CURRENCIES = ["USD", "EUR", "GBP", "CHF", "JPY", "CAD", "AUD"];
 
@@ -27,6 +30,7 @@ type EditDialogProps = {
   strategies: Strategy[];
   educators: Educator[];
   riskPlans: RiskManagementPlan[];
+  appPreferences: AppPreferences;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 };
@@ -332,6 +336,7 @@ function EditEducatorDialog({
 }
 
 function EditStrategyDialog({
+  appPreferences,
   strategy,
   onClose,
   onSaved,
@@ -349,6 +354,25 @@ function EditStrategyDialog({
     strategy.entryConditions,
   );
   const [exitConditions, setExitConditions] = useState(strategy.exitConditions);
+  const [targetMode, setTargetMode] = useState<StrategyTargetMode>(
+    strategy.targetMode,
+  );
+  const [targetUnit, setTargetUnit] = useState(
+    strategy.targetMode === "fixed"
+      ? strategy.targetUnit
+      : appPreferences.tradeTargetUnit,
+  );
+  const [fixedStopLoss, setFixedStopLoss] = useState(
+    String(strategy.fixedStopLoss ?? ""),
+  );
+  const [fixedTakeProfits, setFixedTakeProfits] = useState(
+    strategy.fixedTakeProfits.length > 0
+      ? strategy.fixedTakeProfits.map(String)
+      : [""],
+  );
+  const [riskRewardGoal, setRiskRewardGoal] = useState(
+    String(strategy.riskRewardGoal ?? 3),
+  );
   const [keyLevelDraft, setKeyLevelDraft] = useState("");
   const [entryConditionDraft, setEntryConditionDraft] = useState("");
   const [exitConditionDraft, setExitConditionDraft] = useState("");
@@ -377,6 +401,13 @@ function EditStrategyDialog({
           exitConditions,
           exitConditionDraft,
         ),
+        targetMode,
+        targetUnit,
+        fixedStopLoss: fixedStopLoss.trim() ? Number(fixedStopLoss) : null,
+        fixedTakeProfits: fixedTakeProfits.map((value) =>
+          value.trim() ? Number(value) : Number.NaN,
+        ),
+        riskRewardGoal: riskRewardGoal.trim() ? Number(riskRewardGoal) : null,
       });
       await onSaved();
     } catch (saveError) {
@@ -424,6 +455,22 @@ function EditStrategyDialog({
           label="SL and TP rules"
           value={slTpRules}
           onChange={setSlTpRules}
+        />
+        <StrategyTargetPlanField
+          mode={targetMode}
+          unit={targetUnit}
+          fixedStopLoss={fixedStopLoss}
+          fixedTakeProfits={fixedTakeProfits}
+          riskRewardGoal={riskRewardGoal}
+          onModeChange={(nextMode) => {
+            if (nextMode === "fixed" && targetMode !== "fixed") {
+              setTargetUnit(appPreferences.tradeTargetUnit);
+            }
+            setTargetMode(nextMode);
+          }}
+          onFixedStopLossChange={setFixedStopLoss}
+          onFixedTakeProfitsChange={setFixedTakeProfits}
+          onRiskRewardGoalChange={setRiskRewardGoal}
         />
         <TextArea
           label="Invalidation rules"

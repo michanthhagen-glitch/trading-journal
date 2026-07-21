@@ -1,6 +1,7 @@
-import { isInstrumentSymbol } from "../tradeInstruments";
+import { isInstrumentSymbol, type TradeTargetUnit } from "../tradeInstruments";
 
 export type AccountTypeValue = "live" | "demo" | "backtesting" | "system";
+export type StrategyTargetMode = "fixed" | "risk-reward" | "custom";
 
 export type StrategySetupInput = {
   name: string;
@@ -12,6 +13,11 @@ export type StrategySetupInput = {
   keyLevels: string[];
   entryConditions: string[];
   exitConditions: string[];
+  targetMode: StrategyTargetMode;
+  targetUnit: TradeTargetUnit;
+  fixedStopLoss: number | null;
+  fixedTakeProfits: number[];
+  riskRewardGoal: number | null;
 };
 
 export type EducatorSetupInput = {
@@ -92,6 +98,34 @@ export function validateStrategySetup(input: StrategySetupInput) {
     throw new Error(
       "Instrument symbols must use 3 to 20 letters or numbers, for example EURUSD or NAS100.",
     );
+  }
+  if (input.targetMode === "fixed") {
+    if (
+      input.fixedStopLoss === null ||
+      !Number.isFinite(input.fixedStopLoss) ||
+      input.fixedStopLoss <= 0
+    ) {
+      throw new Error("Fixed stop loss is required and must be higher than 0.");
+    }
+    if (input.fixedTakeProfits.length === 0) {
+      throw new Error("Add at least one fixed take profit.");
+    }
+    if (
+      input.fixedTakeProfits.some(
+        (value) => !Number.isFinite(value) || value <= 0,
+      )
+    ) {
+      throw new Error("Every fixed take profit must be higher than 0.");
+    }
+  }
+  if (
+    input.targetMode === "risk-reward" &&
+    (input.riskRewardGoal === null ||
+      !Number.isInteger(input.riskRewardGoal) ||
+      input.riskRewardGoal < 1 ||
+      input.riskRewardGoal > 20)
+  ) {
+    throw new Error("Main RR goal must be a whole number from 1 to 20.");
   }
 }
 

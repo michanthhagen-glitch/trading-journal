@@ -538,6 +538,12 @@ fn sql_migrations() -> Vec<tauri_plugin_sql::Migration> {
             sql: include_str!("../migrations/0013_educator_strategies.sql"),
             kind: tauri_plugin_sql::MigrationKind::Up,
         },
+        tauri_plugin_sql::Migration {
+            version: 14,
+            description: "add_strategy_target_plans",
+            sql: include_str!("../migrations/0014_strategy_target_plans.sql"),
+            kind: tauri_plugin_sql::MigrationKind::Up,
+        },
     ]
 }
 

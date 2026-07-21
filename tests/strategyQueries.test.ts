@@ -17,13 +17,19 @@ describe("strategy account setup query", () => {
         key_levels TEXT NOT NULL,
         entry_conditions TEXT NOT NULL,
         exit_conditions TEXT NOT NULL,
+        target_plan_mode TEXT NOT NULL,
+        target_unit TEXT NOT NULL,
+        fixed_stop_loss REAL,
+        fixed_take_profits TEXT NOT NULL,
+        risk_reward_goal INTEGER,
         notes TEXT NOT NULL,
         created_at TEXT NOT NULL
       );
       INSERT INTO strategies VALUES (
         'STR-1', 'Continuation', '', '', '', '',
         '["EURUSD","GBPJPY"]',
-        '["00","50"]', '["Doji"]', '["Target reached"]', '',
+        '["00","50"]', '["Doji"]', '["Target reached"]',
+        'fixed', 'pips', 20, '[10,20,30]', NULL, '',
         '2026-07-20T20:00:00Z'
       );
     `);
@@ -38,6 +44,9 @@ describe("strategy account setup query", () => {
       key_levels: '["00","50"]',
       entry_conditions: '["Doji"]',
       exit_conditions: '["Target reached"]',
+      target_plan_mode: "fixed",
+      target_unit: "pips",
+      fixed_take_profits: "[10,20,30]",
     });
     db.close();
   });

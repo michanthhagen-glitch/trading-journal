@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useState } from "react";
 import { ModalShell } from "../../../../components/ModalShell";
 import { StrategyOptionListField } from "../../StrategyOptionListField";
 import { StrategyInstrumentField } from "../../StrategyInstrumentField";
+import { StrategyTargetPlanField } from "../../StrategyTargetPlanField";
 import { strategyOptionsWithDraft } from "../../strategyOptions";
 import { instrumentsWithDraft } from "../../../../shared/tradeInstruments";
 import {
@@ -13,7 +14,9 @@ import {
   type Educator,
   type RiskManagementPlan,
   type Strategy,
+  type StrategyTargetMode,
 } from "../../../../shared/db/database";
+import type { AppPreferences } from "../../../../shared/appPreferences";
 
 export type AccountSetupCreateKind =
   | "accounts"
@@ -45,6 +48,7 @@ type CreateDialogProps = {
   strategies: Strategy[];
   educators: Educator[];
   riskPlans: RiskManagementPlan[];
+  appPreferences: AppPreferences;
   onClose: () => void;
   onCreated: () => Promise<void> | void;
 };
@@ -54,6 +58,7 @@ export function CreateAccountSetupDialog({
   strategies,
   educators,
   riskPlans,
+  appPreferences,
   onClose,
   onCreated,
 }: CreateDialogProps) {
@@ -70,7 +75,13 @@ export function CreateAccountSetupDialog({
   }
 
   if (kind === "strategies") {
-    return <CreateStrategyDialog onClose={onClose} onCreated={onCreated} />;
+    return (
+      <CreateStrategyDialog
+        appPreferences={appPreferences}
+        onClose={onClose}
+        onCreated={onCreated}
+      />
+    );
   }
 
   if (kind === "educators") {
@@ -427,9 +438,11 @@ function CreateEducatorDialog({
 }
 
 function CreateStrategyDialog({
+  appPreferences,
   onClose,
   onCreated,
 }: {
+  appPreferences: AppPreferences;
   onClose: () => void;
   onCreated: () => Promise<void> | void;
 }) {
@@ -442,6 +455,10 @@ function CreateStrategyDialog({
   const [keyLevels, setKeyLevels] = useState<string[]>([]);
   const [entryConditions, setEntryConditions] = useState<string[]>([]);
   const [exitConditions, setExitConditions] = useState<string[]>([]);
+  const [targetMode, setTargetMode] = useState<StrategyTargetMode>("custom");
+  const [fixedStopLoss, setFixedStopLoss] = useState("");
+  const [fixedTakeProfits, setFixedTakeProfits] = useState([""]);
+  const [riskRewardGoal, setRiskRewardGoal] = useState("3");
   const [keyLevelDraft, setKeyLevelDraft] = useState("");
   const [entryConditionDraft, setEntryConditionDraft] = useState("");
   const [exitConditionDraft, setExitConditionDraft] = useState("");
@@ -471,6 +488,13 @@ function CreateStrategyDialog({
           exitConditions,
           exitConditionDraft,
         ),
+        targetMode,
+        targetUnit: appPreferences.tradeTargetUnit,
+        fixedStopLoss: fixedStopLoss.trim() ? Number(fixedStopLoss) : null,
+        fixedTakeProfits: fixedTakeProfits.map((value) =>
+          value.trim() ? Number(value) : Number.NaN,
+        ),
+        riskRewardGoal: riskRewardGoal.trim() ? Number(riskRewardGoal) : null,
       });
       await onCreated();
     } catch (createError) {
@@ -535,6 +559,18 @@ function CreateStrategyDialog({
             placeholder="How stop loss and take profit are chosen"
           />
         </label>
+
+        <StrategyTargetPlanField
+          mode={targetMode}
+          unit={appPreferences.tradeTargetUnit}
+          fixedStopLoss={fixedStopLoss}
+          fixedTakeProfits={fixedTakeProfits}
+          riskRewardGoal={riskRewardGoal}
+          onModeChange={setTargetMode}
+          onFixedStopLossChange={setFixedStopLoss}
+          onFixedTakeProfitsChange={setFixedTakeProfits}
+          onRiskRewardGoalChange={setRiskRewardGoal}
+        />
 
         <label className="field field-wide">
           <span>Invalidation rules</span>

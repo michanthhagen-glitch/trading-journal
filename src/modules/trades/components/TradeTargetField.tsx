@@ -21,6 +21,7 @@ export function TradeTargetField({
   label,
   onChange,
   instrument,
+  readOnly = false,
   required = false,
   unit,
   value,
@@ -31,6 +32,7 @@ export function TradeTargetField({
   label: string;
   onChange: (value: string) => void;
   instrument: string;
+  readOnly?: boolean;
   required?: boolean;
   unit: TradeTargetUnit;
   value: string;
@@ -58,6 +60,7 @@ export function TradeTargetField({
         min={unit === "price" ? undefined : 0}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        readOnly={readOnly}
         required={required}
       />
       {calculation ? (

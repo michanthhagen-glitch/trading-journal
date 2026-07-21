@@ -31,6 +31,7 @@ import type { ModuleContext } from "../../app/types";
 import {
   formatCurrencyValue,
   shouldConfirmDelete,
+  TRADE_TARGET_UNIT_OPTIONS,
   type AppPreferences,
 } from "../../shared/appPreferences";
 import { EditAccountSetupDialog } from "./EditAccountSetupDialog";
@@ -110,6 +111,20 @@ function riskGoalLabel(plan: RiskManagementPlan) {
     plan.weeklyGoalMidPercent,
     plan.weeklyGoalMaxPercent,
   )}`;
+}
+
+function strategyTargetPlanLabel(strategy: Strategy) {
+  if (strategy.targetMode === "risk-reward") {
+    return `Risk / Reward · 1:${strategy.riskRewardGoal ?? 1}`;
+  }
+  if (strategy.targetMode === "fixed") {
+    const unit =
+      TRADE_TARGET_UNIT_OPTIONS.find(
+        (option) => option.value === strategy.targetUnit,
+      )?.label ?? strategy.targetUnit;
+    return `Fixed ${unit} · SL ${strategy.fixedStopLoss ?? "-"} · TP ${strategy.fixedTakeProfits.join(" / ") || "-"}`;
+  }
+  return "Custom in workflow";
 }
 
 export function AccountModule({
@@ -304,6 +319,7 @@ export function AccountModule({
         {editModal === "accounts" ? (
           <EditAccountSetupDialog
             kind="accounts"
+            appPreferences={appPreferences}
             account={selectedAccount}
             strategies={strategies}
             educators={educators}
@@ -329,6 +345,7 @@ export function AccountModule({
         {editModal === "strategies" ? (
           <EditAccountSetupDialog
             kind="strategies"
+            appPreferences={appPreferences}
             strategy={selectedStrategy}
             strategies={strategies}
             educators={educators}
@@ -355,6 +372,7 @@ export function AccountModule({
         {editModal === "educators" ? (
           <EditAccountSetupDialog
             kind="educators"
+            appPreferences={appPreferences}
             educator={selectedEducator}
             strategies={strategies}
             educators={educators}
@@ -380,6 +398,7 @@ export function AccountModule({
         {editModal === "risk" ? (
           <EditAccountSetupDialog
             kind="risk"
+            appPreferences={appPreferences}
             riskPlan={selectedRiskPlan}
             strategies={strategies}
             educators={educators}
@@ -488,6 +507,7 @@ export function AccountModule({
       {createModal ? (
         <CreateAccountSetupDialog
           kind={createModal}
+          appPreferences={appPreferences}
           strategies={strategies}
           educators={educators}
           riskPlans={riskPlans}
@@ -783,6 +803,10 @@ function StrategyDetailView({
             <div>
               <dt>SL and TP rules</dt>
               <dd>{strategy.slTpRules || "-"}</dd>
+            </div>
+            <div>
+              <dt>Target plan</dt>
+              <dd>{strategyTargetPlanLabel(strategy)}</dd>
             </div>
             <div>
               <dt>Invalidation rules</dt>

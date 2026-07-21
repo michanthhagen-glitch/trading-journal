@@ -283,6 +283,11 @@ export type TradeTargetCalculation = InstrumentUnitSizes & {
   ticks: number;
 };
 
+export type RiskRewardTarget = {
+  ratio: number;
+  price: number;
+};
+
 export function normalizeInstrumentSymbol(value: string) {
   return value
     .trim()
@@ -495,6 +500,48 @@ export function tradeTargetInputFromPrice({
   );
   const distance = Math.abs(target - entry) / unitSize(unit, sizes);
   return Number(distance.toFixed(4)).toString();
+}
+
+export function calculateRiskRewardTargets({
+  direction,
+  entryPrice,
+  entryPriceInput = "",
+  goal,
+  instrument,
+  stopLoss,
+}: {
+  direction: TradeDirection;
+  entryPrice: string | number | null;
+  entryPriceInput?: string;
+  goal: number | null;
+  instrument: string;
+  stopLoss: string | number | null;
+}): RiskRewardTarget[] {
+  const entry = finiteNumber(entryPrice);
+  const stop = finiteNumber(stopLoss);
+  if (
+    entry === null ||
+    stop === null ||
+    goal === null ||
+    !Number.isInteger(goal) ||
+    goal < 1
+  ) {
+    return [];
+  }
+  const risk = Math.abs(entry - stop);
+  if (risk === 0) return [];
+  const sizes = instrumentUnitSizes(
+    instrument,
+    entryPriceInput || String(entryPrice ?? ""),
+  );
+  const sign = direction === "long" ? 1 : -1;
+  return Array.from({ length: goal }, (_, index) => {
+    const ratio = index + 1;
+    return {
+      ratio,
+      price: roundPrice(entry + sign * risk * ratio, sizes.pricePrecision),
+    };
+  });
 }
 
 export function formatTradeTargetPrice(

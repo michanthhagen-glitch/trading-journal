@@ -17,6 +17,7 @@ Owns modal creation flows for accounts, strategies, educators, and risk manageme
 - Educator creation can link the educator to multiple existing strategies.
 - Strategy creation supports add/remove lists for key levels, entry conditions, and exit conditions.
 - Strategy creation selects trading instruments from the grouped library and can add custom broker symbols.
+- Strategy creation selects Fixed, Risk/Reward, or Custom target behavior and can save multiple fixed take profits.
 - Dialog save handlers call the typed shared DB helpers passed from the account flow.
 
 ## Work Guidance

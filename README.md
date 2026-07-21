@@ -75,6 +75,7 @@ Use **Recaps** at the end of the day, week, or month to review the larger patter
 
 - Live, demo, and backtesting accounts.
 - Reusable strategies and risk-management plans.
+- Strategy target plans with fixed values, automatic risk/reward ladders, or custom SL and multiple TPs.
 - Strategy-based instrument selectors across normal, System, and Backtesting trades, grouped into Forex Majors, Forex Minors, Forex Exotics, Metals, Indices, Energy, and Crypto.
 - Automatic price, pip, point, and tick conversion for stop losses and take profits.
 - Pre-trade, entry, exit, and recap workflow.

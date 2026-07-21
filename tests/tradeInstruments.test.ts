@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateTradeTarget,
+  calculateRiskRewardTargets,
   findInstrumentGroup,
   INSTRUMENT_GROUPS,
   instrumentsWithDraft,
@@ -147,5 +148,38 @@ describe("trade instruments", () => {
         unit: "pips",
       }),
     ).toBe("20");
+  });
+
+  it("creates every RR target through the main goal", () => {
+    expect(
+      calculateRiskRewardTargets({
+        instrument: "EURUSD",
+        entryPrice: 1.1,
+        entryPriceInput: "1.10000",
+        stopLoss: 1.098,
+        direction: "long",
+        goal: 3,
+      }),
+    ).toEqual([
+      { ratio: 1, price: 1.102 },
+      { ratio: 2, price: 1.104 },
+      { ratio: 3, price: 1.106 },
+    ]);
+  });
+
+  it("creates RR targets below a short entry", () => {
+    expect(
+      calculateRiskRewardTargets({
+        instrument: "NAS100",
+        entryPrice: 21000,
+        entryPriceInput: "21000.0",
+        stopLoss: 21025,
+        direction: "short",
+        goal: 2,
+      }),
+    ).toEqual([
+      { ratio: 1, price: 20975 },
+      { ratio: 2, price: 20950 },
+    ]);
   });
 });

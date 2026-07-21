@@ -36,6 +36,8 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - Backtesting trade logging includes historical date/time, buy/sell, entry, SL, flexible TP/result rows, calculated RR, strategy selectors, and before/after screenshots.
 - Backtesting trades do not raise missing-recap or open-trade reminders.
 - Strategy key-level, entry-condition, and exit-condition choices are available in normal, System Account, and Backtesting trade workflows.
+- Strategy target plans apply across normal, System Account, and Backtesting workflows: Fixed values are locked, Risk/Reward creates every TP from 1R through the goal, and Custom allows manual multiple TPs.
+- Saved normal and System Account trades persist all planned take-profit prices while the legacy single TP remains the final/main target.
 - New trade risk % is checked against the selected account's risk plan without editing the plan.
 - Saved trade cards expose screenshot import for `pre-trade`, `entry`, and `exit`.
 - Screenshot buttons try TradingView capture first, then a window selector, then file import fallback.
