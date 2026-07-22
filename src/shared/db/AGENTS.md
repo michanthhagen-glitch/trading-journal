@@ -6,7 +6,9 @@ Owns the renderer-side data API, SQLite bridge, browser fallback data, and scree
 
 ## Ownership
 
-- `database.ts`: types, SQLite connection, trade workflow APIs, recap APIs, screenshot metadata APIs, browser fallback seeds.
+- `database.ts`: SQLite connection, trade workflow APIs, recap APIs, screenshot metadata APIs, and browser fallback seeds.
+- `models.ts`: public database models plus private SQLite row shapes.
+- `rowMappers.ts`: SQLite row normalization and domain-model conversion.
 - `strategyQueries.ts`: account-setup strategy query, including reusable journaling-choice columns.
 - `accountSetupValidation.ts`: shared account, strategy, educator, commission, and risk-plan validation.
 - `backup.ts`: typed desktop backup/restore wrapper and folder picker flow.

@@ -220,7 +220,7 @@ function PlanMetric({
 }
 
 function TradingPlanPanel({ info }: { info: TradingPlanSidebarInfo }) {
-  const [noteClicks, setNoteClicks] = useState(0);
+  const [, setNoteClicks] = useState(0);
   const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [isSongPlaying, setIsSongPlaying] = useState(false);
   const songRef = useRef<HTMLAudioElement | null>(null);

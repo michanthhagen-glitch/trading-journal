@@ -7,8 +7,7 @@ Owns reusable renderer components that are not specific to one module.
 ## Ownership
 
 - `ModalShell.tsx`: shared single-panel modal shell for reusable popup layout.
-- `layout/Sidebar.tsx`: collapsible module navigation.
-- `layout/Topbar.tsx`: active module title and top actions.
+- `layout/`: reusable shell layout components and their bundled assets.
 
 ## Local Contracts
 

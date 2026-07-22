@@ -25,6 +25,7 @@ import {
   formatDateTimeValue,
   formatNumberValue,
   type CurrencyDisplayPreference,
+  type AppPreferences,
   type DateFormatPreference,
   type NumberFormatPreference,
   type TimeFormatPreference,
@@ -47,36 +48,11 @@ export function SettingsModule({
   }>({ busy: false, message: "", tone: "idle" });
   const backupAvailable = isJournalBackupAvailable();
 
-  function updateDateFormat(dateFormat: DateFormatPreference) {
-    onAppPreferencesChanged({ ...appPreferences, dateFormat });
-  }
-
-  function updateTimeFormat(timeFormat: TimeFormatPreference) {
-    onAppPreferencesChanged({ ...appPreferences, timeFormat });
-  }
-
-  function updateTimezone(timezone: TimezonePreference) {
-    onAppPreferencesChanged({ ...appPreferences, timezone });
-  }
-
-  function updateWeekStartDay(weekStartDay: WeekStartPreference) {
-    onAppPreferencesChanged({ ...appPreferences, weekStartDay });
-  }
-
-  function updateNumberFormat(numberFormat: NumberFormatPreference) {
-    onAppPreferencesChanged({ ...appPreferences, numberFormat });
-  }
-
-  function updateCurrencyDisplay(currencyDisplay: CurrencyDisplayPreference) {
-    onAppPreferencesChanged({ ...appPreferences, currencyDisplay });
-  }
-
-  function updateTradeTargetUnit(tradeTargetUnit: TradeTargetUnitPreference) {
-    onAppPreferencesChanged({ ...appPreferences, tradeTargetUnit });
-  }
-
-  function updateConfirmBeforeDelete(confirmBeforeDelete: boolean) {
-    onAppPreferencesChanged({ ...appPreferences, confirmBeforeDelete });
+  function updatePreference<K extends keyof AppPreferences>(
+    key: K,
+    value: AppPreferences[K],
+  ) {
+    onAppPreferencesChanged({ ...appPreferences, [key]: value });
   }
 
   async function handleCreateBackup() {
@@ -197,7 +173,8 @@ export function SettingsModule({
                     <select
                       value={appPreferences.dateFormat}
                       onChange={(event) =>
-                        updateDateFormat(
+                        updatePreference(
+                          "dateFormat",
                           event.target.value as DateFormatPreference,
                         )
                       }
@@ -215,7 +192,8 @@ export function SettingsModule({
                     <select
                       value={appPreferences.timeFormat}
                       onChange={(event) =>
-                        updateTimeFormat(
+                        updatePreference(
+                          "timeFormat",
                           event.target.value as TimeFormatPreference,
                         )
                       }
@@ -233,7 +211,10 @@ export function SettingsModule({
                     <select
                       value={appPreferences.timezone}
                       onChange={(event) =>
-                        updateTimezone(event.target.value as TimezonePreference)
+                        updatePreference(
+                          "timezone",
+                          event.target.value as TimezonePreference,
+                        )
                       }
                     >
                       {TIMEZONE_OPTIONS.map((option) => (
@@ -249,7 +230,8 @@ export function SettingsModule({
                     <select
                       value={appPreferences.weekStartDay}
                       onChange={(event) =>
-                        updateWeekStartDay(
+                        updatePreference(
+                          "weekStartDay",
                           event.target.value as WeekStartPreference,
                         )
                       }
@@ -288,7 +270,8 @@ export function SettingsModule({
                     <select
                       value={appPreferences.numberFormat}
                       onChange={(event) =>
-                        updateNumberFormat(
+                        updatePreference(
+                          "numberFormat",
                           event.target.value as NumberFormatPreference,
                         )
                       }
@@ -306,7 +289,8 @@ export function SettingsModule({
                     <select
                       value={appPreferences.currencyDisplay}
                       onChange={(event) =>
-                        updateCurrencyDisplay(
+                        updatePreference(
+                          "currencyDisplay",
                           event.target.value as CurrencyDisplayPreference,
                         )
                       }
@@ -324,7 +308,8 @@ export function SettingsModule({
                     <select
                       value={appPreferences.tradeTargetUnit}
                       onChange={(event) =>
-                        updateTradeTargetUnit(
+                        updatePreference(
+                          "tradeTargetUnit",
                           event.target.value as TradeTargetUnitPreference,
                         )
                       }
@@ -345,7 +330,10 @@ export function SettingsModule({
                       type="checkbox"
                       checked={appPreferences.confirmBeforeDelete}
                       onChange={(event) =>
-                        updateConfirmBeforeDelete(event.target.checked)
+                        updatePreference(
+                          "confirmBeforeDelete",
+                          event.target.checked,
+                        )
                       }
                     />
                     <span>

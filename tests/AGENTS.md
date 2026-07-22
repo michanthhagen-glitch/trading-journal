@@ -7,9 +7,14 @@ Owns Vitest tests for app behavior and project contracts.
 ## Ownership
 
 - `appPreferences.test.ts`: shared app preference formatting and week-start behavior.
+- `dashboardAnalytics.test.ts`: total, month, and week dashboard view-model calculations.
+- `localDates.test.ts`: local-calendar arithmetic and month boundary behavior.
+- `newTradeSubmission.test.ts`: new-trade validation and persisted payload assembly.
+- `recapAnalysis.test.ts`: daily, weekly, and monthly recap period boundaries.
 - `accountSetupValidation.test.ts`: commission and risk-plan safety rules.
 - `moduleRegistry.test.ts`: smoke test for sidebar module registration.
 - `screenshotTools.test.ts`: screenshot drop helper behavior.
+- `strategyOptions.test.ts`: typed Strategy option inclusion, blank handling, and duplicate prevention.
 - `strategyQueries.test.ts`: SQLite strategy reload coverage for reusable journaling choices.
 - `tradeNames.test.ts`: automatic per-day trade display naming.
 - `tradingPlan.test.ts`: sidebar trading plan milestones and rule counters.

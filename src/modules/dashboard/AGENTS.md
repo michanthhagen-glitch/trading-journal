@@ -7,6 +7,8 @@ Owns the compact account control room: total/month/week summaries, risk/goal rea
 ## Ownership
 
 - `DashboardModule.tsx`: total/month/week summary cards, dashboard tabs, graphs, and detail modals that use the shared `ModalShell`.
+- `BacktestingDashboard.tsx`: Backtesting account metrics and comparisons by strategy, target, key level, entry condition, and exit condition.
+- `dashboardAnalytics.ts`: pure dashboard summaries, rankings, period histories, and chart view-model calculations.
 
 ## Local Contracts
 

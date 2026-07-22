@@ -8,10 +8,11 @@ Owns account setup, strategy setup, educator setup, and risk management setup.
 
 - `AccountModule.tsx`: Accounts, Strategy, Educators, and Risk Management tabs.
 - `StrategyOptionListField.tsx`: add/remove editor for reusable Strategy journal choices.
+- `strategyOptions.ts`: pure helper that includes a valid typed option when a form is saved before pressing Add.
 - `StrategyInstrumentField.tsx`: grouped instrument library and custom broker-symbol selector for Strategies.
 - `StrategyTargetPlanField.tsx`: Fixed, Risk/Reward, or Custom SL/TP setup with multiple take profits.
 - `EditAccountSetupDialog.tsx`: edit flows for accounts, strategies, educators, and risk plans.
-- `features/createAccountSetup/`: modal creation flows for account setup records, wrapped by the shared `ModalShell`.
+- `features/`: larger Account workflows with their own child contracts.
 
 ## Local Contracts
 

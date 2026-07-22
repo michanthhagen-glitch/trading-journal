@@ -12,6 +12,7 @@ Owns cross-module helpers and data access used by more than one module.
 - `tradingPlan.ts`: selected-account trading plan snapshot, milestone states, and balance-target calculations.
 - `tradeNames.ts`: automatic per-day trade display names, such as `Trade 1`.
 - `tradeInstruments.ts`: grouped market catalog, broker-symbol normalization, and price/pip/point/tick conversion.
+- `localDates.ts`: shared local-calendar parsing, keys, arithmetic, and month boundaries.
 
 ## Local Contracts
 

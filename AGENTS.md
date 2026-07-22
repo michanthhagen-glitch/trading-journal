@@ -11,6 +11,8 @@ MethodMark is a desktop trading journal for logging trades, pre-trade analysis, 
 - If docs conflict, the closer AGENTS.md controls local details, but child docs cannot weaken this root contract.
 - Do not rely on memory for the DOX chain. Re-read the applicable docs in the current session.
 - After meaningful changes, update the closest owning AGENTS.md and any parent Child DOX Index that changed.
+- Every nested AGENTS.md must be listed in the nearest parent AGENTS.md under `Child DOX Index`, using a path relative to that parent.
+- When a child AGENTS.md exists, the parent owns the folder boundary and the child owns its specific files and local rules.
 - Keep docs concise, current, and operational. Delete stale notes instead of explaining history.
 
 ## Project Stack
@@ -48,17 +50,17 @@ npm run format          # prettier --write .
 - Recaps are a separate feature from the trade entry/exit workflow.
 - Recaps are time-bounded: daily, weekly, monthly.
 
-## Root Ownership
+## Ownership
 
 - `.github/`: GitHub Actions release automation.
 - `README.md`: GitHub overview, product philosophy, trader workflow, installation, and development basics.
 - `package.json`, `package-lock.json`: scripts and dependencies.
 - `vite.config.ts`, `tsconfig.json`, `index.html`, `.env.devapp`: frontend build setup.
-- `.gitignore`, `.prettierignore`: repo-level ignore rules.
+- `.gitattributes`, `.gitignore`, `.prettierignore`: repo-level Git and ignore rules.
 - `design-qa.md`, `design-qa-*.png`: latest visual verification report and evidence for approved product branding.
 - `AGENTS.md`: root DOX contract and top-level index.
 
-## Global Work Guidance
+## Work Guidance
 
 - Keep answers and docs short, simple, and practical.
 - Keep the module-owned structure: shell in `src/app`, modules in `src/modules`, reusable UI in `src/components`, shared helpers in `src/shared`.

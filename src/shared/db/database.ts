@@ -10,538 +10,80 @@ import {
   validateRiskPlanSetup,
   validateStrategySetup,
   validateTradingAccountSetup,
-  type AccountTypeValue,
   type EducatorSetupInput,
   type RiskPlanSetupInput,
   type StrategySetupInput,
-  type StrategyTargetMode,
   type TradingAccountSetupInput,
 } from "./accountSetupValidation";
-import type { TradeTargetUnit } from "../tradeInstruments";
+import type {
+  AccountEducatorRow,
+  AccountStrategyRow,
+  Educator,
+  EducatorRow,
+  EducatorStrategyRow,
+  EntryData,
+  ExitData,
+  JournalRecapInput,
+  JournalRecapRow,
+  NewTrade,
+  PreTradeData,
+  RecapRow,
+  RiskManagementPlan,
+  RiskManagementPlanRow,
+  ScreenshotRow,
+  Strategy,
+  StrategyRow,
+  Trade,
+  TradeRecap,
+  TradeRecapInput,
+  TradeRow,
+  TradingAccount,
+  TradingAccountRow,
+} from "./models";
+export type {
+  AccountType,
+  BacktestTarget,
+  Educator,
+  EducatorSetupInput,
+  EntryData,
+  ExitData,
+  JournalRecapInput,
+  JournalRecapRow,
+  NewTrade,
+  PreTradeData,
+  RecapRow,
+  RiskManagementPlan,
+  RiskPlanSetupInput,
+  ScreenshotRow,
+  Strategy,
+  StrategySetupInput,
+  StrategyTargetMode,
+  Trade,
+  TradeRecap,
+  TradeRecapGrade,
+  TradeRecapInput,
+  TradeRecapPlanFollowed,
+  TradeResult,
+  TradeRow,
+  TradeStatus,
+  TradingAccount,
+  TradingAccountSetupInput,
+} from "./models";
+
+import {
+  deriveStatus,
+  normalizedPlanFollowed,
+  normalizedRecapGrade,
+  recapRowToRecap,
+  rowToAccount,
+  rowToEducator,
+  rowToRiskPlan,
+  rowToStrategy,
+  rowToTrade,
+} from "./rowMappers";
 
 const DB_URL =
   import.meta.env.VITE_TRADING_JOURNAL_DB_URL ?? "sqlite:trading-journal.db";
-
-export type TradeStatus = "pre-trade" | "open" | "closed" | "reviewed";
-export type TradeResult = "" | "win" | "loss" | "break-even";
-export type TradeRecapGrade = "" | "A" | "B" | "C" | "D";
-export type TradeRecapPlanFollowed = "" | "yes" | "partial" | "no";
-
-export type TradeRow = {
-  id: string;
-  account_id: string | null;
-  trade_date: string;
-  pair: string;
-  direction: "long" | "short";
-  status: TradeStatus;
-  pre_thesis: string;
-  pre_levels: string;
-  pre_confluences: string;
-  pre_trend: string;
-  pre_key_levels: string;
-  pre_bias: string;
-  pre_notes: string;
-  pre_feeling: number | null;
-  pre_strategy: string;
-  risk_percent: number | null;
-  risk_amount: number | null;
-  entry_price: number | null;
-  entry_size: number | null;
-  entry_time: string | null;
-  stop_loss: number | null;
-  take_profit: number | null;
-  entry_notes: string;
-  entry_confidence: number | null;
-  exit_price: number | null;
-  exit_time: string | null;
-  exit_reason: string;
-  exit_result: string;
-  exit_feeling: number | null;
-  pnl: number | null;
-  key_level: string;
-  entry_condition: string;
-  exit_condition: string;
-  backtest_session_id: string | null;
-  backtest_tested_at: string | null;
-  backtest_targets: string;
-  take_profit_targets: string;
-  created_at: string;
-  updated_at: string;
-};
-
-export type RecapRow = {
-  id: string;
-  trade_id: string;
-  body: string;
-  grade: TradeRecapGrade;
-  followed_plan: TradeRecapPlanFollowed;
-  setup_quality: number | null;
-  entry_quality: number | null;
-  management_quality: number | null;
-  exit_quality: number | null;
-  mistake_tags: string;
-  positive_tags: string;
-  emotion_tag: string;
-  rule_broken: number;
-  lesson: string;
-  next_action: string;
-  created_at: string;
-};
-
-export type TradeRecapInput = {
-  grade: TradeRecapGrade;
-  followedPlan: TradeRecapPlanFollowed;
-  setupQuality: number | null;
-  entryQuality: number | null;
-  managementQuality: number | null;
-  exitQuality: number | null;
-  mistakeTags: string[];
-  positiveTags: string[];
-  emotionTag: string;
-  ruleBroken: boolean;
-  lesson: string;
-  nextAction: string;
-  body: string;
-};
-
-export type TradeRecap = TradeRecapInput & {
-  id: string;
-  tradeId: string;
-  createdAt: string;
-};
-
-export type JournalRecapRow = {
-  id: string;
-  account_id: string | null;
-  cadence: "daily" | "weekly" | "monthly";
-  title: string;
-  period: string;
-  body: string;
-  created_at: string;
-};
-
-export type JournalRecapInput = {
-  id?: string;
-  accountId?: string | null;
-  cadence: JournalRecapRow["cadence"];
-  title: string;
-  period: string;
-  body: string;
-};
-
-export type AccountType = AccountTypeValue;
-export type {
-  EducatorSetupInput,
-  RiskPlanSetupInput,
-  StrategySetupInput,
-  StrategyTargetMode,
-  TradingAccountSetupInput,
-};
-
-export type Strategy = {
-  id: string;
-  name: string;
-  strategy: string;
-  entryRules: string;
-  slTpRules: string;
-  invalidationRules: string;
-  currencyPairs: string[];
-  keyLevels: string[];
-  entryConditions: string[];
-  exitConditions: string[];
-  targetMode: StrategyTargetMode;
-  targetUnit: TradeTargetUnit;
-  fixedStopLoss: number | null;
-  fixedTakeProfits: number[];
-  riskRewardGoal: number | null;
-  notes: string;
-  created_at: string;
-};
-
-export type Educator = {
-  id: string;
-  name: string;
-  community: string;
-  notes: string;
-  strategyIds: string[];
-  created_at: string;
-};
-
-export type RiskManagementPlan = {
-  id: string;
-  name: string;
-  riskPercent: number | null;
-  maxDailyLossPercent: number | null;
-  riskPerTradeMinPercent: number | null;
-  riskPerTradeMaxPercent: number | null;
-  riskPerDayMinPercent: number | null;
-  riskPerDayMidPercent: number | null;
-  riskPerDayMaxPercent: number | null;
-  riskPerWeekMinPercent: number | null;
-  riskPerWeekMaxPercent: number | null;
-  maxTradesPerDay: number | null;
-  maxLosingTradesPerDay: number | null;
-  maxLosingDaysInRow: number | null;
-  dailyGoalMinPercent: number | null;
-  dailyGoalMaxPercent: number | null;
-  weeklyGoalMinPercent: number | null;
-  weeklyGoalMidPercent: number | null;
-  weeklyGoalMaxPercent: number | null;
-  notes: string;
-  created_at: string;
-};
-
-export type TradingAccount = {
-  id: string;
-  name: string;
-  startingBalance: number;
-  commission: number;
-  currency: string;
-  accountType: AccountType;
-  strategyIds: string[];
-  educatorIds: string[];
-  riskPlanId: string | null;
-  created_at: string;
-};
-
-type StrategyRow = {
-  id: string;
-  name: string;
-  strategy: string;
-  entry_rules: string;
-  sl_tp_rules: string;
-  invalidation_rules: string;
-  currency_pairs: string;
-  key_levels: string;
-  entry_conditions: string;
-  exit_conditions: string;
-  target_plan_mode: string;
-  target_unit: string;
-  fixed_stop_loss: number | null;
-  fixed_take_profits: string;
-  risk_reward_goal: number | null;
-  notes: string;
-  created_at: string;
-};
-
-type EducatorRow = {
-  id: string;
-  name: string;
-  community: string;
-  notes: string;
-  strategy_id: string | null;
-  created_at: string;
-};
-
-type RiskManagementPlanRow = {
-  id: string;
-  name: string;
-  risk_percent: number | null;
-  max_daily_loss_percent: number | null;
-  risk_per_trade_min_percent: number | null;
-  risk_per_trade_max_percent: number | null;
-  risk_per_day_min_percent: number | null;
-  risk_per_day_mid_percent: number | null;
-  risk_per_day_max_percent: number | null;
-  risk_per_week_min_percent: number | null;
-  risk_per_week_max_percent: number | null;
-  max_trades_per_day: number | null;
-  max_losing_trades_per_day: number | null;
-  max_losing_days_in_row: number | null;
-  daily_goal_min_percent: number | null;
-  daily_goal_max_percent: number | null;
-  weekly_goal_min_percent: number | null;
-  weekly_goal_mid_percent: number | null;
-  weekly_goal_max_percent: number | null;
-  notes: string;
-  created_at: string;
-};
-
-type TradingAccountRow = {
-  id: string;
-  name: string;
-  starting_balance: number;
-  commission: number;
-  currency: string;
-  account_type: AccountType;
-  risk_plan_id: string | null;
-  created_at: string;
-};
-
-type AccountStrategyRow = {
-  account_id: string;
-  strategy_id: string;
-};
-
-type AccountEducatorRow = {
-  account_id: string;
-  educator_id: string;
-};
-
-type EducatorStrategyRow = {
-  educator_id: string;
-  strategy_id: string;
-};
-
-export type ScreenshotRow = {
-  id: string;
-  trade_id: string;
-  stage: "pre-trade" | "entry" | "exit" | "recap";
-  path: string;
-  caption: string;
-  created_at: string;
-};
-
-export type PreTradeData = {
-  strategy: string;
-  keyLevel: string;
-  entryCondition: string;
-  riskPercent: number | null;
-  riskAmount: number | null;
-  bias: string;
-  notes: string;
-  feeling: number | null;
-};
-
-export type EntryData = {
-  time: string | null;
-  price: number | null;
-  lotSize: number | null;
-  stopLoss: number | null;
-  takeProfit: number | null;
-  takeProfits: number[];
-  notes: string;
-  confidence: number | null;
-};
-
-export type ExitData = {
-  price: number | null;
-  result: TradeResult;
-  note: string;
-  feeling: number | null;
-  time: string | null;
-  exitCondition: string;
-};
-
-export type BacktestTarget = {
-  takeProfit: number | null;
-  result: TradeResult;
-};
-
-export type Trade = {
-  id: string;
-  accountId: string | null;
-  date: string;
-  pair: string;
-  direction: "long" | "short";
-  status: TradeStatus;
-  preTrade: PreTradeData;
-  entry: EntryData;
-  exit: ExitData;
-  pnl: number | null;
-  backtestSessionId: string | null;
-  backtestTestedAt: string | null;
-  backtestTargets: BacktestTarget[];
-  hasRecap: boolean;
-  recap: TradeRecap | null;
-  screenshots: ScreenshotRow[];
-};
-
-export type NewTrade = Omit<
-  Trade,
-  "id" | "status" | "hasRecap" | "recap" | "screenshots" | "accountId"
-> & {
-  accountId?: string | null;
-  status?: TradeStatus;
-};
-
-function normalizedResult(value: string): TradeResult {
-  if (value === "win" || value === "loss" || value === "break-even") {
-    return value;
-  }
-  return "";
-}
-
-function normalizedRecapGrade(value: string): TradeRecapGrade {
-  if (value === "A" || value === "B" || value === "C" || value === "D") {
-    return value;
-  }
-  return "";
-}
-
-function normalizedPlanFollowed(value: string): TradeRecapPlanFollowed {
-  if (value === "yes" || value === "partial" || value === "no") return value;
-  return "";
-}
-
-function stringArrayFromJson(value: string): string[] {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    if (Array.isArray(parsed)) {
-      return parsed.filter((item): item is string => typeof item === "string");
-    }
-  } catch {
-    // Older local rows can contain plain text; keep them from breaking reads.
-  }
-  return [];
-}
-
-function numberArrayFromJson(value: string): number[] {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (item): item is number =>
-        typeof item === "number" && Number.isFinite(item),
-    );
-  } catch {
-    return [];
-  }
-}
-
-function normalizedStrategyTargetMode(value: string): StrategyTargetMode {
-  if (value === "fixed" || value === "risk-reward") return value;
-  return "custom";
-}
-
-function normalizedTradeTargetUnit(value: string): TradeTargetUnit {
-  if (value === "points" || value === "pips" || value === "ticks") {
-    return value;
-  }
-  return "price";
-}
-
-function backtestTargetsFromJson(value: string): BacktestTarget[] {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((item) => {
-      if (!item || typeof item !== "object") return [];
-      const target = item as { takeProfit?: unknown; result?: unknown };
-      const takeProfit =
-        typeof target.takeProfit === "number" &&
-        Number.isFinite(target.takeProfit)
-          ? target.takeProfit
-          : null;
-      const result =
-        typeof target.result === "string"
-          ? normalizedResult(target.result)
-          : "";
-      return [{ takeProfit, result }];
-    });
-  } catch {
-    return [];
-  }
-}
-
-function recapRowToRecap(row: RecapRow): TradeRecap {
-  return {
-    id: row.id,
-    tradeId: row.trade_id,
-    grade: normalizedRecapGrade(row.grade),
-    followedPlan: normalizedPlanFollowed(row.followed_plan),
-    setupQuality: row.setup_quality,
-    entryQuality: row.entry_quality,
-    managementQuality: row.management_quality,
-    exitQuality: row.exit_quality,
-    mistakeTags: stringArrayFromJson(row.mistake_tags),
-    positiveTags: stringArrayFromJson(row.positive_tags),
-    emotionTag: row.emotion_tag ?? "",
-    ruleBroken: row.rule_broken === 1,
-    lesson: row.lesson ?? "",
-    nextAction: row.next_action ?? "",
-    body: row.body ?? "",
-    createdAt: row.created_at,
-  };
-}
-
-function rowToTrade(
-  row: TradeRow,
-  recap: TradeRecap | null,
-  screenshots: ScreenshotRow[],
-): Trade {
-  return {
-    id: row.id,
-    accountId: row.account_id,
-    date: row.trade_date,
-    pair: row.pair,
-    direction: row.direction,
-    status: row.status,
-    preTrade: {
-      strategy: row.pre_strategy ?? "",
-      keyLevel: row.key_level ?? "",
-      entryCondition: row.entry_condition ?? "",
-      riskPercent: row.risk_percent,
-      riskAmount: row.risk_amount,
-      bias: row.pre_bias ?? "",
-      notes: row.pre_notes ?? "",
-      feeling: row.pre_feeling,
-    },
-    entry: {
-      time: row.entry_time,
-      price: row.entry_price,
-      lotSize: row.entry_size,
-      stopLoss: row.stop_loss,
-      takeProfit: row.take_profit,
-      takeProfits: (() => {
-        const targets = numberArrayFromJson(row.take_profit_targets ?? "[]");
-        return targets.length > 0
-          ? targets
-          : row.take_profit === null
-            ? []
-            : [row.take_profit];
-      })(),
-      notes: row.entry_notes ?? "",
-      confidence: row.entry_confidence,
-    },
-    exit: {
-      price: row.exit_price,
-      result: normalizedResult(row.exit_result ?? ""),
-      note: row.exit_reason ?? "",
-      feeling: row.exit_feeling,
-      time: row.exit_time,
-      exitCondition: row.exit_condition ?? "",
-    },
-    pnl: row.pnl,
-    backtestSessionId: row.backtest_session_id,
-    backtestTestedAt: row.backtest_tested_at,
-    backtestTargets: backtestTargetsFromJson(row.backtest_targets ?? "[]"),
-    hasRecap: recap !== null,
-    recap,
-    screenshots,
-  };
-}
-
-function hasEntryData(entry: EntryData): boolean {
-  return Boolean(
-    entry.time ||
-    entry.notes.trim() ||
-    entry.price !== null ||
-    entry.lotSize !== null ||
-    entry.stopLoss !== null ||
-    entry.takeProfit !== null ||
-    entry.takeProfits.length > 0 ||
-    entry.confidence !== null,
-  );
-}
-
-function hasExitData(exit: ExitData, pnl: number | null): boolean {
-  return Boolean(
-    exit.note.trim() ||
-    exit.time ||
-    exit.result ||
-    exit.price !== null ||
-    exit.feeling !== null ||
-    pnl !== null,
-  );
-}
-
-function deriveStatus(input: NewTrade): TradeStatus {
-  if (input.status) return input.status;
-  if (hasExitData(input.exit, input.pnl)) return "closed";
-  if (hasEntryData(input.entry)) return "open";
-  return "pre-trade";
-}
 
 function newTradeId() {
   return `T-${Date.now().toString().slice(-10)}`;
@@ -800,94 +342,6 @@ export async function closeDatabase(): Promise<void> {
 export async function initializeDatabase(): Promise<void> {
   if (!isTauri()) return;
   await getDb();
-}
-
-function rowToRiskPlan(row: RiskManagementPlanRow): RiskManagementPlan {
-  return {
-    id: row.id,
-    name: row.name,
-    riskPercent: row.risk_percent,
-    maxDailyLossPercent: row.max_daily_loss_percent,
-    riskPerTradeMinPercent: row.risk_per_trade_min_percent,
-    riskPerTradeMaxPercent: row.risk_per_trade_max_percent ?? row.risk_percent,
-    riskPerDayMinPercent: row.risk_per_day_min_percent,
-    riskPerDayMidPercent: row.risk_per_day_mid_percent,
-    riskPerDayMaxPercent:
-      row.risk_per_day_max_percent ?? row.max_daily_loss_percent,
-    riskPerWeekMinPercent: row.risk_per_week_min_percent,
-    riskPerWeekMaxPercent: row.risk_per_week_max_percent,
-    maxTradesPerDay: row.max_trades_per_day,
-    maxLosingTradesPerDay: row.max_losing_trades_per_day,
-    maxLosingDaysInRow: row.max_losing_days_in_row,
-    dailyGoalMinPercent: row.daily_goal_min_percent,
-    dailyGoalMaxPercent: row.daily_goal_max_percent,
-    weeklyGoalMinPercent: row.weekly_goal_min_percent,
-    weeklyGoalMidPercent: row.weekly_goal_mid_percent,
-    weeklyGoalMaxPercent: row.weekly_goal_max_percent,
-    notes: row.notes,
-    created_at: row.created_at,
-  };
-}
-
-function rowToStrategy(row: StrategyRow): Strategy {
-  return {
-    id: row.id,
-    name: row.name,
-    strategy: row.strategy,
-    entryRules: row.entry_rules,
-    slTpRules: row.sl_tp_rules,
-    invalidationRules: row.invalidation_rules,
-    currencyPairs: stringArrayFromJson(row.currency_pairs ?? "[]"),
-    keyLevels: stringArrayFromJson(row.key_levels ?? "[]"),
-    entryConditions: stringArrayFromJson(row.entry_conditions ?? "[]"),
-    exitConditions: stringArrayFromJson(row.exit_conditions ?? "[]"),
-    targetMode: normalizedStrategyTargetMode(row.target_plan_mode ?? "custom"),
-    targetUnit: normalizedTradeTargetUnit(row.target_unit ?? "price"),
-    fixedStopLoss: row.fixed_stop_loss,
-    fixedTakeProfits: numberArrayFromJson(row.fixed_take_profits ?? "[]"),
-    riskRewardGoal: row.risk_reward_goal,
-    notes: row.notes,
-    created_at: row.created_at,
-  };
-}
-
-function rowToEducator(
-  row: EducatorRow,
-  linkedStrategyIds: string[],
-): Educator {
-  const strategyIds = Array.from(
-    new Set([
-      ...linkedStrategyIds,
-      ...(row.strategy_id ? [row.strategy_id] : []),
-    ]),
-  );
-  return {
-    id: row.id,
-    name: row.name,
-    community: row.community,
-    notes: row.notes,
-    strategyIds,
-    created_at: row.created_at,
-  };
-}
-
-function rowToAccount(
-  row: TradingAccountRow,
-  strategyIds: string[],
-  educatorIds: string[],
-): TradingAccount {
-  return {
-    id: row.id,
-    name: row.name,
-    startingBalance: row.starting_balance,
-    commission: row.commission,
-    currency: row.currency,
-    accountType: row.account_type,
-    strategyIds,
-    educatorIds,
-    riskPlanId: row.risk_plan_id,
-    created_at: row.created_at,
-  };
 }
 
 export async function listAccountSetup(): Promise<{

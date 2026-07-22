@@ -20,3 +20,7 @@ Owns GitHub Actions workflows for installer and release automation.
 
 - Run `npm run check` before release commits.
 - Confirm the GitHub release workflow finishes before sharing installer links.
+
+## Child DOX Index
+
+No child DOX files.

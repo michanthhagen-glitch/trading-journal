@@ -7,6 +7,7 @@ Owns daily, weekly, and monthly recap browsing.
 ## Ownership
 
 - `RecapsModule.tsx`: cadence tabs and recap list.
+- `recapAnalysis.ts`: pure period ranges, recap statistics, generated body content, and source-row calculations.
 
 ## Local Contracts
 

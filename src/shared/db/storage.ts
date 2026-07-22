@@ -2,7 +2,7 @@
 // In Tauri runtime: bytes go into the app data dir, paths come back relative.
 // In browser fallback: bytes go into IndexedDB-backed Blob URLs (object URLs).
 
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -57,7 +57,7 @@ export async function saveScreenshotBytes(
   }
 
   const { writeFile, mkdir, exists } = await import("@tauri-apps/plugin-fs");
-  const { BaseDirectory, join } = await import("@tauri-apps/api/path");
+  const { BaseDirectory } = await import("@tauri-apps/api/path");
 
   // Ensure .../screenshots/YYYY-MM-DD/ exists
   const dirRel = `${SCREENSHOTS_DIR}/${todayBucket()}`;
@@ -121,7 +121,6 @@ export async function captureTradingViewScreenshot(): Promise<string | null> {
     return null;
   }
 
-  const { invoke } = await import("@tauri-apps/api/core");
   try {
     const captured = await invoke<CapturedWindowImage>(
       "capture_tradingview_window",
@@ -140,7 +139,6 @@ export async function listCaptureWindows(): Promise<CaptureWindowInfo[]> {
     return [];
   }
 
-  const { invoke } = await import("@tauri-apps/api/core");
   return invoke<CaptureWindowInfo[]>("list_capture_windows");
 }
 
@@ -151,7 +149,6 @@ export async function captureWindowScreenshot(
     throw new Error("Window capture is only available in the desktop app.");
   }
 
-  const { invoke } = await import("@tauri-apps/api/core");
   const captured = await invoke<CapturedWindowImage>("capture_window_by_id", {
     windowId,
   });
@@ -197,14 +194,13 @@ export async function resolveScreenshotUrl(relPath: string): Promise<string> {
   if (!isTauri()) {
     return memoryBlobs.get(relPath) ?? "";
   }
-  const { BaseDirectory, join } = await import("@tauri-apps/api/path");
+  const { join } = await import("@tauri-apps/api/path");
   const absPath = await join(await appDataDir(), relPath);
   return convertFileSrc(absPath);
 }
 
 async function appDataDir(): Promise<string> {
-  const { BaseDirectory, appDataDir: dir } =
-    await import("@tauri-apps/api/path");
+  const { appDataDir: dir } = await import("@tauri-apps/api/path");
   // appDataDir() resolves to the absolute path; passing BaseDirectory separately
   // for writeFile is enough for filesystem ops.
   return dir();

@@ -9,7 +9,10 @@ Owns the native desktop shell, Tauri configuration, native plugin registration, 
 - `Cargo.toml`, `Cargo.lock`: Rust crate and Tauri plugin dependencies.
 - `icons/`: approved MethodMark desktop icon source and generated platform icons.
 - `tauri.conf.json`, `tauri.dev.conf.json`, `tauri.macos.conf.json`, `tauri.release.conf.json`: official, dev-app, macOS, and signed updater release settings.
-- `src/main.rs`, `src/lib.rs`: Tauri entry and plugin setup.
+- `src/main.rs`, `src/lib.rs`: Tauri entry, plugin setup, and command registration.
+- `src/backup.rs`: native journal backup/restore commands and safe filesystem swaps.
+- `src/capture.rs`: native window discovery and screenshot capture commands.
+- `src/migrations.rs`: ordered SQLite migration registration.
 - `capabilities/default.json`: desktop permissions.
 - `migrations/`: SQLite schema changes.
 - `build.rs`: Tauri build hook.

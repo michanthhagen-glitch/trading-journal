@@ -8,6 +8,7 @@ Owns reusable shell layout components.
 
 - `Sidebar.tsx`: sidebar navigation, MethodMark branding, and active module state display.
 - `Topbar.tsx`: active module title, keyboard-accessible global search, and notification panel.
+- `assets/`: approved MethodMark sidebar lockup, compact symbol, and bundled plan-check audio.
 
 ## Local Contracts
 

@@ -6,14 +6,15 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 
 ## Ownership
 
-- `TradesModule.tsx`: trade table, selected trade detail, standard three-card workflow, simplified System Account workflow, and saved-stage editors.
+- `TradesModule.tsx`: trade list/calendar, trade workspace, and per-trade recap orchestration.
+- `NewTradeWorkflow.tsx`: standard and System Account new-trade workflow UI.
+- `TradeDetails.tsx`: saved trade summary, Entry/Exit cards, and editors.
+- `newTradeSubmission.ts`: pure new-trade validation and persisted payload assembly.
 - `strategyWorkflow.ts`: pure educator-strategy merging and Fixed/RR/Custom target-plan calculations shared by trade entry and Backtesting.
-- `components/BacktestWorkflow.tsx`: Backtest Session setup and rapid multi-target trade logger.
+- `tradePresentation.ts`: trade labels, dates, balance summaries, risk labels, and display formatting.
 - `tradeRecapMistakes.ts`: categorized starter catalog for trade recap mistake tags.
 - `tradeRecapPositives.ts`: categorized starter catalog for trade recap positive tags.
-- `components/PreTradeCard.tsx`: pre-trade summary and screenshot gallery.
-- `components/PreTradeForm.tsx`: pre-trade editor, screenshot import, clipboard paste.
-- `components/ScreenshotTools.tsx`: reusable screenshot import and gallery controls for saved and draft trade screenshots.
+- `components/`: module-local trade forms, target fields, selectors, screenshot tools, and Backtesting workflow.
 
 ## Local Contracts
 

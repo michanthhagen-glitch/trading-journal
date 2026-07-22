@@ -1,4 +1,5 @@
 import { Camera, FolderOpen, Monitor, Plus, RefreshCw } from "lucide-react";
+import { open } from "@tauri-apps/plugin-dialog";
 import {
   useEffect,
   useRef,
@@ -194,7 +195,6 @@ export function TradeScreenshotDropZone({
 
     setSelecting(true);
     try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
       const picked = await open({
         multiple: false,
         filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
@@ -296,7 +296,6 @@ export function DraftScreenshotImportButton({
   const [captureError, setCaptureError] = useState<string | null>(null);
 
   async function importFromDisk() {
-    const { open } = await import("@tauri-apps/plugin-dialog");
     const picked = await open({
       multiple: false,
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
@@ -760,13 +759,8 @@ type DraftScreenshotGalleryProps = {
   onDelete: (id: string) => void | Promise<void>;
 };
 
-export function DraftScreenshotGallery({
-  confirmBeforeDelete,
-  screenshots,
-  onDelete,
-}: DraftScreenshotGalleryProps) {
+function useScreenshotUrls(screenshots: { id: string; path: string }[]) {
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const [lightbox, setLightbox] = useState<DraftScreenshot | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -783,14 +777,26 @@ export function DraftScreenshotGallery({
         await resolveScreenshotUrl(screenshot.path),
       ]),
     ).then((pairs) => {
-      if (cancelled) return;
-      setUrls(Object.fromEntries(pairs as [string, string][]));
+      if (!cancelled) {
+        setUrls(Object.fromEntries(pairs as [string, string][]));
+      }
     });
 
     return () => {
       cancelled = true;
     };
   }, [screenshots]);
+
+  return urls;
+}
+
+export function DraftScreenshotGallery({
+  confirmBeforeDelete,
+  screenshots,
+  onDelete,
+}: DraftScreenshotGalleryProps) {
+  const urls = useScreenshotUrls(screenshots);
+  const [lightbox, setLightbox] = useState<DraftScreenshot | null>(null);
 
   async function handleDelete(screenshot: DraftScreenshot) {
     if (confirmBeforeDelete && !window.confirm("Delete this screenshot?")) {
@@ -860,32 +866,8 @@ export function TradeScreenshotGallery({
   onChanged,
   onDeleted,
 }: TradeScreenshotGalleryProps) {
-  const [urls, setUrls] = useState<Record<string, string>>({});
+  const urls = useScreenshotUrls(screenshots);
   const [lightbox, setLightbox] = useState<ScreenshotRow | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (screenshots.length === 0) {
-      setUrls({});
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    Promise.all(
-      screenshots.map(async (screenshot) => [
-        screenshot.id,
-        await resolveScreenshotUrl(screenshot.path),
-      ]),
-    ).then((pairs) => {
-      if (cancelled) return;
-      setUrls(Object.fromEntries(pairs as [string, string][]));
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [screenshots]);
 
   async function handleDelete(screenshot: ScreenshotRow) {
     if (confirmBeforeDelete && !window.confirm("Delete this screenshot?")) {
@@ -951,32 +933,8 @@ type ReadOnlyTradeScreenshotGalleryProps = {
 export function ReadOnlyTradeScreenshotGallery({
   screenshots,
 }: ReadOnlyTradeScreenshotGalleryProps) {
-  const [urls, setUrls] = useState<Record<string, string>>({});
+  const urls = useScreenshotUrls(screenshots);
   const [lightbox, setLightbox] = useState<ScreenshotRow | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (screenshots.length === 0) {
-      setUrls({});
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    Promise.all(
-      screenshots.map(async (screenshot) => [
-        screenshot.id,
-        await resolveScreenshotUrl(screenshot.path),
-      ]),
-    ).then((pairs) => {
-      if (cancelled) return;
-      setUrls(Object.fromEntries(pairs as [string, string][]));
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [screenshots]);
 
   return (
     <>
