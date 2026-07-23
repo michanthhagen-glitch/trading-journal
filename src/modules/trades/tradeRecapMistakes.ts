@@ -223,3 +223,14 @@ export const TRADE_RECAP_MISTAKE_GROUPS: TradeRecapMistakeGroup[] = [
     ],
   },
 ];
+
+export const TRADE_RECAP_QUICK_MISTAKES = [
+  "Entered too early",
+  "Entered too late",
+  "Entered without confirmation",
+  "Over-risked",
+  "Moved stop loss wider",
+  "Closed too early",
+  "Forced the trade",
+  "Traded during news",
+];

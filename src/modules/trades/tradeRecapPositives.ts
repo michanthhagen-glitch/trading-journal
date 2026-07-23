@@ -155,3 +155,14 @@ export const TRADE_RECAP_POSITIVE_GROUPS: TradeRecapPositiveGroup[] = [
     ],
   },
 ];
+
+export const TRADE_RECAP_QUICK_POSITIVES = [
+  "Waited for confirmation",
+  "Followed risk plan",
+  "Correct position size",
+  "Respected stop loss",
+  "Took profit at planned target",
+  "Stayed calm",
+  "Trade matched plan",
+  "Good entry timing",
+];

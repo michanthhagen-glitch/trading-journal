@@ -12,6 +12,7 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - `newTradeSubmission.ts`: pure new-trade validation and persisted payload assembly.
 - `strategyWorkflow.ts`: pure educator-strategy merging and Fixed/RR/Custom target-plan calculations shared by trade entry and Backtesting.
 - `tradePresentation.ts`: trade labels, dates, balance summaries, risk labels, and display formatting.
+- `tradeRecapWorkflow.ts`: account-specific recap defaults, System execution cleanup, and quick validation.
 - `tradeRecapMistakes.ts`: categorized starter catalog for trade recap mistake tags.
 - `tradeRecapPositives.ts`: categorized starter catalog for trade recap positive tags.
 - `components/`: module-local trade forms, target fields, selectors, screenshot tools, and Backtesting workflow.
@@ -48,18 +49,20 @@ Owns trade logging, trade list, trade detail, pre-trade planning, entry details,
 - Calendar days show only day totals; double-click a populated day to open that day's trades.
 - Missing per-trade recaps show a small warning on calendar days, weekly groups, and trade rows.
 - Calendar day detail and list rows can create a missing per-trade recap.
-- Per-trade recap creation collects structured automation fields: grade, plan follow, quality scores, mistake tags, positive tags, emotion, rule-broken, lesson, and next action.
+- Live/Demo per-trade recaps use a one-screen quick review for plan follow, grade, rules, mindset, common tags, takeaway, and next focus; quality scores and the full tag library stay optional.
+- System Account recaps are a separate execution-only workflow: call follow, execution grade, optional execution markers, and one note. They do not rate the educator or collect Live/Demo quality, emotion, rule, lesson, or next-action fields.
 - Recap mistake tags start from `tradeRecapMistakes.ts`; keep the catalog grouped even if the UI later flattens it.
 - Recap positive tags start from `tradeRecapPositives.ts`; keep the catalog grouped even if the UI later flattens it.
 - Recap quick tag buttons use quick exports from the catalog files, not duplicate local arrays.
 - Recap lesson and next action fields use quick options plus free text so journaling stays fast.
+- Recap save can advance directly to the next closed trade that is still missing a recap.
 - Trade rows open a shared trade workspace modal instead of a separate full-page detail view.
 - Global search can switch to Trades/List and open a specific trade in the shared workspace modal.
 - The shared trade workspace has two modes: trade mode gives trade details the wide side and recap summary the narrow side; recap mode gives trade context the narrow side and recap editing the wide side.
 - Trade mode shows the trade summary metrics in the modal header, above the split workspace body.
 - Create and Done recap actions both open the shared trade workspace in recap mode.
 - Recap modal trade details show saved pre-trade, entry, and exit screenshot thumbnails when available.
-- Recap tabs navigate Mistakes, Done Well, Lesson, and Score.
+- Recap editing opens on the quick review; deeper Live/Demo scoring and full tag browsing stay behind Detailed review.
 - Trade popups use the shared `ModalShell` for popup chrome, including the trade workspace, day details, trade workflow, entry/exit forms, pre-trade, and screenshot previews.
 - The trade list stays compact and shows date/time, buy/sell, strategy or educator, result, P&L, and growth %.
 - Recaps are separate from the pre-trade, entry, and exit workflow.

@@ -19,6 +19,7 @@ Owns Vitest tests for app behavior and project contracts.
 - `tradeNames.test.ts`: automatic per-day trade display naming.
 - `tradingPlan.test.ts`: sidebar trading plan milestones and rule counters.
 - `tradeInstruments.test.ts`: instrument normalization, grouping, and price/pip/point/tick calculations.
+- `tradeRecapWorkflow.test.ts`: Live/Demo versus System recap defaults, validation, and System execution-only save shape.
 - `strategyWorkflow.test.ts`: educator multi-strategy merging and shared Fixed/RR/Custom trade target behavior.
 - Strategy and instrument tests cover Fixed target validation and automatic 1R-through-goal calculations.
 

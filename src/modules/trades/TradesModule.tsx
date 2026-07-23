@@ -39,9 +39,24 @@ import {
   formatTradeName,
   formatTradeNameWithPair,
 } from "../../shared/tradeNames";
-import { TRADE_RECAP_MISTAKE_GROUPS } from "./tradeRecapMistakes";
-import { TRADE_RECAP_POSITIVE_GROUPS } from "./tradeRecapPositives";
+import {
+  TRADE_RECAP_MISTAKE_GROUPS,
+  TRADE_RECAP_QUICK_MISTAKES,
+} from "./tradeRecapMistakes";
+import {
+  TRADE_RECAP_POSITIVE_GROUPS,
+  TRADE_RECAP_QUICK_POSITIVES,
+} from "./tradeRecapPositives";
 import { mergeLinkedStrategies } from "./strategyWorkflow";
+import {
+  createTradeRecapDraft,
+  LIVE_RECAP_EMOTIONS,
+  prepareTradeRecapForSave,
+  SYSTEM_EXECUTION_MISTAKES,
+  SYSTEM_EXECUTION_POSITIVES,
+  tradeRecapValidationError,
+  type TradeRecapProfile,
+} from "./tradeRecapWorkflow";
 import {
   accountBalance,
   actualRiskReward,
@@ -83,18 +98,10 @@ import { SummaryMetric, TradeDetail, TradeSummaryStrip } from "./TradeDetails";
 
 type TradesView = "calendar" | "list";
 type TradeWorkspaceMode = "trade" | "recap";
-type TradeRecapTab = "mistakes" | "done-well" | "lesson" | "score";
 
 const TRADE_VIEWS: { id: TradesView; label: string; icon: ReactNode }[] = [
   { id: "calendar", label: "Calendar", icon: <CalendarDays size={16} /> },
   { id: "list", label: "List", icon: <ListIcon size={16} /> },
-];
-
-const TRADE_RECAP_TABS: { id: TradeRecapTab; label: string }[] = [
-  { id: "mistakes", label: "Mistakes" },
-  { id: "done-well", label: "Done Well" },
-  { id: "lesson", label: "Lesson" },
-  { id: "score", label: "Score" },
 ];
 
 const TRADE_RECAP_GRADES: TradeRecapInput["grade"][] = ["A", "B", "C", "D"];
@@ -303,6 +310,16 @@ export function TradesModule({
     setWorkspace({ tradeId, mode });
   }
 
+  function openNextMissingRecap(currentTradeId: string) {
+    const nextTrade = trades.find(
+      (trade) =>
+        trade.id !== currentTradeId &&
+        trade.status === "closed" &&
+        !trade.hasRecap,
+    );
+    setWorkspace(nextTrade ? { tradeId: nextTrade.id, mode: "recap" } : null);
+  }
+
   return (
     <div className="trades">
       <div className="module-toolbar">
@@ -405,6 +422,7 @@ export function TradesModule({
               current ? { ...current, mode } : current,
             )
           }
+          onOpenNextMissingRecap={openNextMissingRecap}
         />
       ) : null}
 
@@ -820,27 +838,8 @@ type TradeWorkspaceDialogProps = {
   onClose: () => void;
   onDeleted: () => void | Promise<void>;
   onModeChange: (mode: TradeWorkspaceMode) => void;
+  onOpenNextMissingRecap: (currentTradeId: string) => void;
 };
-
-function createDefaultTradeRecap(trade: Trade): TradeRecapInput {
-  return (
-    trade.recap ?? {
-      grade: "",
-      followedPlan: "",
-      setupQuality: 5,
-      entryQuality: 5,
-      managementQuality: 5,
-      exitQuality: 5,
-      mistakeTags: [],
-      positiveTags: [],
-      emotionTag: "none",
-      ruleBroken: false,
-      lesson: "",
-      nextAction: "",
-      body: "",
-    }
-  );
-}
 
 function TradeWorkspaceDialog({
   account,
@@ -854,27 +853,31 @@ function TradeWorkspaceDialog({
   onClose,
   onDeleted,
   onModeChange,
+  onOpenNextMissingRecap,
 }: TradeWorkspaceDialogProps) {
   const currency = account?.currency ?? "USD";
   const isRecapMode = mode === "recap";
+  const recapProfile: TradeRecapProfile =
+    account?.accountType === "system" ? "system" : "live-demo";
   const tradeName = formatTradeName(trade, accountTrades);
   const tradeNameWithPair = formatTradeNameWithPair(trade, accountTrades);
+  const hasNextMissingRecap = accountTrades.some(
+    (item) =>
+      item.id !== trade.id && item.status === "closed" && !item.hasRecap,
+  );
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [recapActiveTab, setRecapActiveTab] =
-    useState<TradeRecapTab>("mistakes");
   const [recapForm, setRecapForm] = useState<TradeRecapInput>(() =>
-    createDefaultTradeRecap(trade),
+    createTradeRecapDraft(trade.recap, recapProfile),
   );
   const [recapSaving, setRecapSaving] = useState(false);
   const [recapError, setRecapError] = useState<string | null>(null);
 
   useEffect(() => {
-    setRecapActiveTab("mistakes");
-    setRecapForm(createDefaultTradeRecap(trade));
+    setRecapForm(createTradeRecapDraft(trade.recap, recapProfile));
     setRecapError(null);
     setRecapSaving(false);
-  }, [trade.id]);
+  }, [recapProfile, trade.id]);
 
   function updateRecap<K extends keyof TradeRecapInput>(
     key: K,
@@ -932,23 +935,24 @@ function TradeWorkspaceDialog({
 
   async function handleRecapSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!recapForm.lesson.trim()) {
-      setRecapActiveTab("lesson");
-      setRecapError("Lesson is required.");
+    const validationError = tradeRecapValidationError(recapForm, recapProfile);
+    if (validationError) {
+      setRecapError(validationError);
       return;
     }
 
-    if (!recapForm.grade || !recapForm.followedPlan) {
-      setRecapActiveTab("score");
-      setRecapError("Grade and plan follow are required.");
-      return;
-    }
-
+    const nativeEvent = event.nativeEvent as SubmitEvent;
+    const submitter = nativeEvent.submitter as HTMLButtonElement | null;
+    const shouldOpenNext = submitter?.value === "save-and-next";
     setRecapError(null);
     setRecapSaving(true);
     try {
-      await saveRecap(trade.id, recapForm);
+      await saveRecap(
+        trade.id,
+        prepareTradeRecapForSave(recapForm, recapProfile),
+      );
       await onChanged();
+      if (shouldOpenNext) onOpenNextMissingRecap(trade.id);
     } catch (saveError) {
       console.error(saveError);
       setRecapError("Could not save recap. Try again.");
@@ -1014,10 +1018,24 @@ function TradeWorkspaceDialog({
             >
               Back to trade
             </button>
+            {hasNextMissingRecap ? (
+              <button
+                className="secondary-button"
+                type="submit"
+                form="trade-recap-editor-form"
+                name="recap-save-intent"
+                value="save-and-next"
+                disabled={recapSaving}
+              >
+                Save & next
+              </button>
+            ) : null}
             <button
               className="primary-button"
               type="submit"
               form="trade-recap-editor-form"
+              name="recap-save-intent"
+              value="save"
               disabled={recapSaving}
             >
               {recapSaving
@@ -1065,9 +1083,8 @@ function TradeWorkspaceDialog({
         <div className="trade-workspace-secondary">
           {isRecapMode ? (
             <TradeRecapEditor
-              activeTab={recapActiveTab}
               form={recapForm}
-              onActiveTabChange={setRecapActiveTab}
+              profile={recapProfile}
               onSubmit={handleRecapSubmit}
               onToggleQuickText={toggleRecapQuickText}
               onToggleTag={toggleRecapTag}
@@ -1075,6 +1092,7 @@ function TradeWorkspaceDialog({
             />
           ) : (
             <TradeRecapSummaryPanel
+              isSystemAccount={recapProfile === "system"}
               trade={trade}
               onOpenRecap={() => onModeChange("recap")}
             />
@@ -1086,9 +1104,8 @@ function TradeWorkspaceDialog({
 }
 
 type TradeRecapEditorProps = {
-  activeTab: TradeRecapTab;
   form: TradeRecapInput;
-  onActiveTabChange: (tab: TradeRecapTab) => void;
+  profile: TradeRecapProfile;
   onSubmit: (event: React.FormEvent) => void | Promise<void>;
   onToggleQuickText: (key: "lesson" | "nextAction", option: string) => void;
   onToggleTag: (key: "mistakeTags" | "positiveTags", tag: string) => void;
@@ -1099,9 +1116,8 @@ type TradeRecapEditorProps = {
 };
 
 function TradeRecapEditor({
-  activeTab,
   form,
-  onActiveTabChange,
+  profile,
   onSubmit,
   onToggleQuickText,
   onToggleTag,
@@ -1113,213 +1129,351 @@ function TradeRecapEditor({
       id="trade-recap-editor-form"
       onSubmit={onSubmit}
     >
-      <div className="recap-sticky-head">
-        <div
-          className="recap-tab-bar"
-          role="tablist"
-          aria-label="Trade recap sections"
-        >
-          {TRADE_RECAP_TABS.map((tab) => (
-            <button
-              className={`recap-tab-button${activeTab === tab.id ? " is-active" : ""}`}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              aria-controls={`recap-panel-${tab.id}`}
-              id={`recap-tab-${tab.id}`}
-              key={tab.id}
-              onClick={() => onActiveTabChange(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
+      <header className="recap-editor-heading">
+        <div>
+          <span>
+            {profile === "system" ? "System account" : "Live / Demo account"}
+          </span>
+          <h3>
+            {profile === "system" ? "Execution recap" : "Quick trade recap"}
+          </h3>
+          <p>
+            {profile === "system"
+              ? "Review only how you executed the call. The educator is not scored."
+              : "Capture the useful part first. Deeper scoring stays optional."}
+          </p>
         </div>
-      </div>
+        <span className="recap-speed-badge">Quick review</span>
+      </header>
 
-      {activeTab === "mistakes" ? (
-        <section
-          className="recap-section"
-          role="tabpanel"
-          id="recap-panel-mistakes"
-          aria-labelledby="recap-tab-mistakes"
-        >
-          <div className="recap-section-title-row">
-            <h4>Mistakes</h4>
-            <span>{form.mistakeTags.length} selected</span>
-          </div>
-          <RecapGroupedTagSection
-            groups={TRADE_RECAP_MISTAKE_CATALOG}
-            emptyLabel="No mistakes selected"
-            addLabel="Add mistake"
-            selected={form.mistakeTags}
-            onToggle={(tag) => onToggleTag("mistakeTags", tag)}
-          />
-        </section>
-      ) : null}
+      {profile === "system" ? (
+        <>
+          <section className="recap-decision-grid is-system">
+            <RecapChoiceField
+              label="Followed the call?"
+              options={PLAN_FOLLOWED_OPTIONS}
+              selected={form.followedPlan}
+              onChange={(value) =>
+                onUpdate(
+                  "followedPlan",
+                  value as TradeRecapInput["followedPlan"],
+                )
+              }
+            />
+            <RecapChoiceField
+              label="Execution grade"
+              options={TRADE_RECAP_GRADES.map((grade) => ({
+                value: grade,
+                label: grade,
+              }))}
+              selected={form.grade}
+              onChange={(value) =>
+                onUpdate("grade", value as TradeRecapInput["grade"])
+              }
+            />
+          </section>
 
-      {activeTab === "done-well" ? (
-        <section
-          className="recap-section"
-          role="tabpanel"
-          id="recap-panel-done-well"
-          aria-labelledby="recap-tab-done-well"
-        >
-          <div className="recap-section-title-row">
-            <h4>Done well</h4>
-            <span>{form.positiveTags.length} selected</span>
-          </div>
-          <RecapGroupedTagSection
-            groups={TRADE_RECAP_POSITIVE_CATALOG}
-            emptyLabel="Nothing selected yet"
-            addLabel="Add"
-            selected={form.positiveTags}
-            onToggle={(tag) => onToggleTag("positiveTags", tag)}
-          />
-        </section>
-      ) : null}
-
-      {activeTab === "lesson" ? (
-        <section
-          className="recap-section"
-          role="tabpanel"
-          id="recap-panel-lesson"
-          aria-labelledby="recap-tab-lesson"
-        >
-          <h4>Lesson</h4>
-          <div className="form-grid">
-            <div className="recap-text-block field-wide">
-              <RecapQuickTextArea
-                label="Lesson learned"
-                quickLabel="Quick lessons"
-                options={LESSON_OPTIONS}
-                placeholder="What did this trade teach you?"
-                value={form.lesson}
-                onChange={(value) => onUpdate("lesson", value)}
-                onToggle={(option) => onToggleQuickText("lesson", option)}
+          <section className="recap-fast-section">
+            <div className="recap-section-title-row">
+              <div>
+                <h4>Execution markers</h4>
+                <p>Optional one-click details for your own statistics.</p>
+              </div>
+            </div>
+            <div className="recap-fast-columns">
+              <RecapQuickTagGroup
+                label="Done well"
+                options={SYSTEM_EXECUTION_POSITIVES}
+                selected={form.positiveTags}
+                onToggle={(tag) => onToggleTag("positiveTags", tag)}
+              />
+              <RecapQuickTagGroup
+                label="Execution issues"
+                options={SYSTEM_EXECUTION_MISTAKES}
+                selected={form.mistakeTags}
+                onToggle={(tag) => onToggleTag("mistakeTags", tag)}
               />
             </div>
-            <div className="recap-text-block field-wide">
-              <RecapQuickTextArea
-                label="Next time"
-                quickLabel="Quick next time"
-                options={NEXT_TIME_OPTIONS}
-                placeholder="What will you do differently next time?"
-                value={form.nextAction}
-                onChange={(value) => onUpdate("nextAction", value)}
-                onToggle={(option) => onToggleQuickText("nextAction", option)}
+          </section>
+
+          <label className="field recap-main-note">
+            <span>Execution note (optional)</span>
+            <textarea
+              rows={5}
+              value={form.body}
+              onChange={(event) => onUpdate("body", event.target.value)}
+              placeholder="Anything useful about how you entered, managed, or exited?"
+            />
+          </label>
+        </>
+      ) : (
+        <>
+          <section className="recap-decision-grid">
+            <RecapChoiceField
+              label="Followed your plan?"
+              options={PLAN_FOLLOWED_OPTIONS}
+              selected={form.followedPlan}
+              onChange={(value) =>
+                onUpdate(
+                  "followedPlan",
+                  value as TradeRecapInput["followedPlan"],
+                )
+              }
+            />
+            <RecapChoiceField
+              label="Trade grade"
+              options={TRADE_RECAP_GRADES.map((grade) => ({
+                value: grade,
+                label: grade,
+              }))}
+              selected={form.grade}
+              onChange={(value) =>
+                onUpdate("grade", value as TradeRecapInput["grade"])
+              }
+            />
+            <RecapChoiceField
+              label="Rules"
+              options={[
+                { value: "kept", label: "Kept" },
+                { value: "broken", label: "Broken" },
+              ]}
+              selected={form.ruleBroken ? "broken" : "kept"}
+              onChange={(value) => onUpdate("ruleBroken", value === "broken")}
+            />
+          </section>
+
+          <section className="recap-fast-section">
+            <div className="recap-section-title-row">
+              <div>
+                <h4>Mindset</h4>
+                <p>Optional. Pick the strongest feeling during the trade.</p>
+              </div>
+            </div>
+            <RecapChoiceField
+              compact
+              label="Emotion"
+              options={LIVE_RECAP_EMOTIONS}
+              selected={form.emotionTag || "none"}
+              onChange={(value) => onUpdate("emotionTag", value)}
+            />
+          </section>
+
+          <section className="recap-fast-section">
+            <div className="recap-section-title-row">
+              <div>
+                <h4>What stood out?</h4>
+                <p>Optional. The most common choices are ready to tap.</p>
+              </div>
+            </div>
+            <div className="recap-fast-columns">
+              <RecapQuickTagGroup
+                label="Done well"
+                options={TRADE_RECAP_QUICK_POSITIVES}
+                selected={form.positiveTags}
+                onToggle={(tag) => onToggleTag("positiveTags", tag)}
+              />
+              <RecapQuickTagGroup
+                label="Mistakes"
+                options={TRADE_RECAP_QUICK_MISTAKES}
+                selected={form.mistakeTags}
+                onToggle={(tag) => onToggleTag("mistakeTags", tag)}
               />
             </div>
-            <label className="field field-wide">
-              <span>Extra notes</span>
-              <textarea
-                rows={3}
-                value={form.body}
-                onChange={(event) => onUpdate("body", event.target.value)}
-                placeholder="Anything else worth remembering"
-              />
-            </label>
-          </div>
-        </section>
-      ) : null}
+          </section>
 
-      {activeTab === "score" ? (
-        <section
-          className="recap-section"
-          role="tabpanel"
-          id="recap-panel-score"
-          aria-labelledby="recap-tab-score"
-        >
-          <h4>Review score</h4>
-          <div className="form-grid">
-            <label className="field">
-              <span>Trade grade</span>
-              <select
-                value={form.grade}
-                onChange={(event) =>
-                  onUpdate(
-                    "grade",
-                    event.target.value as TradeRecapInput["grade"],
-                  )
-                }
-              >
-                <option value="">Pick grade</option>
-                {TRADE_RECAP_GRADES.map((grade) => (
-                  <option value={grade} key={grade}>
-                    {grade}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Followed plan?</span>
-              <select
-                value={form.followedPlan}
-                onChange={(event) =>
-                  onUpdate(
-                    "followedPlan",
-                    event.target.value as TradeRecapInput["followedPlan"],
-                  )
-                }
-              >
-                <option value="">Pick one</option>
-                {PLAN_FOLLOWED_OPTIONS.map((option) => (
-                  <option value={option.value} key={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field recap-rule-toggle">
-              <span>Rule broken?</span>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={form.ruleBroken}
-                  onChange={(event) =>
-                    onUpdate("ruleBroken", event.target.checked)
-                  }
+          <section className="recap-fast-section">
+            <div className="recap-note-grid">
+              <div className="recap-text-block">
+                <RecapQuickTextArea
+                  label="Key takeaway (optional)"
+                  quickLabel="Quick lessons"
+                  options={LESSON_OPTIONS}
+                  placeholder="What is worth remembering?"
+                  value={form.lesson}
+                  onChange={(value) => onUpdate("lesson", value)}
+                  onToggle={(option) => onToggleQuickText("lesson", option)}
                 />
-                <span>{form.ruleBroken ? "Yes" : "No"}</span>
-              </label>
-            </label>
-          </div>
+              </div>
+              <div className="recap-text-block">
+                <RecapQuickTextArea
+                  label="Next focus (optional)"
+                  quickLabel="Quick next steps"
+                  options={NEXT_TIME_OPTIONS}
+                  placeholder="One thing to focus on next time"
+                  value={form.nextAction}
+                  onChange={(value) => onUpdate("nextAction", value)}
+                  onToggle={(option) => onToggleQuickText("nextAction", option)}
+                />
+              </div>
+            </div>
+          </section>
 
-          <div className="recap-score-grid">
-            <RecapScoreField
-              label="Setup quality"
-              value={form.setupQuality ?? 5}
-              onChange={(value) => onUpdate("setupQuality", value)}
-            />
-            <RecapScoreField
-              label="Entry quality"
-              value={form.entryQuality ?? 5}
-              onChange={(value) => onUpdate("entryQuality", value)}
-            />
-            <RecapScoreField
-              label="Management quality"
-              value={form.managementQuality ?? 5}
-              onChange={(value) => onUpdate("managementQuality", value)}
-            />
-            <RecapScoreField
-              label="Exit quality"
-              value={form.exitQuality ?? 5}
-              onChange={(value) => onUpdate("exitQuality", value)}
-            />
-          </div>
-        </section>
-      ) : null}
+          <details className="recap-advanced-panel">
+            <summary>
+              <div>
+                <strong>Detailed review</strong>
+                <span>Quality scores, full tag library, and extra notes</span>
+              </div>
+              <ChevronDown size={16} aria-hidden="true" />
+            </summary>
+            <div className="recap-advanced-content">
+              <section>
+                <h4>Quality scores</h4>
+                <div className="recap-score-grid">
+                  <RecapScoreField
+                    label="Setup quality"
+                    value={form.setupQuality ?? 5}
+                    onChange={(value) => onUpdate("setupQuality", value)}
+                  />
+                  <RecapScoreField
+                    label="Entry quality"
+                    value={form.entryQuality ?? 5}
+                    onChange={(value) => onUpdate("entryQuality", value)}
+                  />
+                  <RecapScoreField
+                    label="Management quality"
+                    value={form.managementQuality ?? 5}
+                    onChange={(value) => onUpdate("managementQuality", value)}
+                  />
+                  <RecapScoreField
+                    label="Exit quality"
+                    value={form.exitQuality ?? 5}
+                    onChange={(value) => onUpdate("exitQuality", value)}
+                  />
+                </div>
+              </section>
+              <section className="recap-full-library">
+                <div>
+                  <h4>All positives</h4>
+                  <RecapGroupedTagSection
+                    groups={TRADE_RECAP_POSITIVE_CATALOG}
+                    emptyLabel="Nothing selected yet"
+                    addLabel="Browse"
+                    selected={form.positiveTags}
+                    onToggle={(tag) => onToggleTag("positiveTags", tag)}
+                  />
+                </div>
+                <div>
+                  <h4>All mistakes</h4>
+                  <RecapGroupedTagSection
+                    groups={TRADE_RECAP_MISTAKE_CATALOG}
+                    emptyLabel="No mistakes selected"
+                    addLabel="Browse"
+                    selected={form.mistakeTags}
+                    onToggle={(tag) => onToggleTag("mistakeTags", tag)}
+                  />
+                </div>
+              </section>
+              <label className="field">
+                <span>Extra notes</span>
+                <textarea
+                  rows={3}
+                  value={form.body}
+                  onChange={(event) => onUpdate("body", event.target.value)}
+                  placeholder="Anything else worth remembering"
+                />
+              </label>
+            </div>
+          </details>
+        </>
+      )}
     </form>
   );
 }
 
+function RecapChoiceField({
+  compact = false,
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  compact?: boolean;
+  label: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  selected: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <fieldset className={`recap-choice-field${compact ? " is-compact" : ""}`}>
+      <legend>{label}</legend>
+      <div className="recap-choice-list">
+        {options.map((option) => (
+          <button
+            className={`recap-choice-button${selected === option.value ? " is-selected" : ""}`}
+            type="button"
+            aria-pressed={selected === option.value}
+            key={option.value}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function RecapQuickTagGroup({
+  label,
+  options,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  options: readonly string[];
+  selected: string[];
+  onToggle: (tag: string) => void;
+}) {
+  const visibleOptions = [
+    ...options,
+    ...selected.filter((tag) => !options.includes(tag)),
+  ];
+
+  return (
+    <fieldset className="recap-quick-tag-group">
+      <legend>
+        <span>{label}</span>
+        <strong>{selected.length || ""}</strong>
+      </legend>
+      <div className="recap-quick-list">
+        {visibleOptions.map((option) => {
+          const isSelected = selected.includes(option);
+          return (
+            <button
+              className={`recap-quick-option${isSelected ? " is-selected" : ""}`}
+              type="button"
+              aria-pressed={isSelected}
+              key={option}
+              onClick={() => onToggle(option)}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 function TradeRecapSummaryPanel({
+  isSystemAccount,
   trade,
   onOpenRecap,
 }: {
+  isSystemAccount: boolean;
   trade: Trade;
   onOpenRecap: () => void;
 }) {
   const recap = trade.recap;
+  const systemNote =
+    recap?.body.trim() ||
+    recap?.lesson.trim() ||
+    recap?.nextAction.trim() ||
+    "";
+  const emotionLabel =
+    LIVE_RECAP_EMOTIONS.find((emotion) => emotion.value === recap?.emotionTag)
+      ?.label ?? "Neutral";
 
   return (
     <aside
@@ -1327,57 +1481,92 @@ function TradeRecapSummaryPanel({
       aria-label="Trade recap summary"
     >
       <header className="trade-recap-summary-header">
-        <span>Trade recap</span>
+        <span>{isSystemAccount ? "System execution" : "Trade recap"}</span>
         <h4>{recap ? "Recap done" : "Recap missing"}</h4>
       </header>
 
       {recap ? (
         <>
           <div className="trade-recap-summary-grid">
-            <SummaryMetric label="Grade" value={recap.grade || "—"} strong />
             <SummaryMetric
-              label="Plan"
+              label={isSystemAccount ? "Execution" : "Grade"}
+              value={recap.grade || "—"}
+              strong
+            />
+            <SummaryMetric
+              label={isSystemAccount ? "Followed call" : "Plan"}
               value={planFollowedLabel(recap.followedPlan)}
             />
+            {!isSystemAccount ? (
+              <>
+                <SummaryMetric label="Mindset" value={emotionLabel} />
+                <SummaryMetric
+                  label="Rules"
+                  value={recap.ruleBroken ? "Broken" : "Kept"}
+                />
+              </>
+            ) : null}
           </div>
-          <TradeRecapSummaryTagList
-            label="Mistakes"
-            emptyLabel="No mistakes selected"
-            tags={recap.mistakeTags}
-          />
           <TradeRecapSummaryTagList
             label="Done well"
             emptyLabel="Nothing selected yet"
             tags={recap.positiveTags}
           />
-          <div className="trade-recap-summary-note">
-            <span>Lesson</span>
-            <p>{recap.lesson || "No lesson written yet."}</p>
-          </div>
-          <div className="trade-recap-summary-note">
-            <span>Next time</span>
-            <p>{recap.nextAction || "No next action written yet."}</p>
-          </div>
-          <section className="trade-recap-summary-scores">
-            <header>
-              <span>Scores</span>
-              <strong>{recap.ruleBroken ? "Rule broken" : "Rules kept"}</strong>
-            </header>
-            <div className="trade-recap-score-grid">
-              <TradeRecapScoreValue label="Setup" value={recap.setupQuality} />
-              <TradeRecapScoreValue label="Entry" value={recap.entryQuality} />
-              <TradeRecapScoreValue
-                label="Management"
-                value={recap.managementQuality}
-              />
-              <TradeRecapScoreValue label="Exit" value={recap.exitQuality} />
+          <TradeRecapSummaryTagList
+            label={isSystemAccount ? "Execution issues" : "Mistakes"}
+            emptyLabel={
+              isSystemAccount
+                ? "No execution issues selected"
+                : "No mistakes selected"
+            }
+            tags={recap.mistakeTags}
+          />
+          {isSystemAccount ? (
+            <div className="trade-recap-summary-note">
+              <span>Execution note</span>
+              <p>{systemNote || "No note added."}</p>
             </div>
-          </section>
+          ) : (
+            <>
+              <div className="trade-recap-summary-note">
+                <span>Takeaway</span>
+                <p>{recap.lesson || "No takeaway added."}</p>
+              </div>
+              <div className="trade-recap-summary-note">
+                <span>Next focus</span>
+                <p>{recap.nextAction || "No next focus added."}</p>
+              </div>
+            </>
+          )}
+          {!isSystemAccount ? (
+            <section className="trade-recap-summary-scores">
+              <header>
+                <span>Detailed scores</span>
+                <strong>Optional review</strong>
+              </header>
+              <div className="trade-recap-score-grid">
+                <TradeRecapScoreValue
+                  label="Setup"
+                  value={recap.setupQuality}
+                />
+                <TradeRecapScoreValue
+                  label="Entry"
+                  value={recap.entryQuality}
+                />
+                <TradeRecapScoreValue
+                  label="Management"
+                  value={recap.managementQuality}
+                />
+                <TradeRecapScoreValue label="Exit" value={recap.exitQuality} />
+              </div>
+            </section>
+          ) : null}
         </>
       ) : (
         <p className="trade-recap-summary-empty">
-          Create a recap to lock in mistakes, what went well, lessons, and
-          score.
+          {isSystemAccount
+            ? "Review your own execution of this call."
+            : "Capture the grade, discipline, and one useful takeaway."}
         </p>
       )}
 
