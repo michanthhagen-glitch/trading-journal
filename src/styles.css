@@ -3236,7 +3236,7 @@ button {
   height: min(820px, calc(100vh - var(--topbar-height) - 44px));
 }
 
-.trade-workspace-modal .modal-body {
+.trade-workspace-modal > .modal-body {
   flex: 1;
   min-height: 0;
   display: block;
